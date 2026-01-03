@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Marcar Consulta</title>
+  </head>
+  <body>
+    <h1>Marcar consulta</h1>
+
+    <!-- Form para escolher serviço/profissional/data -->
+    <form method="get">
+      <label>Serviço</label>
+      <select name="service_id" required>
+        <option value="">-- Escolhe --</option>
+        {% for s in services %}
+          <option value="{{ s.id }}" {% if s.id|stringformat:"s" == selected_service_id %}selected{% endif %}>
+            {{ s.name }} ({{ s.duration_minutes }} min)
+          </option>
+        {% endfor %}
+      </select>
+
+      <label>Profissional</label>
+      <select name="professional_id" required>
+        <option value="">-- Escolhe --</option>
+        {% for p in professionals %}
+          <option value="{{ p.id }}" {% if p.id|stringformat:"s" == selected_professional_id %}selected{% endif %}>
+            {{ p }}
+          </option>
+        {% endfor %}
+      </select>
+
+      <label>Data</label>
+      <input type="date" name="date" value="{{ selected_date }}" required />
+
+      <button type="submit">Ver horários</button>
+    </form>
+
+    {% if message %}
+      <p><b>{{ message }}</b></p>
+    {% endif %}
+
+    {% if slots %}
+      <h2>Horários disponíveis</h2>
+
+      <!-- Form para criar a marcação -->
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="service_id" value="{{ selected_service_id }}" />
+        <input type="hidden" name="professional_id" value="{{ selected_professional_id }}" />
+        <input type="hidden" name="date" value="{{ selected_date }}" />
+
+        <label>Hora</label>
+        <select name="time" required>
+          {% for s in slots %}
+            <option value="{{ s }}">{{ s }}</option>
+          {% endfor %}
+        </select>
+
+        <label>Notas (opcional)</label>
+        <input type="text" name="notes" />
+
+        <button type="submit">Confirmar marcação</button>
+      </form>
+    {% endif %}
+  </body>
+</html>
