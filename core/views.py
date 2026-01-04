@@ -5,6 +5,10 @@ from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
 from django.shortcuts import render, redirect
 from .models import Professional, Availability, Appointment, Service
+from django.utils.text import slugify
+from .forms import RegisterForm
+from .models import ClientProfile, ClinicalRecord
+
 
 
 def _time_range(start: dtime, end: dtime, step_minutes: int):
@@ -35,10 +39,11 @@ def _get_slots(prof: Professional, date_obj, step_minutes: int):
 def login_view(request):
     message = ""
     if request.method == "POST":
-        username = request.POST.get("username", "").strip()
+        email = request.POST.get("username", "").strip()
         password = request.POST.get("password", "").strip()
 
-        user = authenticate(request, username=username, password=password)
+        user = authenticate(request, username=email, password=password)
+
         if user is not None:
             login(request, user)
             return redirect("/marcar/")
@@ -50,6 +55,43 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect("/login/")
+
+def register_view(request):
+    if request.method == "POST":
+        form = RegisterForm(request.POST)
+        if form.is_valid():
+            full_name = form.cleaned_data["full_name"]
+            email = form.cleaned_data["email"]
+            password = form.cleaned_data["password"]
+            phone = form.cleaned_data.get("phone", "")
+
+            base = slugify(full_name)[:20] or "user"
+            username = base
+            i = 1
+            while User.objects.filter(username=username).exists():
+                i += 1
+                username = f"{base}{i}"
+
+            user = User.objects.create_user(username=username, email=email, password=password)
+            user.first_name = full_name
+            user.save()
+
+            profile = ClientProfile.objects.create(
+                user=user,
+                full_name=full_name,
+                phone=phone,
+                created_by=user,
+                updated_by=user,
+            )
+            ClinicalRecord.objects.create(client=profile, updated_by=user)
+
+            login(request, user, backend="core.auth_backends.EmailBackend")
+            return redirect("/marcar/")
+    else:
+        form = RegisterForm()
+
+    return render(request, "core/register.html", {"form": form})
+
 
 
 @login_required(login_url="/login/")

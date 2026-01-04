@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.conf import settings
 
 
 class Service(models.Model):
@@ -63,3 +64,47 @@ class Appointment(models.Model):
 
     def __str__(self):
         return f"{self.client} - {self.service} ({self.date} {self.time})"
+
+class ClientProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="client_profile")
+
+    full_name = models.CharField(max_length=200)
+    phone = models.CharField(max_length=30, blank=True)
+
+    nif = models.CharField(max_length=20, blank=True)
+    address_line1 = models.CharField(max_length=255, blank=True)
+    address_line2 = models.CharField(max_length=255, blank=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+    city = models.CharField(max_length=120, blank=True)
+    country = models.CharField(max_length=120, blank=True)
+
+    birth_date = models.DateField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="created_clients"
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="updated_clients"
+    )
+
+    def __str__(self):
+        return self.full_name
+
+
+class ClinicalRecord(models.Model):
+    client = models.OneToOneField(ClientProfile, on_delete=models.CASCADE, related_name="clinical_record")
+
+    allergies = models.TextField(blank=True)
+    conditions = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="updated_records"
+    )
+
+    def __str__(self):
+        return f"Ficha clínica — {self.client.full_name}"
