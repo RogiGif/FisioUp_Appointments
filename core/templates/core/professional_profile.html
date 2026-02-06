@@ -1,0 +1,122 @@
+{% extends "core/base_duralux.html" %}
+{% load static %}
+
+{% block title %}Perfil Profissional{% endblock %}
+
+{% block main_wrapper %}
+    <div class="page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Perfil Profissional</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'professional_calendar' %}">Calendário</a></li>
+                <li class="breadcrumb-item">Perfil</li>
+            </ul>
+        </div>
+        <div class="page-header-right ms-auto">
+            <div class="page-header-right-items">
+                <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                    <a href="{% url 'professional_calendar' %}" class="btn btn-light-brand">
+                        <i class="feather-arrow-left me-2"></i>
+                        <span>Voltar</span>
+                    </a>
+                    <button type="submit" form="professional-profile-form" class="btn btn-primary">
+                        <i class="feather-save me-2"></i>
+                        <span>Guardar</span>
+                    </button>
+                </div>
+            </div>
+            <div class="d-md-none d-flex align-items-center">
+                <a href="javascript:void(0)" class="page-header-right-open-toggle">
+                    <i class="feather-align-right fs-20"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="alert alert-warning">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form id="professional-profile-form" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="main-content">
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="wd-80 ht-80 position-relative overflow-hidden border border-gray-2 rounded-circle bg-light">
+                                        {% if professional.profile_photo %}
+                                            <img src="{{ professional.profile_photo.url }}" alt="Foto de perfil" class="img-fluid rounded-circle h-100 w-100">
+                                        {% else %}
+                                            <img src="{% static 'duralux/assets/images/avatar/1.png' %}" alt="Foto de perfil" class="img-fluid rounded-circle h-100 w-100">
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <div class="fw-semibold">{{ request.user.get_full_name|default:request.user.username }}</div>
+                                        <div class="fs-12 text-muted">{{ request.user.email|default:"-" }}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row g-4">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Primeiro nome</label>
+                                    {{ form.first_name }}
+                                    {% if form.first_name.errors %}
+                                        <div class="invalid-feedback d-block">{{ form.first_name.errors|striptags }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Último nome</label>
+                                    {{ form.last_name }}
+                                    {% if form.last_name.errors %}
+                                        <div class="invalid-feedback d-block">{{ form.last_name.errors|striptags }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Especialidade</label>
+                                    {{ form.speciality }}
+                                    {% if form.speciality.errors %}
+                                        <div class="invalid-feedback d-block">{{ form.speciality.errors|striptags }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Género</label>
+                                    {{ form.gender }}
+                                    {% if form.gender.errors %}
+                                        <div class="invalid-feedback d-block">{{ form.gender.errors|striptags }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Telefone</label>
+                                    {{ form.phone }}
+                                    {% if form.phone.errors %}
+                                        <div class="invalid-feedback d-block">{{ form.phone.errors|striptags }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">E-mail</label>
+                                    {{ form.email }}
+                                    {% if form.email.errors %}
+                                        <div class="invalid-feedback d-block">{{ form.email.errors|striptags }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Foto de perfil</label>
+                                    {{ form.profile_photo }}
+                                    {% if form.profile_photo.errors %}
+                                        <div class="invalid-feedback d-block">{{ form.profile_photo.errors|striptags }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock %}

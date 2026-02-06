@@ -1,0 +1,61 @@
+{% extends "backoffice/base.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title=title %}
+
+  <div class="card backoffice-form-card">
+    <div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% if return_to %}
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+        {% endif %}
+        {{ form.non_field_errors }}
+
+        <div class="mb-3">
+          <label class="form-label">Nome</label>
+          {{ form.name }}
+          {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3 form-check">
+          {{ form.active }}
+          <label class="form-check-label" for="{{ form.active.id_for_label }}">Ativo</label>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Tipo de desconto</label>
+          {{ form.discount_type }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Percentagem</label>
+          {{ form.discount_percent }}
+          {% if form.discount_percent.errors %}<div class="text-danger small">{{ form.discount_percent.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Valor fixo</label>
+          {{ form.discount_amount }}
+          {% if form.discount_amount.errors %}<div class="text-danger small">{{ form.discount_amount.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Etiqueta</label>
+          {{ form.discount_label }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Notas</label>
+          {{ form.notes }}
+        </div>
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Guardar</button>
+          {% url 'backoffice_partners' as backoffice_partners_url %}
+          <a class="btn btn-outline-secondary" href="{{ return_to|default:backoffice_partners_url }}">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

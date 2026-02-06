@@ -1,0 +1,522 @@
+{% load static %}
+<div class="tab-pane fade{% if active_tab == 'profile' %} show active{% endif %}" id="profileTab" role="tabpanel">
+    {% if read_only %}
+        <div class="card-body personal-info">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 me-4">
+                    <span class="d-block mb-2">Informação Pessoal:</span>
+                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Dados principais do cliente.</span>
+                </h5>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Foto:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="mb-4 mb-md-0 d-flex gap-4 your-brand">
+                        <div class="wd-100 ht-100 position-relative overflow-hidden border border-gray-2 rounded">
+                            {% if client_profile.profile_photo %}
+                                <img src="{{ client_profile.profile_photo.url }}" class="img-fluid rounded h-100 w-100" alt="">
+                            {% else %}
+                                <img src="{% static 'duralux/assets/images/avatar/1.png' %}" class="img-fluid rounded h-100 w-100" alt="">
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Nome completo:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.full_name|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Email:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_user.email|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Username:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_user.username|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Telefone:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.phone|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">NIF:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.nif|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+        <hr class="my-0">
+        <div class="card-body additional-info">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 me-4">
+                    <span class="d-block mb-2">Morada:</span>
+                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Dados de endereço do cliente.</span>
+                </h5>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Morada:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.address_line1|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Morada (linha 2):</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.address_line2|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Código postal:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.postal_code|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Distrito:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.district|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Concelho:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.county|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Localidade:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.locality|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Cidade:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.city|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Designação postal:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.postal_designation|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">País:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.country|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+        <hr class="my-0">
+        <div class="card-body additional-info">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 me-4">
+                    <span class="d-block mb-2">Parcerias e Descontos:</span>
+                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Informação de parceria e desconto.</span>
+                </h5>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Parceria:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.partner.name|default:"-" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Tipo de desconto:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.get_discount_type_display|default:"Sem desconto" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Valor:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">
+                        {% if client_profile.discount_type == "percent" and client_profile.discount_percent %}
+                            {{ client_profile.discount_percent }}%
+                        {% elif client_profile.discount_type == "fixed" and client_profile.discount_amount %}
+                            {{ client_profile.discount_amount }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Descrição:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.discount_label|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="card-body personal-info">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 me-4">
+                    <span class="d-block mb-2">Informação Pessoal:</span>
+                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Dados principais do cliente.</span>
+                </h5>
+                <a href="javascript:void(0);" class="btn btn-sm btn-light-brand">Adicionar</a>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Foto:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="mb-4 mb-md-0 d-flex gap-4 your-brand">
+                        <div class="wd-100 ht-100 position-relative overflow-hidden border border-gray-2 rounded">
+                            <img src="{% static 'duralux/assets/images/avatar/1.png' %}" class="upload-pic img-fluid rounded h-100 w-100" alt="">
+                            <div class="position-absolute start-50 top-50 end-0 bottom-0 translate-middle h-100 w-100 hstack align-items-center justify-content-center c-pointer upload-button">
+                                <i class="feather feather-camera" aria-hidden="true"></i>
+                            </div>
+                            <input class="file-upload" type="file" name="profile_photo" accept="image/*">
+                        </div>
+                        <div class="d-flex flex-column gap-1">
+                            <div class="fs-11 text-gray-500 mt-2"># Foto de perfil</div>
+                            <div class="fs-11 text-gray-500"># Tamanho recomendado 150x150</div>
+                            <div class="fs-11 text-gray-500"># Max 2mb</div>
+                            <div class="fs-11 text-gray-500"># png, jpg, jpeg</div>
+                        </div>
+                    </div>
+                    {% if form.profile_photo.errors %}
+                        <div class="invalid-feedback d-block">{{ form.profile_photo.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="fullnameInput" class="fw-semibold">Nome completo:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-user"></i></div>
+                        <input type="text" name="full_name" class="form-control{% if form.full_name.errors %} is-invalid{% endif %}" id="fullnameInput" value="{{ form.full_name.value|default_if_none:'' }}" placeholder="Nome completo">
+                    </div>
+                    {% if form.full_name.errors %}
+                        <div class="invalid-feedback d-block">{{ form.full_name.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="mailInput" class="fw-semibold">Email:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-mail"></i></div>
+                        <input type="email" name="email" class="form-control{% if form.email.errors %} is-invalid{% endif %}" id="mailInput" value="{{ form.email.value|default_if_none:'' }}" placeholder="Email">
+                    </div>
+                    {% if form.email.errors %}
+                        <div class="invalid-feedback d-block">{{ form.email.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="usernameInput" class="fw-semibold">Username:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-link-2"></i></div>
+                        <input type="text" name="username" class="form-control{% if form.username.errors %} is-invalid{% endif %}" id="usernameInput" value="{{ form.username.value|default_if_none:'' }}" placeholder="Username">
+                    </div>
+                    {% if form.username.errors %}
+                        <div class="invalid-feedback d-block">{{ form.username.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="phoneInput" class="fw-semibold">Telefone:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-phone"></i></div>
+                        <input type="text" name="phone" class="form-control{% if form.phone.errors %} is-invalid{% endif %}" id="phoneInput" value="{{ form.phone.value|default_if_none:'' }}" placeholder="Telefone">
+                    </div>
+                    {% if form.phone.errors %}
+                        <div class="invalid-feedback d-block">{{ form.phone.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="nifInput" class="fw-semibold">NIF:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-hash"></i></div>
+                        <input type="text" name="nif" class="form-control{% if form.nif.errors %} is-invalid{% endif %}" id="nifInput" value="{{ form.nif.value|default_if_none:'' }}" placeholder="NIF">
+                    </div>
+                    {% if form.nif.errors %}
+                        <div class="invalid-feedback d-block">{{ form.nif.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="addressInput_1" class="fw-semibold">Morada:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-map-pin"></i></div>
+                        <textarea class="form-control{% if form.address_line1.errors %} is-invalid{% endif %}" id="addressInput_1" name="address_line1" cols="30" rows="3" placeholder="Morada">{{ form.address_line1.value|default_if_none:'' }}</textarea>
+                    </div>
+                    {% if form.address_line1.errors %}
+                        <div class="invalid-feedback d-block">{{ form.address_line1.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="addressInput_2" class="fw-semibold">Morada (linha 2):</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-map-pin"></i></div>
+                        <textarea class="form-control{% if form.address_line2.errors %} is-invalid{% endif %}" id="addressInput_2" name="address_line2" cols="30" rows="3" placeholder="Complemento">{{ form.address_line2.value|default_if_none:'' }}</textarea>
+                    </div>
+                    {% if form.address_line2.errors %}
+                        <div class="invalid-feedback d-block">{{ form.address_line2.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <hr class="my-0">
+        <div class="card-body additional-info">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 me-4">
+                    <span class="d-block mb-2">Morada:</span>
+                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Preenchimento automático por código postal.</span>
+                </h5>
+                <a href="javascript:void(0);" class="btn btn-sm btn-light-brand">Adicionar</a>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Código postal:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-tag"></i></div>
+                        <input type="text" name="postal_code_1" class="form-control{% if form.postal_code.errors %} is-invalid{% endif %}" maxlength="4" inputmode="numeric" value="{{ form.postal_code.value|default_if_none:''|slice:':4' }}" placeholder="0000">
+                        <span class="input-group-text">-</span>
+                        <input type="text" name="postal_code_2" class="form-control{% if form.postal_code.errors %} is-invalid{% endif %}" maxlength="3" inputmode="numeric" value="{% if form.postal_code.value %}{{ form.postal_code.value|slice:'5:8' }}{% endif %}" placeholder="000">
+                    </div>
+                    {% if form.postal_code.errors %}
+                        <div class="invalid-feedback d-block">{{ form.postal_code.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Distrito:</label>
+                </div>
+                <div class="col-lg-8">
+                    <select name="district" class="form-control{% if form.district.errors %} is-invalid{% endif %}" data-initial="{{ form.district.value|default_if_none:'' }}">
+                        <option value="">— escolher —</option>
+                    </select>
+                    {% if form.district.errors %}
+                        <div class="invalid-feedback d-block">{{ form.district.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Concelho:</label>
+                </div>
+                <div class="col-lg-8">
+                    <select name="county" class="form-control{% if form.county.errors %} is-invalid{% endif %}" data-initial="{{ form.county.value|default_if_none:'' }}">
+                        <option value="">— escolher —</option>
+                    </select>
+                    {% if form.county.errors %}
+                        <div class="invalid-feedback d-block">{{ form.county.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Localidade:</label>
+                </div>
+                <div class="col-lg-8">
+                    <select name="locality" class="form-control{% if form.locality.errors %} is-invalid{% endif %}" data-initial="{{ form.locality.value|default_if_none:'' }}">
+                        <option value="">— escolher —</option>
+                    </select>
+                    {% if form.locality.errors %}
+                        <div class="invalid-feedback d-block">{{ form.locality.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="cityInput" class="fw-semibold">Cidade:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-map"></i></div>
+                        <input type="text" name="city" class="form-control{% if form.city.errors %} is-invalid{% endif %}" id="cityInput" value="{{ form.city.value|default_if_none:'' }}" placeholder="Cidade">
+                    </div>
+                    {% if form.city.errors %}
+                        <div class="invalid-feedback d-block">{{ form.city.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="postalDesignationInput" class="fw-semibold">Designação postal:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-type"></i></div>
+                        <input type="text" name="postal_designation" class="form-control{% if form.postal_designation.errors %} is-invalid{% endif %}" id="postalDesignationInput" value="{{ form.postal_designation.value|default_if_none:'' }}" placeholder="Designação postal">
+                    </div>
+                    {% if form.postal_designation.errors %}
+                        <div class="invalid-feedback d-block">{{ form.postal_designation.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="countryInput" class="fw-semibold">País:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-globe"></i></div>
+                        <input type="text" name="country" class="form-control{% if form.country.errors %} is-invalid{% endif %}" id="countryInput" value="{{ form.country.value|default_if_none:'' }}" placeholder="País">
+                    </div>
+                    {% if form.country.errors %}
+                        <div class="invalid-feedback d-block">{{ form.country.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <hr class="my-0">
+        <div class="card-body additional-info">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 me-4">
+                    <span class="d-block mb-2">Parcerias e Descontos:</span>
+                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Configurações de parceria e desconto do cliente.</span>
+                </h5>
+                <a href="javascript:void(0);" class="btn btn-sm btn-light-brand">Adicionar</a>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Parceria:</label>
+                </div>
+                <div class="col-lg-8">
+                    <select name="partner" class="form-control{% if form.partner.errors %} is-invalid{% endif %}">
+                        <option value="">— escolher —</option>
+                        {% for partner in form.partner.field.queryset %}
+                            <option value="{{ partner.id }}" {% if form.partner.value|default_if_none:''|stringformat:'s' == partner.id|stringformat:'s' %}selected{% endif %}>{{ partner.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.partner.errors %}
+                        <div class="invalid-feedback d-block">{{ form.partner.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Tipo de desconto:</label>
+                </div>
+                <div class="col-lg-8">
+                    <select name="discount_type" class="form-control{% if form.discount_type.errors %} is-invalid{% endif %}">
+                        {% for value, label in form.discount_type.field.choices %}
+                            <option value="{{ value }}" {% if form.discount_type.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.discount_type.errors %}
+                        <div class="invalid-feedback d-block">{{ form.discount_type.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="discountPercentInput" class="fw-semibold">Desconto (%):</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-percent"></i></div>
+                        <input type="number" step="0.01" name="discount_percent" class="form-control{% if form.discount_percent.errors %} is-invalid{% endif %}" id="discountPercentInput" value="{{ form.discount_percent.value|default_if_none:'' }}" placeholder="0">
+                    </div>
+                    {% if form.discount_percent.errors %}
+                        <div class="invalid-feedback d-block">{{ form.discount_percent.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="discountAmountInput" class="fw-semibold">Desconto (valor):</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-dollar-sign"></i></div>
+                        <input type="number" step="0.01" name="discount_amount" class="form-control{% if form.discount_amount.errors %} is-invalid{% endif %}" id="discountAmountInput" value="{{ form.discount_amount.value|default_if_none:'' }}" placeholder="0">
+                    </div>
+                    {% if form.discount_amount.errors %}
+                        <div class="invalid-feedback d-block">{{ form.discount_amount.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="discountLabelInput" class="fw-semibold">Descrição do desconto:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-tag"></i></div>
+                        <input type="text" name="discount_label" class="form-control{% if form.discount_label.errors %} is-invalid{% endif %}" id="discountLabelInput" value="{{ form.discount_label.value|default_if_none:'' }}" placeholder="Descrição">
+                    </div>
+                    {% if form.discount_label.errors %}
+                        <div class="invalid-feedback d-block">{{ form.discount_label.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>

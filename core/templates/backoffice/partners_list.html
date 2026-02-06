@@ -1,0 +1,37 @@
+{% extends "backoffice/base.html" %}
+{% load backoffice_extras %}
+
+{% block backoffice_content %}
+  {% url 'backoffice_partner_new' as backoffice_partner_new_url %}
+  {% with return_qs=return_to|urlencode %}
+    {% with actions_html="<a class='btn btn-primary' href='"|add:backoffice_partner_new_url|add:"?return_to="|add:return_qs|add:"'>Criar parceria</a>" %}
+      {% include "backoffice/partials/page_header.html" with title="Parcerias" subtitle="Gestão de parcerias/seguros." actions=actions_html %}
+    {% endwith %}
+  {% endwith %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      {% include "backoffice/partials/filters_bar.html" with q=q per_page=per_page placeholder="Pesquisar por nome" auto_submit=True %}
+    </div>
+  </div>
+
+  {% if partners %}
+    <div class="card">
+      {% include "backoffice/partials/table_open.html" with header_cols="Nome,Ativo,Desconto,Ação"|split_csv %}
+      {% for p in partners %}
+        <tr>
+          <td>{{ p.name }}</td>
+          <td>{{ p.active|yesno:"Sim,Não" }}</td>
+          <td>{{ p.get_discount_type_display }}</td>
+          <td class="text-end">
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'backoffice_partner_edit' p.id %}?return_to={{ return_to|urlencode }}">Editar</a>
+          </td>
+        </tr>
+      {% endfor %}
+      {% include "backoffice/partials/table_close.html" %}
+    </div>
+    {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    {% include "backoffice/partials/empty_state.html" with title="Sem parcerias" description="Ainda não existem parcerias registadas." action_text="Criar parceria" action_url=backoffice_partner_new_url %}
+  {% endif %}
+{% endblock %}

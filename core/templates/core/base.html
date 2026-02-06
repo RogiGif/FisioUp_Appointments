@@ -1,0 +1,160 @@
+{% load static %}
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{% block title %}Marcações{% endblock %}</title>
+
+  <link rel="stylesheet" href="{% static 'core/css/app.css' %}?v=3">
+</head>
+<body>
+
+  <!-- HEADER GLOBAL -->
+  <header class="top">
+    <div class="container top-inner">
+      <div class="brand">FisioUp</div>
+
+      <nav class="top-nav nav-pill">
+        {% if request.resolver_match.url_name != "login" %}
+          <a class="nav-link" href="{% url 'home' %}">Home</a>
+        {% endif %}
+
+        {% if request.user.is_authenticated %}
+          {% with is_professional=request.user.professional %}
+            {% if is_professional or request.user.is_staff %}
+              <a class="nav-link" href="{% url 'professional_clients' %}">Utentes</a>
+              <a class="nav-link" href="{% url 'professional_calendar' %}">Agenda</a>
+            {% else %}
+              <a class="nav-link" href="{% url 'book' %}">Marcar</a>
+              <a class="nav-link" href="{% url 'my_appointments' %}">Minhas marcações</a>
+            {% endif %}
+          {% endwith %}
+        {% else %}
+          <a class="nav-link" href="{% url 'login' %}">Entrar</a>
+          <a class="nav-link" href="{% url 'register' %}">Registar</a>
+        {% endif %}
+      </nav>
+
+      {% if request.user.is_authenticated %}
+        <div class="user-menu">
+          <button class="avatar-btn" type="button" data-menu-toggle aria-haspopup="true" aria-expanded="false">
+            {% if request.user.professional and request.user.professional.profile_photo %}
+              <img src="{{ request.user.professional.profile_photo.url }}" alt="Foto de perfil">
+            {% elif request.user.client_profile and request.user.client_profile.profile_photo %}
+              <img src="{{ request.user.client_profile.profile_photo.url }}" alt="Foto de perfil">
+            {% else %}
+              <span>{{ request.user.username|slice:":2"|upper }}</span>
+            {% endif %}
+          </button>
+          <div class="menu-card" data-menu-card>
+            {% if request.user.professional %}
+              <a class="menu-link" href="{% url 'professional_profile' %}">Perfil</a>
+            {% else %}
+              <a class="menu-link" href="{% url 'profile' %}">Perfil</a>
+            {% endif %}
+            {% if request.user.is_staff %}
+              <a class="menu-link" href="/admin/">Admin</a>
+            {% endif %}
+            <a class="menu-link" href="{% url 'logout' %}">Sair</a>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="container">
+
+      <div class="page-card">
+        <!-- MENSAGENS -->
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert">
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+
+        <!-- CONTEÚDO -->
+        {% block content %}{% endblock %}
+      </div>
+
+    </div>
+  </div>
+
+  <div class="cookie-banner" data-cookie-banner hidden>
+    <div class="cookie-card">
+      <div>
+        <div class="cookie-title">Usamos cookies</div>
+        <div class="cookie-text">
+          Utilizamos cookies para melhorar a tua experiência e manter a sessão ativa. Podes aceitar ou rejeitar.
+        </div>
+      </div>
+      <div class="cookie-actions">
+        <button class="btn secondary" type="button" data-cookie-reject>Rejeitar</button>
+        <button class="btn" type="button" data-cookie-accept>Aceitar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const toggle = document.querySelector("[data-menu-toggle]");
+      const menu = document.querySelector("[data-menu-card]");
+      if (!toggle || !menu) return;
+
+      function closeMenu() {
+        menu.classList.remove("open");
+        toggle.setAttribute("aria-expanded", "false");
+      }
+
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = menu.classList.toggle("open");
+        toggle.setAttribute("aria-expanded", String(isOpen));
+      });
+
+      document.addEventListener("click", closeMenu);
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeMenu();
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      const banner = document.querySelector("[data-cookie-banner]");
+      if (!banner) return;
+
+      function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(";").shift();
+        return "";
+      }
+
+      function setCookie(name, value, maxAgeSeconds) {
+        document.cookie = `${name}=${value}; Max-Age=${maxAgeSeconds}; Path=/; SameSite=Lax`;
+      }
+
+      const consent = getCookie("cookie_consent");
+      if (!consent) {
+        banner.hidden = false;
+      }
+
+      const acceptBtn = document.querySelector("[data-cookie-accept]");
+      const rejectBtn = document.querySelector("[data-cookie-reject]");
+
+      function closeBanner(value) {
+        setCookie("cookie_consent", value, 60 * 60 * 24 * 365);
+        banner.hidden = true;
+        banner.classList.add("hidden");
+      }
+
+      if (acceptBtn) acceptBtn.addEventListener("click", () => closeBanner("accept"));
+      if (rejectBtn) rejectBtn.addEventListener("click", () => closeBanner("reject"));
+    })();
+  </script>
+
+</body>
+</html>

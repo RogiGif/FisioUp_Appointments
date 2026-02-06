@@ -1,0 +1,79 @@
+{% extends "core/base.html" %}
+
+{% block title %}Dashboard Profissional{% endblock %}
+
+{% block page_title %}Dashboard Profissional{% endblock %}
+{% block page_subtitle %}
+  <div class="muted">
+    Agenda de hoje ({{ today }}).
+    {% if prof %}A mostrar só o teu calendário.{% else %}A mostrar todos (staff).{% endif %}
+  </div>
+{% endblock %}
+
+{% block content %}
+
+  <div class="grid" style="grid-template-columns:1fr 1fr 1fr;">
+    <div class="card">
+      <div class="muted">Total hoje</div>
+      <div style="font-size:28px;font-weight:800;margin-top:6px;">{{ total }}</div>
+    </div>
+    <div class="card">
+      <div class="muted">Agendadas</div>
+      <div style="font-size:28px;font-weight:800;margin-top:6px;">{{ scheduled }}</div>
+    </div>
+    <div class="card">
+      <div class="muted">Concluídas</div>
+      <div style="font-size:28px;font-weight:800;margin-top:6px;">{{ completed }}</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <a class="btn" href="/admin/">Abrir Admin</a>
+      <a class="btn secondary" href="/admin/core/appointment/">Marcações</a>
+      <a class="btn secondary" href="/admin/core/treatmentrecord/">Tratamentos</a>
+      <a class="btn secondary" href="/">Home</a>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <h3 style="margin:0 0 8px 0;">Agenda de hoje</h3>
+
+    {% if appointments %}
+      <table>
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Cliente</th>
+            <th>Serviço</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in appointments %}
+            <tr>
+              <td>{% if a.time %}{{ a.time }}{% else %}-{% endif %}</td>
+              <td>{{ a.client.username }}</td>
+              <td>{{ a.service.name }}</td>
+              <td>{{ a.status }}</td>
+              <td style="text-align:right;">
+                {# Só funciona se o user tiver ClientProfile ligado; normalmente tem #}
+                {% if a.client.client_profile %}
+                  <a class="btn secondary" href="{% url 'client_record' a.client.client_profile.id %}" target="_blank">
+                    Abrir ficha
+                  </a>
+                {% else %}
+                  <span class="muted">sem profile</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted">Sem marcações para hoje.</div>
+    {% endif %}
+  </div>
+
+{% endblock %}

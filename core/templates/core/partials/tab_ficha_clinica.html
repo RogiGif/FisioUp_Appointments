@@ -1,0 +1,73 @@
+<div class="tab-pane fade{% if active_tab == 'clinical' %} show active{% endif %}{% if read_only %} p-4{% endif %}" id="clinicalTab" role="tabpanel">
+    {% if read_only %}
+        <div class="about-section mb-5">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0">Ficha Clínica:</h5>
+                <a href="javascript:void(0);" class="btn btn-sm btn-light-brand">Detalhe</a>
+            </div>
+            {% if clinical_record %}
+                {% if clinical_record.allergies or clinical_record.conditions or clinical_record.notes %}
+                    <div class="row mb-4">
+                        <div class="col-sm-4 text-muted">Alergias:</div>
+                        <div class="col-sm-8 fw-semibold">{{ clinical_record.allergies|default:"-" }}</div>
+                    </div>
+                    <div class="row mb-4">
+                        <div class="col-sm-4 text-muted">Condições:</div>
+                        <div class="col-sm-8 fw-semibold">{{ clinical_record.conditions|default:"-" }}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-4 text-muted">Notas:</div>
+                        <div class="col-sm-8 fw-semibold">{{ clinical_record.notes|default:"-" }}</div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-soft-warning-message">Ainda não existe ficha clínica preenchida.</div>
+                {% endif %}
+            {% else %}
+                <div class="alert alert-soft-warning-message">Ainda não existe ficha clínica preenchida.</div>
+            {% endif %}
+        </div>
+    {% else %}
+        <div class="card-body pass-info">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 me-4">
+                    <span class="d-block mb-2">Ficha Clínica:</span>
+                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Informação clínica do cliente.</span>
+                </h5>
+                <a href="javascript:void(0);" class="btn btn-sm btn-light-brand">Atualizar</a>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="clinicalAllergies" class="fw-semibold">Alergias:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-alert-circle"></i></div>
+                        <textarea class="form-control" id="clinicalAllergies" name="clinical_allergies" rows="3" placeholder="Alergias">{{ form.clinical_allergies.value|default_if_none:'' }}</textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="clinicalConditions" class="fw-semibold">Condições clínicas:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-activity"></i></div>
+                        <textarea class="form-control" id="clinicalConditions" name="clinical_conditions" rows="3" placeholder="Condições">{{ form.clinical_conditions.value|default_if_none:'' }}</textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="clinicalNotes" class="fw-semibold">Notas:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-file-text"></i></div>
+                        <textarea class="form-control" id="clinicalNotes" name="clinical_notes" rows="4" placeholder="Notas clínicas">{{ form.clinical_notes.value|default_if_none:'' }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>

@@ -1,0 +1,16 @@
+{% extends "emails/base.txt" %}
+
+{% block content %}
+Olá {{ client_name }},
+
+A clínica alterou a tua marcação.
+
+Tipo de alteração: {{ change_type }}
+Serviço: {{ service_name }}
+Profissional: {{ professional_name }}
+{% if old_date %}Data anterior: {{ old_date }} {{ old_time }}{% endif %}
+{% if new_date %}Nova data: {{ new_date }} {{ new_time }}{% endif %}
+{% if reason %}Motivo: {{ reason }}{% endif %}
+
+Gerir marcações: {{ manage_url }}
+{% endblock %}

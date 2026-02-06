@@ -1,0 +1,116 @@
+{% extends "core/base_duralux.html" %}
+
+{% block content %}
+    <div class="page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Dashboard</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'backoffice_dashboard' %}">Home</a></li>
+                <li class="breadcrumb-item">Dashboard</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-3">
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted fs-11 text-uppercase">Faturado hoje</div>
+                            <div class="fs-4 fw-bold">€{{ kpi_revenue_today|default:"0.00" }}</div>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-gray-200">
+                            <i class="feather-dollar-sign"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted fs-11 text-uppercase">Marcações do dia</div>
+                            <div class="fs-4 fw-bold">{{ kpi_appts_today|default:"0" }}</div>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-gray-200">
+                            <i class="feather-calendar"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted fs-11 text-uppercase">Novos clientes</div>
+                            <div class="fs-4 fw-bold">{{ kpi_new_clients|default:"0" }}</div>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-gray-200">
+                            <i class="feather-users"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted fs-11 text-uppercase">Vendas</div>
+                            <div class="fs-4 fw-bold">€{{ kpi_sales_total|default:"0.00" }}</div>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-gray-200">
+                            <i class="feather-bar-chart-2"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card stretch stretch-full mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Agenda de hoje</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Cliente</th>
+                            <th>Serviço</th>
+                            <th>Profissional</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if today_agenda %}
+                            {% for item in today_agenda %}
+                                <tr>
+                                    <td>{{ item.time|time:"H:i" }}</td>
+                                    <td>{{ item.client }}</td>
+                                    <td>{{ item.service }}</td>
+                                    <td>{{ item.professional }}</td>
+                                    <td>{{ item.status }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">Sem marcações para hoje.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}

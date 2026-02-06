@@ -1,0 +1,19 @@
+<ul class="nav nav-tabs flex-wrap w-100 text-center customers-nav-tabs" id="myTab" role="tablist">
+    <li class="nav-item flex-fill border-top" role="presentation">
+        <a href="javascript:void(0);" class="nav-link{% if active_tab == 'profile' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#profileTab" role="tab">Perfil</a>
+    </li>
+    {% if show_password %}
+        <li class="nav-item flex-fill border-top" role="presentation">
+            <a href="javascript:void(0);" class="nav-link{% if active_tab == 'password' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#passwordTab" role="tab">Password</a>
+        </li>
+    {% endif %}
+    <li class="nav-item flex-fill border-top" role="presentation">
+        <a href="javascript:void(0);" class="nav-link{% if active_tab == 'movements' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#movementsTab" role="tab">Movimentos</a>
+    </li>
+    <li class="nav-item flex-fill border-top" role="presentation">
+        <a href="javascript:void(0);" class="nav-link{% if active_tab == 'notifications' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#notificationsTab" role="tab">Notificações</a>
+    </li>
+    <li class="nav-item flex-fill border-top" role="presentation">
+        <a href="javascript:void(0);" class="nav-link{% if active_tab == 'clinical' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#clinicalTab" role="tab">Ficha Clínica</a>
+    </li>
+</ul>

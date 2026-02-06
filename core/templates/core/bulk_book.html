@@ -1,0 +1,263 @@
+{% extends "core/base.html" %}
+
+{% block title %}Marcar várias sessões{% endblock %}
+
+{% block page_title %}Marcar várias sessões{% endblock %}
+{% block page_subtitle %}
+  <div class="muted">Cria um plano com várias sessões e ajusta profissional e horário por sessão.</div>
+{% endblock %}
+
+{% block content %}
+
+  <div class="card">
+    <form method="get">
+      <div class="row" style="gap:10px;flex-wrap:wrap;">
+        {% if is_staff_flow %}
+          <div style="min-width:260px;">
+            <label><strong>Cliente selecionado</strong></label>
+            <div class="pill" style="margin-top:6px;">
+              {% if selected_client %}
+                {{ selected_client.full_name }}{% if selected_client.user and selected_client.user.username %} ({{ selected_client.user.username }}){% endif %}
+              {% else %}
+                — nenhum —
+              {% endif %}
+            </div>
+            <input type="hidden" name="client_id" value="{{ selected_client_id }}">
+          </div>
+        {% endif %}
+        <div style="min-width:220px;">
+          <label><strong>Serviço</strong></label>
+          <select name="service_id" required onchange="this.form.submit();">
+            <option value="">-- escolher --</option>
+            {% for s in services %}
+              <option value="{{ s.id }}" {% if service_id == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="min-width:160px;">
+          <label><strong>Data inicial</strong></label>
+          <input type="date" name="start_date" value="{{ start_date }}" required>
+        </div>
+
+        <div style="min-width:120px;">
+          <label><strong>N.º sessões</strong></label>
+          <input type="number" name="count" min="1" max="20" value="{{ count|default:"10" }}" required>
+        </div>
+
+        <div style="min-width:160px;">
+          <label><strong>Frequência</strong></label>
+          <select name="freq">
+            <option value="daily" {% if freq == "daily" %}selected{% endif %}>Diário</option>
+            <option value="weekdays" {% if freq == "weekdays" %}selected{% endif %}>Dias úteis</option>
+            <option value="weekly" {% if freq == "weekly" %}selected{% endif %}>Semanal</option>
+          </select>
+        </div>
+
+        <div style="min-width:220px;">
+          <label><strong>Profissional preferido (opcional)</strong></label>
+          <select name="professional_id">
+            <option value="">-- escolher --</option>
+            {% for p in professionals %}
+              <option value="{{ p.id }}" {% if preferred_professional_id == p.id|stringformat:"s" %}selected{% endif %}>
+                {{ p.user.get_full_name|default:p.user.username }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="display:flex;align-items:flex-end;">
+          <button class="btn" type="submit">Gerar plano</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {% if is_staff_flow and not selected_client_id %}
+    <div class="card" style="margin-top:14px;">
+      <h3 style="margin:0 0 8px 0;">Selecionar cliente</h3>
+      <form method="get" style="margin-bottom:10px;">
+        <input type="hidden" name="service_id" value="{{ service_id }}">
+        <input type="hidden" name="start_date" value="{{ start_date }}">
+        <input type="hidden" name="count" value="{{ count }}">
+        <input type="hidden" name="freq" value="{{ freq }}">
+        <input type="hidden" name="professional_id" value="{{ preferred_professional_id }}">
+        <div class="row" style="gap:10px;flex-wrap:wrap;">
+          <div style="min-width:260px;flex:1;">
+            <label><strong>Pesquisar</strong></label>
+            <input type="text" name="q" value="{{ client_query }}" placeholder="Nome, username, telefone ou NIF">
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn secondary btn-compact" type="submit">Pesquisar</button>
+          </div>
+        </div>
+      </form>
+
+      {% if clients %}
+        <table class="table-compact">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Username</th>
+              <th>Telefone</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in clients %}
+              <tr>
+                <td>{{ c.full_name }}</td>
+                <td>{% if c.user %}{{ c.user.username }}{% else %}—{% endif %}</td>
+                <td>{{ c.phone|default:"—" }}</td>
+                <td>
+                  <a class="btn secondary btn-compact"
+                     href="?{% if base_has_params %}{{ base_params }}&{% endif %}client_id={{ c.id }}">
+                    Selecionar
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        {% if clients.paginator.num_pages > 1 %}
+          <div class="card-actions" style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;align-items:center;">
+            {% if clients.has_previous %}
+              <a class="btn secondary btn-compact" href="?{% if base_has_params %}{{ base_params }}&{% endif %}page={{ clients.previous_page_number }}">Anterior</a>
+            {% endif %}
+            <span class="muted">Página {{ clients.number }} de {{ clients.paginator.num_pages }}</span>
+            {% if clients.has_next %}
+              <a class="btn secondary btn-compact" href="?{% if base_has_params %}{{ base_params }}&{% endif %}page={{ clients.next_page_number }}">Seguinte</a>
+            {% endif %}
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="muted">Sem resultados.</div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if general_errors %}
+    <div class="alert" style="margin-top:10px;">
+      {% for e in general_errors %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+    </div>
+  {% endif %}
+
+  {% if sessions %}
+    <div class="card" style="margin-top:14px;">
+      <h3 style="margin:0 0 10px 0;">Plano de sessões</h3>
+
+      <form method="post" id="bulkConfirmForm">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="confirm">
+        <input type="hidden" name="service_id" value="{{ service_id }}">
+        {% if is_staff_flow %}
+          <input type="hidden" name="client_id" value="{{ selected_client_id }}">
+        {% endif %}
+
+        <table class="appointments-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Profissional</th>
+              <th>Hora</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in sessions %}
+              <tr class="bulk-row" data-date="{{ s.date_value }}">
+                <td>
+                  <div class="appt-date">{{ s.date_display|date:"M. j, Y" }}</div>
+                  <input type="hidden" name="session_date" value="{{ s.date_value }}">
+                </td>
+                <td>
+                  <select class="prof-select" name="session_professional_id" required>
+                    <option value="">-- escolher --</option>
+                    {% for p in professionals %}
+                      <option value="{{ p.id }}" {% if s.professional_id == p.id|stringformat:"s" %}selected{% endif %}>
+                        {{ p.user.get_full_name|default:p.user.username }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td>
+                  <select class="time-select" name="session_time" data-selected-time="{{ s.time|default:'' }}" required>
+                    <option value="">-- escolher --</option>
+                  </select>
+                </td>
+                <td>
+                  <span class="row-status {% if s.error %}danger{% endif %}">{{ s.error|default:"" }}</span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div style="margin-top:12px;">
+          <label><strong>Notas globais (opcional)</strong></label>
+          <textarea name="notes_global" rows="3" placeholder="Opcional..."></textarea>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn" type="submit">Confirmar marcações</button>
+          <a class="btn secondary" href="{% url 'book' %}">Voltar</a>
+        </div>
+      </form>
+    </div>
+  {% endif %}
+
+  <script>
+    (function() {
+      const serviceId = "{{ service_id }}";
+      if (!serviceId) return;
+
+      function loadSlotsForRow(row) {
+        const profSelect = row.querySelector(".prof-select");
+        const timeSelect = row.querySelector(".time-select");
+        const statusEl = row.querySelector(".row-status");
+        const date = row.dataset.date;
+        const profId = profSelect.value;
+
+        timeSelect.innerHTML = '<option value="">-- escolher --</option>';
+        statusEl.textContent = "";
+
+        if (!profId) {
+          statusEl.textContent = "Escolhe o profissional.";
+          return;
+        }
+
+        fetch(`/api/slots/?service_id=${serviceId}&professional_id=${profId}&date=${date}`)
+          .then(r => r.json())
+          .then(data => {
+            if (!data.ok) {
+              statusEl.textContent = data.message || "Sem horários.";
+              return;
+            }
+            data.slots.forEach(t => {
+              const opt = document.createElement("option");
+              opt.value = t;
+              opt.textContent = t;
+              timeSelect.appendChild(opt);
+            });
+            const selected = timeSelect.dataset.selectedTime;
+            if (selected) {
+              timeSelect.value = selected;
+            }
+          })
+          .catch(() => {
+            statusEl.textContent = "Erro a carregar horários.";
+          });
+      }
+
+      document.querySelectorAll(".bulk-row").forEach(row => {
+        const profSelect = row.querySelector(".prof-select");
+        profSelect.addEventListener("change", () => loadSlotsForRow(row));
+        if (profSelect.value) {
+          loadSlotsForRow(row);
+        }
+      });
+    })();
+  </script>
+
+{% endblock %}

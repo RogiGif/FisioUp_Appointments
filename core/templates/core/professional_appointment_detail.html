@@ -1,0 +1,68 @@
+{% extends "core/base.html" %}
+
+{% block title %}Marcação{% endblock %}
+{% block page_title %}Marcação{% endblock %}
+{% block page_subtitle %}
+  <div class="muted">
+    {{ appointment.date }}{% if appointment.time %} · {{ appointment.time }}{% endif %}
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="muted" style="margin-bottom:8px;">
+      Serviço: <strong>{{ appointment.service.name }}</strong>
+      · Utente: <strong>{{ appointment.client.get_full_name|default:appointment.client.username }}</strong>
+    </div>
+    <div class="muted" style="margin-bottom:8px;">
+      Estado: <strong>{{ appointment.status }}</strong>
+    </div>
+    {% if appointment.notes %}
+      <div class="muted">Notas: {{ appointment.notes }}</div>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+    {% if appointment.client.client_profile %}
+      <a class="btn secondary" href="{% url 'prof_customer_detail' appointment.client.client_profile.id %}">
+        Ver ficha
+      </a>
+    {% endif %}
+
+    {% if appointment.status == "scheduled" %}
+      <form method="post"
+            action="{% url 'professional_cancel_appointment' appointment.id %}?week={{ week }}"
+            style="margin:0;">
+        {% csrf_token %}
+        <button class="btn secondary" type="submit"
+                onclick="return confirm('Cancelar esta marcação?');">
+          Cancelar
+        </button>
+      </form>
+    {% endif %}
+
+    {% if appointment.status != "completed" %}
+      <form method="post"
+            action="{% url 'professional_complete_appointment' appointment.id %}?week={{ week }}"
+            style="margin:0;">
+        {% csrf_token %}
+        <button class="btn secondary" type="submit"
+                onclick="return confirm('Marcar como concluída?');">
+          Concluir
+        </button>
+      </form>
+    {% endif %}
+
+    {% if appointment.status != "completed" and appointment.status != "cancelled" %}
+      <a class="btn secondary"
+         href="{% url 'professional_reschedule_appointment' appointment.id %}?week={{ week }}">
+        Reagendar
+      </a>
+    {% endif %}
+
+    <a class="btn secondary"
+       href="{% url 'professional_calendar' %}{% if week %}?week={{ week }}{% endif %}">
+      Voltar ao calendário
+    </a>
+  </div>
+{% endblock %}

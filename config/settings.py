@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 
 
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -25,20 +26,35 @@ load_dotenv(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY", "fallback-dev-secret")
+# Ambiente
+ENV = os.getenv("ENV", "development").lower()
 
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if ENV == "production":
+        raise RuntimeError("SECRET_KEY não definido em produção.")
+    SECRET_KEY = "fallback-dev-secret"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG") == "1"
+DEBUG_ENV = os.getenv("DEBUG")
+if DEBUG_ENV is None:
+    DEBUG = ENV != "production"
+else:
+    DEBUG = DEBUG_ENV == "1"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
 
+LOGIN_URL = "/login/"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # Application definition
 
 INSTALLED_APPS = [
-    'core',   # 👈 ESTA LINHA É A CHAVE
+    'jazzmin',
+    'core.apps.CoreConfig',   # 👈 ESTA LINHA É A CHAVE
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -57,6 +73,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -65,6 +82,14 @@ MIDDLEWARE = [
 ]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Cache (rate limit)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "marcacoes-default",
+    }
+}
 
 ROOT_URLCONF = 'config.urls'
 
@@ -78,6 +103,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.role_flags',
             ],
         },
     },
@@ -125,7 +151,10 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'pt'
+LANGUAGES = [
+    ("pt", "Português"),
+]
 
 TIME_ZONE = 'UTC'
 
@@ -133,6 +162,9 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Formatação de hora (24h) em toda a app
+TIME_FORMAT = "H:i"
+SHORT_TIME_FORMAT = "H:i"
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -140,7 +172,151 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# Email (Password reset)
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "1") == "1"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@localhost")
+
+# Notificações da clínica (fallback se DB estiver vazio)
+CLINIC_NOTIFICATION_EMAILS = ["rececao@fisio-up.pt"]
+
+# Email principal da clínica (fallback)
+CLINIC_EMAIL = "rececao@fisio-up.pt"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Segurança para produção
+if ENV == "production":
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "1") == "1"
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "0") == "1"
+    SECURE_HSTS_PRELOAD = os.getenv("SECURE_HSTS_PRELOAD", "0") == "1"
+    SECURE_REFERRER_POLICY = "same-origin"
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+# Logging básico
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {"format": "%(levelname)s %(name)s %(message)s"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "simple"},
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+    },
+}
+
+# Jazzmin (Django Admin)
+JAZZMIN_SETTINGS = {
+    "site_title": "Fisio-UP Backoffice",
+    "site_header": "Fisio-UP Backoffice",
+    "site_brand": "Fisio-UP",
+    "welcome_sign": "Bem-vindo ao Backoffice",
+    "search_model": "auth.User",
+    "navigation_expanded": True,
+    "show_sidebar": True,
+    "show_ui_builder": False,
+    "icons": {
+        "auth.User": "fas fa-user",
+        "auth.Group": "fas fa-users",
+        "core.ClientProfile": "fas fa-user-injured",
+        "core.Professional": "fas fa-user-md",
+        "core.Service": "fas fa-stethoscope",
+        "core.Appointment": "fas fa-calendar-check",
+        "core.Availability": "fas fa-clock",
+    },
+    "topmenu_links": [
+        {"name": "Backoffice", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Voltar ao site", "url": "/", "new_window": False},
+    ],
+    "hide_apps": ["django.contrib.sessions", "django.contrib.contenttypes"],
+    "hide_models": [
+        "auth.Permission",
+        "core.Appointment",
+        "core.ClientProfile",
+        "core.Professional",
+        "core.Service",
+        "core.Availability",
+        "core.Partner",
+        "core.ClinicalRecord",
+        "core.TreatmentRecord",
+    ],
+    "order_with_respect_to": [
+        "core.Appointment",
+        "core.ClientProfile",
+        "core.Professional",
+        "core.Service",
+        "core.Availability",
+    ],
+    "custom_links": {
+        "core": [
+            {
+                "name": "Importar clientes",
+                "url": "/backoffice/importar-clientes/",
+                "icon": "fas fa-file-import",
+                "permissions": ["core.can_access_backoffice"],
+            },
+            {
+                "name": "Faturação",
+                "url": "/backoffice/faturacao/",
+                "icon": "fas fa-file-invoice-dollar",
+                "permissions": ["core.can_access_backoffice"],
+            },
+            {
+                "name": "Marcações",
+                "url": "admin:core_appointment_changelist",
+                "icon": "fas fa-calendar-check",
+                "permissions": ["core.view_appointment"],
+            },
+            {
+                "name": "Clientes",
+                "url": "admin:core_clientprofile_changelist",
+                "icon": "fas fa-user-injured",
+                "permissions": ["core.view_clientprofile"],
+            },
+            {
+                "name": "Profissionais",
+                "url": "admin:core_professional_changelist",
+                "icon": "fas fa-user-md",
+                "permissions": ["core.view_professional"],
+            },
+            {
+                "name": "Serviços",
+                "url": "admin:core_service_changelist",
+                "icon": "fas fa-stethoscope",
+                "permissions": ["core.view_service"],
+            },
+            {
+                "name": "Parcerias",
+                "url": "admin:core_partner_changelist",
+                "icon": "fas fa-handshake",
+                "permissions": ["core.view_partner"],
+            },
+            {
+                "name": "Disponibilidades",
+                "url": "admin:core_availability_changelist",
+                "icon": "fas fa-clock",
+                "permissions": ["core.view_availability"],
+            },
+        ]
+    },
+    "changeform_format": "horizontal_tabs",
+    "changeform_format_overrides": {
+        "auth.user": "collapsible",
+        "auth.group": "collapsible",
+    },
+}

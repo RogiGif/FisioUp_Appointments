@@ -1,0 +1,31 @@
+<div class="tab-pane fade{% if active_tab == 'notifications' %} show active{% endif %}" id="notificationsTab" role="tabpanel">
+    <div class="table-responsive">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Descrição</th>
+                    <th class="wd-250 text-end">Tipo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if history_items %}
+                    {% for item in history_items %}
+                        <tr>
+                            <td>{{ item.date }}</td>
+                            <td>
+                                <div class="fw-bold text-dark">{{ item.title }}</div>
+                                <small class="fs-12 text-muted">{{ item.detail }}</small>
+                            </td>
+                            <td class="text-end">{{ item.kind }}</td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center text-muted">Sem histórico.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>

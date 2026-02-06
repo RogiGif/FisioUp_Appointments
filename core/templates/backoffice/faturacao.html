@@ -1,0 +1,99 @@
+{% extends "backoffice/base.html" %}
+{% load backoffice_extras %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Faturação" subtitle="Resumo diário das marcações concluídas." %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+          <label class="form-label">Data início</label>
+          <input class="form-control" type="date" name="start" value="{{ start }}">
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Data fim</label>
+          <input class="form-control" type="date" name="end" value="{{ end }}">
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Profissional</label>
+          <select class="form-select" name="professional_id">
+            <option value="">Todos</option>
+            {% for p in professionals %}
+              <option value="{{ p.id }}" {% if professional_id|stringformat:"s" == p.id|stringformat:"s" %}selected{% endif %}>
+                {{ p.user.get_full_name|default:p.user.username }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Serviço</label>
+          <select class="form-select" name="service_id">
+            <option value="">Todos</option>
+            {% for s in services %}
+              <option value="{{ s.id }}" {% if service_id|stringformat:"s" == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <label class="form-label">Por página</label>
+          <select class="form-select" name="per_page">
+            {% for n in "5,10,15,25,50"|split_csv %}
+              <option value="{{ n }}" {% if per_page|stringformat:"s" == n %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6 d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Filtrar</button>
+          <a class="btn btn-outline-secondary" href="{% url 'backoffice_faturacao' %}">Limpar</a>
+          <a class="btn btn-outline-primary" href="?start={{ start }}&end={{ end }}&professional_id={{ professional_id }}&service_id={{ service_id }}&export=1">Exportar CSV</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Total do período</div>
+          <div class="h5 mb-0">{{ total_period }} €</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Média por dia</div>
+          <div class="h5 mb-0">{{ avg_per_day|floatformat:2 }} €</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Marcações concluídas</div>
+          <div class="h5 mb-0">{{ total_count }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if page_obj %}
+    <div class="card">
+      {% include "backoffice/partials/table_open.html" with header_cols="Data,Total,Marcações"|split_csv %}
+      {% for row in page_obj.object_list %}
+        <tr>
+          <td>{{ row.date|date:"d M Y" }}</td>
+          <td>{{ row.total }} €</td>
+          <td>{{ row.count }}</td>
+        </tr>
+      {% endfor %}
+      {% include "backoffice/partials/table_close.html" %}
+    </div>
+    {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    {% include "backoffice/partials/empty_state.html" with title="Sem dados" description="Não existem marcações concluídas no período selecionado." %}
+  {% endif %}
+{% endblock %}

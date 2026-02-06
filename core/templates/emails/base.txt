@@ -1,0 +1,8 @@
+{{ clinic_name }}
+
+{% block content %}{% endblock %}
+
+{% if footer_text %}{{ footer_text }}{% endif %}
+{% if signature_text %}
+{{ signature_text }}
+{% endif %}

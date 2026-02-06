@@ -1,0 +1,158 @@
+{% load static %}
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Ficha do Cliente</title>
+
+  <link rel="stylesheet" href="{% static 'core/css/app.css' %}">
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>{{ client.full_name }}</h1>
+        <div class="muted">
+          <span class="pill">Telefone: {{ client.phone|default:"-" }}</span>
+          <span class="pill">NIF: {{ client.nif|default:"-" }}</span>
+          <span class="pill">Cidade: {{ client.city|default:"-" }}</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        {% if request.user.is_staff %}
+          <a class="btn secondary" href="/admin/">Admin</a>
+        {% endif %}
+        <a class="btn secondary" href="/">Home</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- COLUNA ESQUERDA -->
+      <div class="card">
+        <h3 style="margin:0 0 6px 0;">Adicionar tratamento</h3>
+        <div class="muted">Registo por sessão (histórico clínico).</div>
+
+        {% if message %}
+          <div class="alert">{{ message }}</div>
+        {% endif %}
+
+        <!-- 1) GET: escolher serviço + data (e profissional, se necessário) para calcular horários -->
+        <form method="get" style="margin-top:10px;">
+          <div class="row">
+
+            {# Só mostra dropdown de profissional se o user logado NÃO tiver Professional ligado #}
+            {% if not request.user.professional %}
+              <div>
+                <label><strong>Profissional</strong></label>
+                <select name="professional_id" required>
+                  <option value="">-- escolher --</option>
+                  {% for p in professionals %}
+                    <option value="{{ p.id }}" {% if selected_professional_id == p.id|stringformat:"s" %}selected{% endif %}>
+                      {{ p.user.username }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+            {% else %}
+              {# garante que o selected_professional_id continua no querystring #}
+              <input type="hidden" name="professional_id" value="{{ selected_professional_id }}">
+            {% endif %}
+
+            <div>
+              <label><strong>Serviço</strong></label>
+              <select name="service_id" required>
+                <option value="">-- escolher --</option>
+                {% for s in services %}
+                  <option value="{{ s.id }}" {% if selected_service_id == s.id|stringformat:"s" %}selected{% endif %}>
+                    {{ s.name }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label><strong>Data</strong></label>
+              <input type="date" name="date" value="{{ selected_date }}" required>
+            </div>
+
+            <div style="flex:0 0 auto;min-width:auto">
+              <button class="btn" type="submit">Ver horas</button>
+            </div>
+          </div>
+        </form>
+
+        <!-- 2) POST: guardar tratamento -->
+        <form method="post" style="margin-top:16px;">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_treatment">
+          <input type="hidden" name="professional_id" value="{{ selected_professional_id }}">
+          <input type="hidden" name="service_id" value="{{ selected_service_id }}">
+          <input type="hidden" name="date" value="{{ selected_date }}">
+
+          <label><strong>Hora (obrigatório)</strong></label>
+          <select name="time" required>
+            <option value="">-- escolher --</option>
+            {% for t in slots %}
+              <option value="{{ t }}" {% if selected_time == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+
+          <label><strong>Notas clínicas</strong></label>
+          <textarea name="notes" rows="5">{{ notes|default:"" }}</textarea>
+
+          <div style="margin-top:10px;">
+            <button class="btn" type="submit">Guardar tratamento</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- COLUNA DIREITA -->
+      <div class="card">
+        <h3 style="margin:0 0 6px 0;">Ficha clínica (resumo)</h3>
+        <div class="muted">Alergias / condições / notas gerais.</div>
+
+        <div style="margin-top:10px;">
+          <div><strong>Alergias:</strong> <span class="muted">{{ clinical.allergies|default:"-" }}</span></div>
+          <div style="margin-top:8px;"><strong>Condições:</strong> <span class="muted">{{ clinical.conditions|default:"-" }}</span></div>
+          <div style="margin-top:8px;"><strong>Notas:</strong> <span class="muted">{{ clinical.notes|default:"-" }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTÓRICO -->
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Histórico de tratamentos</h3>
+
+      {% if treatments %}
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Serviço</th>
+              <th>Profissional</th>
+              <th>Notas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in treatments %}
+              <tr>
+                <td>
+                  {{ t.date }}
+                  {% if t.time %}<br><span class="muted">{{ t.time }}</span>{% endif %}
+                </td>
+                <td>{{ t.service_name|default:"-" }}</td>
+                <td>{% if t.professional %}{{ t.professional.user.username }}{% else %}-{% endif %}</td>
+                <td style="white-space:pre-wrap;">{{ t.notes|default:"" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="muted">Ainda sem registos.</div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

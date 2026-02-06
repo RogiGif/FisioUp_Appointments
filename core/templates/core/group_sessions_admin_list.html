@@ -1,0 +1,38 @@
+{% extends "backoffice/base.html" %}
+{% load backoffice_extras %}
+
+{% block title %}Turmas (Admin){% endblock %}
+
+{% block backoffice_content %}
+  {% url 'group_sessions_bulk_create' as group_sessions_bulk_create_url %}
+  {% with return_qs=return_to|urlencode %}
+    {% with actions_html="<a class='btn btn-primary' href='"|add:group_sessions_bulk_create_url|add:"?return_to="|add:return_qs|add:"'>Criar em massa</a>" %}
+    {% include "backoffice/partials/page_header.html" with title="Turmas" subtitle="Lista de sessões de turma." actions=actions_html %}
+    {% endwith %}
+  {% endwith %}
+
+  <div class="card">
+    {% if sessions %}
+      {% include "backoffice/partials/table_open.html" with header_cols="Data,Hora,Serviço,Profissional,Vagas,Estado"|split_csv %}
+      {% for s in sessions %}
+        <tr>
+          <td>{{ s.date|date:"M. j, Y" }}</td>
+          <td>{{ s.time|time:"H:i" }}</td>
+          <td><a href="{% url 'group_session_detail_admin' s.id %}?return_to={{ return_to|urlencode }}">{{ s.service.name }}</a></td>
+          <td>
+            {% if s.professional %}
+              {{ s.professional.user.get_full_name|default:s.professional.user.username }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td>{{ s.spots_left }}/{{ s.capacity_value }}</td>
+          <td>{{ s.get_status_display }}</td>
+        </tr>
+      {% endfor %}
+      {% include "backoffice/partials/table_close.html" %}
+    {% else %}
+      {% include "backoffice/partials/empty_state.html" with title="Sem sessões" description="Ainda não existem turmas para mostrar." %}
+    {% endif %}
+  </div>
+{% endblock %}

@@ -1,0 +1,223 @@
+{% extends "core/base_duralux.html" %}
+
+{% block content %}
+    <div class="page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Nova marcação</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ back_to_calendar_url }}">Agenda</a></li>
+                <li class="breadcrumb-item">Marcar</li>
+            </ul>
+        </div>
+        <div class="page-header-right ms-auto">
+            <a class="btn btn-outline-secondary" href="{{ back_to_calendar_url }}">← Voltar ao calendário</a>
+        </div>
+    </div>
+
+    {% if selected_date and selected_time %}
+        <div class="alert alert-info d-flex align-items-center justify-content-between">
+            <div>
+                A marcar para: <strong>{{ selected_date }}</strong> às <strong>{{ selected_time }}</strong>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if selection_in_past %}
+        <div class="alert alert-warning">
+            Esta hora já passou. Escolhe um horário futuro.
+        </div>
+    {% endif %}
+
+    {% if message %}
+        <div class="alert alert-warning">{{ message }}</div>
+    {% endif %}
+
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            <form method="get">
+                <input type="hidden" name="client_id" value="{{ client_id }}">
+                <input type="hidden" name="client_profile_id" value="{{ client_profile.id }}">
+                {% if not is_admin %}
+                    <input type="hidden" name="professional_id" value="{{ selected_professional_id }}">
+                {% endif %}
+                {% if week %}
+                    <input type="hidden" name="week" value="{{ week }}">
+                {% endif %}
+                {% if status %}
+                    <input type="hidden" name="status" value="{{ status }}">
+                {% endif %}
+                {% if q %}
+                    <input type="hidden" name="q" value="{{ q }}">
+                {% endif %}
+
+                <div class="row g-3">
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label">Cliente</label>
+                        <input type="text" class="form-control" value="{{ client_profile.full_name|default:client_profile.user.username }}" disabled>
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label">Serviço</label>
+                        <select name="service_id" id="service-select" class="form-select" required>
+                            <option value="">— escolher —</option>
+                            {% for s in services %}
+                                <option value="{{ s.id }}" {% if selected_service_id == s.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ s.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% if is_admin %}
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label">Técnico</label>
+                            <select name="professional_id" id="professional-select" class="form-select" required {% if not selected_service_id %}disabled{% endif %}>
+                                <option value="">— escolher —</option>
+                                {% for p in professionals %}
+                                    <option value="{{ p.id }}" {% if selected_professional_id == p.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ p.user.get_full_name|default:p.user.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    {% endif %}
+
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label">Data</label>
+                        <input type="date" name="date" class="form-control" value="{{ selected_date }}" required>
+                    </div>
+
+                    <div class="col-12">
+                        <button class="btn btn-outline-primary" type="submit">Ver horários</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card stretch stretch-full mt-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">Horários disponíveis</h5>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ back_to_calendar_url }}">Cancelar</a>
+        </div>
+        <div class="card-body">
+            {% if slots %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="client_id" value="{{ client_id }}">
+                    <input type="hidden" name="client_profile_id" value="{{ client_profile.id }}">
+                    <input type="hidden" name="professional_id" value="{{ selected_professional_id }}">
+                    <input type="hidden" name="service_id" value="{{ selected_service_id }}">
+                    <input type="hidden" name="date" value="{{ selected_date }}">
+                    {% if week %}
+                        <input type="hidden" name="week" value="{{ week }}">
+                    {% endif %}
+                    {% if status %}
+                        <input type="hidden" name="status" value="{{ status }}">
+                    {% endif %}
+                    {% if q %}
+                        <input type="hidden" name="q" value="{{ q }}">
+                    {% endif %}
+
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for t in slots %}
+                            <input type="radio" class="btn-check" name="time" id="slot-{{ forloop.counter }}" value="{{ t }}" {% if selected_time == t %}checked{% endif %} required>
+                            <label class="btn btn-outline-secondary" for="slot-{{ forloop.counter }}"><strong>{{ t }}</strong></label>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">Notas</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Opcional..."></textarea>
+                    </div>
+
+                    <div class="mt-3 d-flex flex-wrap gap-2">
+                        <button class="btn btn-primary" type="submit" {% if selection_in_past %}disabled{% endif %}>Confirmar marcação</button>
+                        <a class="btn btn-outline-secondary" href="{{ back_to_calendar_url }}">Voltar ao calendário</a>
+                    </div>
+                </form>
+            {% else %}
+                <div class="text-muted">
+                    {% if is_admin and not selected_professional_id %}
+                        Seleciona um técnico para ver horários.
+                    {% elif selected_service_id and selected_date %}
+                        Sem horários disponíveis para a data escolhida.
+                    {% else %}
+                        Escolhe serviço + data e carrega em <strong>Ver horários</strong>.
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if is_admin %}
+        {{ service_map|json_script:"service-map" }}
+        <script>
+            (function () {
+                const serviceSelect = document.getElementById("service-select");
+                const professionalSelect = document.getElementById("professional-select");
+                const mapEl = document.getElementById("service-map");
+                if (!serviceSelect || !professionalSelect || !mapEl) return;
+
+                let serviceMap = {};
+                try {
+                    serviceMap = JSON.parse(mapEl.textContent);
+                } catch (err) {
+                    return;
+                }
+
+                const serviceToPros = {};
+                Object.keys(serviceMap).forEach((profId) => {
+                    (serviceMap[profId] || []).forEach((service) => {
+                        const serviceId = String(service.id);
+                        if (!serviceToPros[serviceId]) {
+                            serviceToPros[serviceId] = new Set();
+                        }
+                        serviceToPros[serviceId].add(String(profId));
+                    });
+                });
+
+                const options = Array.from(professionalSelect.querySelectorAll("option"));
+
+                function updateProfessionals() {
+                    const serviceId = serviceSelect.value;
+                    if (!serviceId) {
+                        professionalSelect.value = "";
+                        professionalSelect.disabled = true;
+                        options.forEach((opt, idx) => {
+                            if (idx === 0) {
+                                opt.hidden = false;
+                                return;
+                            }
+                            opt.hidden = true;
+                        });
+                        return;
+                    }
+
+                    const allowed = serviceToPros[serviceId] ? Array.from(serviceToPros[serviceId]) : [];
+                    professionalSelect.disabled = false;
+                    options.forEach((opt, idx) => {
+                        if (idx === 0) {
+                            opt.hidden = false;
+                            return;
+                        }
+                        const show = allowed.includes(opt.value);
+                        opt.hidden = !show;
+                        if (!show && opt.selected) {
+                            professionalSelect.value = "";
+                        }
+                    });
+
+                    if (!professionalSelect.value && allowed.length === 1) {
+                        professionalSelect.value = allowed[0];
+                    }
+                }
+
+                serviceSelect.addEventListener("change", updateProfessionals);
+                updateProfessionals();
+            })();
+        </script>
+    {% endif %}
+{% endblock %}

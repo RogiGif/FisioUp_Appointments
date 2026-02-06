@@ -1,26 +1,110 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="keyword" content="">
+    <meta name="author" content="theme_ocean">
+    <!--! The above 6 meta tags *must* come first in the head; any other head content must come *after* these tags !-->
+    <!--! BEGIN: Apps Title-->
     <title>Login</title>
-  </head>
-  <body>
-    <h1>Login</h1>
+    <!--! END:  Apps Title-->
+    <!--! BEGIN: Favicon-->
+    <link rel="shortcut icon" type="image/x-icon" href="{% static 'duralux/assets/images/favicon.ico' %}">
+    <!--! END: Favicon-->
+    <!--! BEGIN: Bootstrap CSS-->
+    <link rel="stylesheet" type="text/css" href="{% static 'duralux/assets/css/bootstrap.min.css' %}">
+    <!--! END: Bootstrap CSS-->
+    <!--! BEGIN: Vendors CSS-->
+    <link rel="stylesheet" type="text/css" href="{% static 'duralux/assets/vendors/css/vendors.min.css' %}">
+    <!--! END: Vendors CSS-->
+    <!--! BEGIN: Custom CSS-->
+    <link rel="stylesheet" type="text/css" href="{% static 'duralux/assets/css/theme.min.css' %}">
+    <!--! END: Custom CSS-->
+    <!--! HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries !-->
+    <!--! WARNING: Respond.js doesn"t work if you view the page via file: !-->
+    <!--[if lt IE 9]>
+			<script src="https:oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+			<script src="https:oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+		<![endif]-->
+</head>
 
-    {% if message %}
-      <p><b>{{ message }}</b></p>
-    {% endif %}
+<body>
+    <!--! ================================================================ !-->
+    <!--! [Start] Main Content !-->
+    <!--! ================================================================ !-->
+    <main class="auth-cover-wrapper">
+        <div class="auth-cover-content-inner">
+            <div class="auth-cover-content-wrapper">
+                <div class="auth-img">
+                    <img src="{% static 'duralux/assets/images/auth/auth-cover-login-bg.svg' %}" alt="" class="img-fluid">
+                </div>
+            </div>
+        </div>
+        <div class="auth-cover-sidebar-inner">
+            <div class="auth-cover-card-wrapper">
+                <div class="auth-cover-card p-sm-5">
+                    <div class="wd-50 mb-5">
+                        <img src="{% static 'core/images/logo_fisioUP_white.svg' %}" alt="Fisio-UP" class="img-fluid">
+                    </div>
+                    <h2 class="fs-20 fw-bolder mb-4">Fisio-UP</h2>
+                    <h4 class="fs-13 fw-bold mb-2">Iniciar sessão</h4>
+                    <p class="fs-12 fw-medium text-muted">Acede à tua área para gerir marcações e clientes.</p>
 
-    <form method="post">
-      {% csrf_token %}
+                    {% if message %}
+                        <div class="alert alert-warning">{{ message }}</div>
+                    {% endif %}
 
-      <label>Username</label>
-      <input name="username" required />
+                    <form action="{% url 'login' %}" method="post" class="w-100 mt-4 pt-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ next }}">
+                        <div class="mb-4">
+                            <input type="text" class="form-control" name="username" placeholder="Email ou username" autocomplete="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <input type="password" class="form-control" name="password" placeholder="Password" autocomplete="current-password" required>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="rememberMe">
+                                    <label class="custom-control-label c-pointer" for="rememberMe">Lembrar-me</label>
+                                </div>
+                            </div>
+                            <div>
+                                <a href="{% url 'password_reset' %}" class="fs-11 text-primary">Esqueci-me da password</a>
+                            </div>
+                        </div>
+                        <div class="mt-5">
+                            <button type="submit" class="btn btn-lg btn-primary w-100">Entrar</button>
+                        </div>
+                    </form>
 
-      <label>Password</label>
-      <input name="password" type="password" required />
+                    <div class="mt-5 text-muted">
+                        <span>Não tens conta?</span>
+                        <a href="{% url 'register' %}" class="fw-bold">Criar conta</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <!--! ================================================================ !-->
+    <!--! [End] Main Content !-->
+    <!--! ================================================================ !-->
+    <!--! ================================================================ !-->
+    <!--! Footer Script !-->
+    <!--! ================================================================ !-->
+    <!--! BEGIN: Vendors JS !-->
+    <script src="{% static 'duralux/assets/vendors/js/vendors.min.js' %}"></script>
+    <!-- vendors.min.js {always must need to be top} -->
+    <!--! END: Vendors JS -->
+    <!--! BEGIN: Apps Init  !-->
+    <script src="{% static 'duralux/assets/js/common-init.min.js' %}"></script>
+    <!--! END: Apps Init !-->
+</body>
 
-      <button type="submit">Entrar</button>
-    </form>
-  </body>
 </html>

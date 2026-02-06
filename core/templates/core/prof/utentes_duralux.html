@@ -1,0 +1,172 @@
+{% extends "core/base_duralux.html" %}
+
+{% block content %}
+    <div class="page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Gestão de Clientes</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'professional_clients' %}">Utentes</a></li>
+                <li class="breadcrumb-item">Lista</li>
+            </ul>
+        </div>
+        <div class="page-header-right ms-auto">
+            <span class="text-muted">Lista de clientes associados às marcações.</span>
+        </div>
+    </div>
+
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            <form id="clients-form" method="get">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-lg">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="feather-search"></i></span>
+                            <input type="text" class="form-control" name="q" placeholder="Pesquisar por nome, username ou telefone" value="{{ q }}" />
+                            {% if q %}
+                                <a class="btn btn-outline-secondary" href="{% url 'professional_clients' %}?per_page={{ per_page }}&order={{ sort_order }}&date={{ selected_date }}&time={{ selected_time }}&service_id={{ selected_service_id }}&professional_id={{ selected_professional_id }}&week={{ week }}">Limpar</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-auto">
+                        <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+                            <a class="btn btn-outline-secondary" href="?{{ sort_toggle_qs }}" title="Ordenar alfabeticamente">
+                                {% if sort_order == "asc" %}A-Z{% else %}Z-A{% endif %}
+                            </a>
+                            <select name="per_page" class="form-select" onchange="this.form.submit();">
+                                {% for opt in per_page_options %}
+                                    <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }} por página</option>
+                                {% endfor %}
+                            </select>
+                            <a class="btn btn-primary" href="{% url 'prof_customer_create' %}?date={{ selected_date }}&time={{ selected_time }}&service_id={{ selected_service_id }}&professional_id={{ selected_professional_id }}&week={{ week }}">Novo</a>
+                            {% if is_admin %}
+                                <a class="btn btn-outline-primary" href="{% url 'client_import' %}">Importar</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <input type="hidden" name="order" value="{{ sort_order }}" />
+                <input type="hidden" name="date" value="{{ selected_date }}" />
+                <input type="hidden" name="time" value="{{ selected_time }}" />
+                <input type="hidden" name="service_id" value="{{ selected_service_id }}" />
+                <input type="hidden" name="professional_id" value="{{ selected_professional_id }}" />
+                <input type="hidden" name="week" value="{{ week }}" />
+            </form>
+        </div>
+    </div>
+
+    <div class="card stretch stretch-full mt-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">Resultados ({{ total_count }})</h5>
+            <span class="text-muted fs-12">Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ total_count }}</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Username / Estado</th>
+                            <th>Telefone</th>
+                            <th class="text-end">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if clients %}
+                            {% for c in clients %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            {% if c.profile_photo %}
+                                                <img src="{{ c.profile_photo.url }}" alt="{{ c.full_name }}" class="rounded-circle" style="width:40px;height:40px;object-fit:cover;" />
+                                            {% else %}
+                                                <div class="avatar-text avatar-md bg-primary text-white" style="width:40px;height:40px;">
+                                                    {{ c.full_name|default:""|cut:" "|slice:":2"|upper }}
+                                                </div>
+                                            {% endif %}
+                                            <div>
+                                                <div class="fw-semibold">{{ c.full_name|default:"-" }}</div>
+                                                {% if c.user and c.user.email %}
+                                                    <div class="text-muted fs-12">{{ c.user.email }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if c.user %}
+                                            <div class="fw-semibold">{{ c.user.username }}</div>
+                                            {% if c.user.is_active %}
+                                                <span class="badge bg-soft-success text-success">Ativa</span>
+                                            {% else %}
+                                                <span class="badge bg-soft-warning text-warning">Inativa</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-soft-secondary text-muted">Sem conta</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ c.phone|default:"-" }}</td>
+                                    <td>
+                                        <div class="d-flex flex-wrap gap-2 justify-content-end">
+                                            <a class="btn btn-sm btn-outline-primary" href="{% url 'prof_customer_detail' c.id %}">Ver ficha</a>
+                                            <a class="btn btn-sm btn-outline-secondary" href="{% url 'prof_customer_edit' c.id %}">Editar</a>
+                                            <a class="btn btn-sm btn-primary" href="{% url 'professional_book' %}?client_profile_id={{ c.id }}&date={{ selected_date }}&time={{ selected_time }}&service_id={{ selected_service_id }}&professional_id={{ selected_professional_id }}&week={{ week }}">Marcar</a>
+                                            {% if not c.user %}
+                                                <a class="btn btn-sm btn-outline-success" href="{% url 'prof_customer_create' %}?prefill_profile_id={{ c.id }}&date={{ selected_date }}&time={{ selected_time }}&service_id={{ selected_service_id }}&professional_id={{ selected_professional_id }}&week={{ week }}">Criar conta</a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">Sem utentes para mostrar.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div class="text-muted fs-12">Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ total_count }}</div>
+            <nav aria-label="Paginação">
+                <ul class="pagination mb-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?{{ prev_qs }}">Anterior</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                    {% endif %}
+
+                    {% for p in page_links %}
+                        {% if p.is_current %}
+                            <li class="page-item active"><span class="page-link">{{ p.number }}</span></li>
+                        {% else %}
+                            <li class="page-item"><a class="page-link" href="?{{ p.qs }}">{{ p.number }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link" href="?{{ next_qs }}">Seguinte</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Seguinte</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+          const form = document.getElementById("clients-form");
+          if (!form) return;
+          const qInput = form.querySelector("input[name='q']");
+          if (!qInput) return;
+          let timer = null;
+          qInput.addEventListener("input", () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => form.submit(), 350);
+          });
+        })();
+    </script>
+{% endblock %}

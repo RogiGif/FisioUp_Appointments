@@ -1,0 +1,17 @@
+{% extends "emails/base.txt" %}
+
+{% block content %}
+{{ event_title }}
+
+Evento: {{ event_type }}
+Utente: {{ client_name }}{% if client_phone %} ({{ client_phone }}){% endif %}
+Serviço: {{ service_name }}
+Profissional: {{ professional_name }}
+{% if old_date %}Data anterior: {{ old_date }} {{ old_time }}{% endif %}
+{% if new_date %}Nova data: {{ new_date }} {{ new_time }}{% endif %}
+{% if cancelled_at %}Cancelado em: {{ cancelled_at }}{% endif %}
+Autor: {{ actor }}
+{% if admin_url %}
+Abrir: {{ admin_url }}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,223 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Importar clientes{% endblock %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Importar clientes" subtitle="Pré-visualiza e seleciona os registos antes de importar." %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="preview">
+      <div class="mb-3">
+        <label class="form-label">Ficheiro CSV</label>
+        <input class="form-control" type="file" name="csv_file" accept=".csv" required>
+      </div>
+
+      <div class="text-muted">
+        Colunas aceites (nomes podem variar): nif, nome, telefone, email, morada, codigo_postal, localidade, concelho, distrito.
+        O NIF é obrigatório e serve como chave única.
+      </div>
+      <div class="form-check mt-3">
+        <input class="form-check-input" type="checkbox" name="validate_nif" value="1" checked id="validate_nif">
+        <label class="form-check-label" for="validate_nif">Validar checksum do NIF (recomendado)</label>
+      </div>
+
+      <div class="mt-3">
+        <button class="btn btn-primary" type="submit">Carregar ficheiro</button>
+      </div>
+    </form>
+    </div>
+  </div>
+
+  {% if batch %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+          <div class="col-12 col-md-6 col-lg-4">
+            <label class="form-label">Pesquisar</label>
+            <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="Nome, NIF ou telefone">
+          </div>
+          <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label">Tamanho página</label>
+            <select class="form-select" name="page_size">
+              {% for s in page_sizes %}
+                <option value="{{ s }}" {% if page_size == s %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-3 col-lg-2">
+            <button class="btn btn-outline-secondary w-100" type="submit">Aplicar</button>
+          </div>
+          <div class="col-12 d-flex flex-wrap gap-3 mt-2">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="only_missing_email" value="1" {% if only_missing_email %}checked{% endif %} id="only_missing_email">
+              <label class="form-check-label" for="only_missing_email">Só sem email</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="only_valid_vat" value="1" {% if only_valid_vat %}checked{% endif %} id="only_valid_vat">
+              <label class="form-check-label" for="only_valid_vat">Só NIF válido</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="only_duplicates" value="1" {% if only_duplicates %}checked{% endif %} id="only_duplicates">
+              <label class="form-check-label" for="only_duplicates">Só duplicados</label>
+            </div>
+          </div>
+        </form>
+        <div class="text-muted mt-2">
+          Ficheiro: <strong>{{ batch.original_filename }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <form method="post" id="selectionForm">
+        {% csrf_token %}
+        <input type="hidden" name="batch_id" value="{{ batch.id }}">
+        <input type="hidden" name="q" value="{{ q }}">
+        <input type="hidden" name="only_missing_email" value="{% if only_missing_email %}1{% else %}0{% endif %}">
+        <input type="hidden" name="only_valid_vat" value="{% if only_valid_vat %}1{% else %}0{% endif %}">
+        <input type="hidden" name="only_duplicates" value="{% if only_duplicates %}1{% else %}0{% endif %}">
+        <input type="hidden" name="page_size" value="{{ page_size }}">
+        <input type="hidden" name="row_ids_on_page" id="rowIdsOnPage" value="">
+        <input type="hidden" name="action" id="selectionAction" value="update_selection">
+
+        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <h3 class="h6 m-0">Pré‑visualização ({{ total_filtered }})</h3>
+          <div class="text-muted">Selecionados: <strong data-selected-count>{{ selected_count }}</strong></div>
+        </div>
+
+        {% if rows_page %}
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+            <thead>
+              <tr>
+                <th>
+                  <input class="form-check-input" type="checkbox" data-select-all aria-label="Selecionar todos">
+                </th>
+                <th>Nome</th>
+                <th>NIF</th>
+                <th>Telefone</th>
+                <th>Email</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows_page %}
+                <tr>
+                  <td>
+                    <input class="form-check-input" type="checkbox" name="row_id" value="{{ r.id }}" {% if r.id in selected_ids %}checked{% endif %} data-select-row aria-label="Selecionar linha">
+                  </td>
+                  <td>{{ r.full_name|default:"—" }}</td>
+                  <td>{{ r.nif|default:"—" }}</td>
+                  <td>{{ r.phone|default:"—" }}</td>
+                  <td>{{ r.email|default:"—" }}</td>
+                  <td>
+                    {% if r.exists_in_db %}<span class="badge text-bg-secondary">Já existe</span>{% endif %}
+                    {% if not r.valid_vat %}<span class="badge text-bg-warning">NIF inválido</span>{% endif %}
+                    {% if r.duplicate_in_file %}<span class="badge text-bg-info">Duplicado CSV</span>{% endif %}
+                    {% if r.missing_email %}<span class="badge text-bg-light">Sem email</span>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+            </table>
+          </div>
+
+          <div class="card-body border-top d-flex flex-wrap gap-2 align-items-center">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-action="select_page">Selecionar página</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-action="select_all_filtered">Selecionar filtro</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-action="clear">Limpar seleção</button>
+            <span class="text-muted">Selecionados: <strong id="selectedCount" data-selected-count>{{ selected_count }}</strong></span>
+            <button class="btn btn-primary btn-sm" type="button" data-action="import_selected">Importar selecionados</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-action="import_filtered">Importar filtrados</button>
+          </div>
+
+          {% include "backoffice/partials/pagination.html" with page_obj=rows_page %}
+        {% else %}
+          <div class="card-body text-muted">Sem resultados.</div>
+        {% endif %}
+      </form>
+    </div>
+  {% endif %}
+
+  {% if logs %}
+    <div class="card">
+      <div class="card-body">
+        <h3 class="h6 mb-3">Últimas importações</h3>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Ficheiro</th>
+            <th>Criados</th>
+            <th>Atualizados</th>
+            <th>Ignorados</th>
+            <th>Erros</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in logs %}
+            <tr>
+              <td>{{ l.created_at|date:"Y-m-d H:i" }}</td>
+              <td>{{ l.file_name|default:"—" }}</td>
+              <td>{{ l.created_count }}</td>
+              <td>{{ l.updated_count }}</td>
+              <td>{{ l.skipped_count }}</td>
+              <td>{{ l.error_count }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <script>
+    (function () {
+      const form = document.getElementById("selectionForm");
+      if (!form) return;
+      const actionInput = document.getElementById("selectionAction");
+      const rowIdsOnPage = document.getElementById("rowIdsOnPage");
+      const checkboxes = Array.from(form.querySelectorAll("input[name='row_id']"));
+      const selectedCountEls = Array.from(document.querySelectorAll("[data-selected-count]"));
+      const selectAll = form.querySelector("[data-select-all]");
+      rowIdsOnPage.value = checkboxes.map(cb => cb.value).join(",");
+
+      const updateSelectedCount = () => {
+        const count = checkboxes.filter(cb => cb.checked).length;
+        selectedCountEls.forEach(el => { el.textContent = String(count); });
+        if (selectAll) {
+          selectAll.checked = checkboxes.length > 0 && count === checkboxes.length;
+          selectAll.indeterminate = count > 0 && count < checkboxes.length;
+        }
+      };
+
+      checkboxes.forEach(cb => {
+        cb.addEventListener("change", updateSelectedCount);
+      });
+      if (selectAll) {
+        selectAll.addEventListener("change", () => {
+          checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+          updateSelectedCount();
+        });
+      }
+      updateSelectedCount();
+
+      form.querySelectorAll("[data-action]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const action = btn.dataset.action;
+          actionInput.value = action;
+          if (action === "select_page") {
+            checkboxes.forEach(cb => { cb.checked = true; });
+            actionInput.value = "update_selection";
+          }
+          form.submit();
+        });
+      });
+    })();
+  </script>
+{% endblock %}

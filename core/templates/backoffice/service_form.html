@@ -1,0 +1,96 @@
+{% extends "backoffice/base.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title=title %}
+
+  <div class="card backoffice-form-card">
+    <div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% if return_to %}
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+        {% endif %}
+        {{ form.non_field_errors }}
+
+        <div class="mb-3">
+          <label class="form-label">Nome</label>
+          {{ form.name }}
+          {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Duração (min)</label>
+          {{ form.duration_minutes }}
+          {% if form.duration_minutes.errors %}<div class="text-danger small">{{ form.duration_minutes.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Tipo</label>
+          {{ form.service_type }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Capacidade (turmas)</label>
+          {{ form.capacity }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Modo de preço</label>
+          {{ form.pricing_mode }}
+        </div>
+
+        <div class="mb-3" data-price-base>
+          <label class="form-label">Preço base</label>
+          {{ form.price }}
+          {% if form.price.errors %}<div class="text-danger small">{{ form.price.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3" data-price-first>
+          <label class="form-label">Preço 1ª consulta</label>
+          {{ form.price_first }}
+          {% if form.price_first.errors %}<div class="text-danger small">{{ form.price_first.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3" data-price-followup>
+          <label class="form-label">Preço seguintes</label>
+          {{ form.price_followup }}
+          {% if form.price_followup.errors %}<div class="text-danger small">{{ form.price_followup.errors }}</div>{% endif %}
+        </div>
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Guardar</button>
+          {% url 'backoffice_services' as backoffice_services_url %}
+          <a class="btn btn-outline-secondary" href="{{ return_to|default:backoffice_services_url }}">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const pricingSelect = document.querySelector('[name="pricing_mode"]');
+      const priceWrap = document.querySelector('[data-price-base]');
+      const priceFirstWrap = document.querySelector('[data-price-first]');
+      const priceFollowWrap = document.querySelector('[data-price-followup]');
+      if (!pricingSelect || !priceWrap) return;
+      const priceInput = priceWrap.querySelector('input');
+      const priceFirstInput = priceFirstWrap ? priceFirstWrap.querySelector('input') : null;
+      const priceFollowInput = priceFollowWrap ? priceFollowWrap.querySelector('input') : null;
+      const togglePrice = () => {
+        const isFirstFollow = pricingSelect.value === "first_followup";
+        priceWrap.style.display = isFirstFollow ? "none" : "block";
+        if (priceFirstWrap) priceFirstWrap.style.display = isFirstFollow ? "block" : "none";
+        if (priceFollowWrap) priceFollowWrap.style.display = isFirstFollow ? "block" : "none";
+        if (priceInput) {
+          priceInput.disabled = isFirstFollow;
+          if (isFirstFollow) {
+            priceInput.value = "0.00";
+          }
+        }
+        if (priceFirstInput) priceFirstInput.disabled = !isFirstFollow;
+        if (priceFollowInput) priceFollowInput.disabled = !isFirstFollow;
+      };
+      togglePrice();
+      pricingSelect.addEventListener("change", togglePrice);
+    })();
+  </script>
+{% endblock %}

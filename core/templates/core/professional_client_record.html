@@ -1,0 +1,148 @@
+{% extends "core/base.html" %}
+
+{% block title %}Ficha do utente{% endblock %}
+{% block page_title %}Ficha do utente{% endblock %}
+{% block page_subtitle %}
+  <div class="muted">
+    {{ client_profile.full_name|default:client_profile.user.username }}
+    — {{ client_profile.user.username }}
+  </div>
+{% endblock %}
+
+{% block content %}
+
+  <div class="grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Dados</h3>
+
+      {% if client_profile.profile_photo %}
+        <div style="margin-bottom:10px;">
+          <img src="{{ client_profile.profile_photo.url }}" alt="Foto de perfil" style="width:96px;height:96px;border-radius:50%;object-fit:cover;">
+        </div>
+      {% endif %}
+
+      <div class="muted">Nome</div>
+      <div><strong>{{ client_profile.full_name|default:"-" }}</strong></div>
+
+      <div style="margin-top:10px;" class="muted">Telefone</div>
+      <div><strong>{{ client_profile.phone|default:"-" }}</strong></div>
+
+      <div style="margin-top:10px;" class="muted">Morada</div>
+      <div>
+        <strong>
+          {{ client_profile.address_line1|default:"-" }}
+          {% if client_profile.city %}, {{ client_profile.city }}{% endif %}
+          {% if client_profile.postal_code %} ({{ client_profile.postal_code }}){% endif %}
+        </strong>
+      </div>
+
+      <div style="margin-top:14px;">
+        <a class="btn secondary" href="{% url 'professional_clients' %}">← Voltar a utentes</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Ficha clínica</h3>
+      <div class="muted">Neste MVP estamos só a mostrar o registo associado (podes evoluir depois para campos/observações).</div>
+
+      <div style="margin-top:10px;">
+        <div class="muted">Última atualização</div>
+        <div><strong>{{ record.updated_at|default:"-" }}</strong></div>
+      </div>
+
+      {% if record.notes %}
+        <div style="margin-top:10px;">
+          <div class="muted">Notas</div>
+          <div style="white-space:pre-wrap;">{{ record.notes }}</div>
+        </div>
+      {% else %}
+        <div style="margin-top:10px;" class="muted">Sem notas registadas.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <h3 style="margin:0 0 8px 0;">Consultas</h3>
+    <div class="muted">Admin vê todas; profissional vê apenas as dele.</div>
+
+    {% if appointments %}
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Serviço</th>
+            <th>Profissional</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in appointments %}
+            <tr>
+              <td>
+                {{ a.date }}
+                {% if a.time %}<br><span class="muted">{{ a.time }}</span>{% endif %}
+              </td>
+              <td>{{ a.service.name }}</td>
+              <td>{{ a.professional.user.username }}</td>
+              <td>{{ a.status_label|default:a.status }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted">Sem consultas para mostrar.</div>
+    {% endif %}
+  </div>
+    <div class="card" style="margin-top:14px;">
+    <h3 style="margin:0 0 8px 0;">Histórico de alterações</h3>
+    <div class="muted">Registo de ações feitas nas marcações deste utente.</div>
+
+    {% if logs %}
+      <table>
+        <thead>
+          <tr>
+            <th>Quando</th>
+            <th>Ação</th>
+            <th>Quem</th>
+            <th>Marcação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in logs %}
+            <tr>
+              <td>
+                {{ l.created_at }}
+              </td>
+              <td>
+                <strong>{{ l.action|default:"-" }}</strong>
+                {% if l.details %}
+                  <br><span class="muted">{{ l.details }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if l.actor %}
+                  {{ l.actor.username }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                {% if l.appointment %}
+                  {{ l.appointment.date }}
+                  {% if l.appointment.time %} {{ l.appointment.time }}{% endif %}
+                  <br><span class="muted">{{ l.appointment.service.name }}</span>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted">Sem histórico para mostrar.</div>
+    {% endif %}
+  </div>
+
+
+{% endblock %}

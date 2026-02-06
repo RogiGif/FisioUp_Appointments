@@ -1,0 +1,213 @@
+{% extends "core/base_duralux.html" %}
+
+{% block content %}
+    <div class="page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Marcar consulta</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ back_to_appointments_url }}">Marcações</a></li>
+                <li class="breadcrumb-item">Nova</li>
+            </ul>
+        </div>
+        <div class="page-header-right ms-auto">
+            <a class="btn btn-outline-secondary" href="{{ back_to_appointments_url }}">← Voltar às marcações</a>
+        </div>
+    </div>
+
+    {% if info_message %}
+        <div class="alert alert-info">{{ info_message }}</div>
+    {% endif %}
+
+    {% if message %}
+        <div class="alert alert-warning">{{ message }}</div>
+    {% endif %}
+
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            <form method="get" id="filtersForm">
+                <div class="row g-3">
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label">Serviço</label>
+                        <select id="serviceSelect" name="service_id" class="form-select" required>
+                            <option value="">— escolher —</option>
+                            {% for s in services %}
+                                <option value="{{ s.id }}" {% if selected_service_id == s.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ s.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label">Profissional</label>
+                        <select id="professionalSelect" name="professional_id" class="form-select" data-selected="{{ selected_professional_id }}" required>
+                            <option value="">— escolher —</option>
+                            {% for p in professionals %}
+                                <option value="{{ p.id }}" {% if selected_professional_id == p.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ p.user.get_full_name|default:p.user.username }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label">Data</label>
+                        <input type="date" id="dateSelect" name="date" class="form-control" value="{{ selected_date }}" {% if not selected_professional_id %}disabled{% endif %}>
+                    </div>
+                    <div class="col-12 col-lg-6 d-flex align-items-end">
+                        {% if selected_service_id and selected_professional_id %}
+                            <button class="btn btn-outline-primary" type="submit">Ver horários</button>
+                        {% else %}
+                            <button class="btn btn-outline-secondary" type="submit" disabled>Escolhe serviço e profissional</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card stretch stretch-full mt-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">Horários disponíveis</h5>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ back_to_appointments_url }}">Cancelar</a>
+        </div>
+        <div class="card-body">
+            {% if slots %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="service_id" value="{{ selected_service_id }}">
+                    <input type="hidden" name="professional_id" value="{{ selected_professional_id }}">
+                    <input type="hidden" name="date" value="{{ selected_date }}">
+
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for t in slots %}
+                            <input type="radio" class="btn-check" name="time" id="slot-{{ forloop.counter }}" value="{{ t }}" required>
+                            <label class="btn btn-outline-secondary" for="slot-{{ forloop.counter }}"><strong>{{ t }}</strong></label>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">Notas</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Opcional..."></textarea>
+                    </div>
+
+                    <div class="mt-3 d-flex flex-wrap gap-2">
+                        <button class="btn btn-primary" type="submit">Confirmar marcação</button>
+                        <a class="btn btn-outline-secondary" href="{{ back_to_appointments_url }}">Voltar</a>
+                    </div>
+                </form>
+            {% else %}
+                <div class="text-muted">
+                    {% if selected_service_id and selected_professional_id and selected_date %}
+                        Sem horários disponíveis para a data escolhida.
+                    {% else %}
+                        Escolhe serviço, profissional e data para ver horários.
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card stretch stretch-full mt-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">As tuas marcações</h5>
+            <a class="btn btn-outline-secondary btn-sm" href="{{ back_to_appointments_url }}">Ver tudo</a>
+        </div>
+        <div class="card-body">
+            {% if upcoming_appointments %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Serviço</th>
+                                <th>Profissional</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for a in upcoming_appointments %}
+                                <tr>
+                                    <td>
+                                        {{ a.date }}
+                                        {% if a.time %}<div class="text-muted fs-12">{{ a.time }}</div>{% endif %}
+                                    </td>
+                                    <td>{{ a.service.name }}</td>
+                                    <td>{{ a.professional.user.get_full_name|default:a.professional.user.username }}</td>
+                                    <td>{{ a.status_label|default:a.status }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-muted">Ainda não tens marcações futuras.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const serviceSelect = document.getElementById("serviceSelect");
+            const professionalSelect = document.getElementById("professionalSelect");
+            const selectedProfessionalId = professionalSelect ? (professionalSelect.dataset.selected || "") : "";
+
+            function resetProfessionals(msg = "— escolher —") {
+                if (!professionalSelect) return;
+                professionalSelect.innerHTML = `<option value="">${msg}</option>`;
+                professionalSelect.disabled = true;
+            }
+
+            async function loadProfessionals(serviceId) {
+                resetProfessionals("A carregar...");
+                try {
+                    const r = await fetch(`/api/profissionais/?service_id=${encodeURIComponent(serviceId)}`, {
+                        headers: {"X-Requested-With": "XMLHttpRequest"}
+                    });
+                    const data = await r.json();
+
+                    professionalSelect.innerHTML = `<option value="">— escolher —</option>`;
+                    for (const p of data.results) {
+                        const opt = document.createElement("option");
+                        opt.value = p.id;
+                        opt.textContent = p.label;
+                        professionalSelect.appendChild(opt);
+                    }
+
+                    if (selectedProfessionalId) {
+                        professionalSelect.value = selectedProfessionalId;
+                    } else if (data.results.length === 1) {
+                        professionalSelect.value = String(data.results[0].id);
+                        document.getElementById("filtersForm").submit();
+                        return;
+                    }
+
+                    professionalSelect.disabled = false;
+
+                    if (data.results.length === 0) {
+                        resetProfessionals("Sem profissionais para este serviço");
+                    }
+                } catch (e) {
+                    resetProfessionals("Erro a carregar profissionais");
+                }
+            }
+
+            if (professionalSelect) {
+                resetProfessionals("Escolhe primeiro o serviço");
+            }
+
+            serviceSelect.addEventListener("change", () => {
+                const serviceId = serviceSelect.value;
+                if (!serviceId) {
+                    resetProfessionals("Escolhe primeiro o serviço");
+                    return;
+                }
+                loadProfessionals(serviceId);
+            });
+
+            if (serviceSelect.value) {
+                loadProfessionals(serviceSelect.value);
+            }
+        })();
+    </script>
+{% endblock %}

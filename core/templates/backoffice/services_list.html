@@ -1,0 +1,52 @@
+{% extends "backoffice/base.html" %}
+{% load backoffice_extras %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Serviços" subtitle="Gestão de serviços e preços." %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <div class="text-muted">Lista de serviços da clínica.</div>
+        <a class="btn btn-primary" href="{% url 'backoffice_service_new' %}?return_to={{ return_to|urlencode }}">Criar serviço</a>
+      </div>
+      {% include "backoffice/partials/filters_bar.html" with q=q per_page=per_page placeholder="Nome do serviço" auto_submit=True %}
+    </div>
+  </div>
+
+  {% if services %}
+    <div class="card">
+      {% include "backoffice/partials/table_open.html" with header_cols="Serviço,Duração,Tipo,Modo,Preço,Preço 1ª/Seguintes,Ação"|split_csv %}
+      {% for s in services %}
+        <tr>
+          <td>{{ s.name }}</td>
+          <td>{{ s.duration_minutes }} min</td>
+          <td>{{ s.get_service_type_display }}</td>
+          <td>{{ s.get_pricing_mode_display }}</td>
+          <td>
+            {% if s.pricing_mode == "single" %}
+              {{ s.price|floatformat:2 }} €
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td>
+            {% if s.pricing_mode == "first_followup" %}
+              {{ s.price_first|floatformat:2 }} € / {{ s.price_followup|floatformat:2 }} €
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'backoffice_service_edit' s.id %}?return_to={{ return_to|urlencode }}">Editar</a>
+          </td>
+        </tr>
+      {% endfor %}
+      {% include "backoffice/partials/table_close.html" %}
+    </div>
+    {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    {% url 'backoffice_service_new' as backoffice_services_create_url %}
+    {% include "backoffice/partials/empty_state.html" with title="Sem serviços" description="Ainda não existem serviços registados." action_text="Criar serviço" action_url=backoffice_services_create_url %}
+  {% endif %}
+{% endblock %}

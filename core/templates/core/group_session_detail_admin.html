@@ -1,0 +1,51 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Turma{% endblock %}
+
+{% block backoffice_content %}
+{% with page_title="Turma · "|add:session.service.name page_subtitle=session.date|date:"M. j, Y"|add:" às "|add:session.time|time:"H:i" %}
+  {% include "backoffice/partials/page_header.html" with title=page_title subtitle=page_subtitle %}
+{% endwith %}
+
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <span class="badge text-bg-light">
+          Profissional: <strong>{% if session.professional %}{{ session.professional.user.get_full_name|default:session.professional.user.username }}{% else %}—{% endif %}</strong>
+        </span>
+        <span class="badge text-bg-light">Vagas: <strong>{{ session.spots_left }}/{{ session.capacity_value }}</strong></span>
+        <span class="badge text-bg-light">Estado: <strong>{{ session.get_status_display }}</strong></span>
+      </div>
+
+      <h3 class="h6 mb-2">Inscritos</h3>
+      {% if enrolments %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Username</th>
+                <th>Telefone</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in enrolments %}
+                <tr>
+                  <td>{{ e.client.client_profile.full_name|default:e.client.username }}</td>
+                  <td>{{ e.client.username }}</td>
+                  <td>{{ e.client.client_profile.phone|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted">Sem inscrições.</div>
+      {% endif %}
+    </div>
+    <div class="card-body border-top">
+      {% url 'group_sessions_admin_list' as group_sessions_admin_list_url %}
+      <a class="btn btn-outline-secondary" href="{{ return_to|default:group_sessions_admin_list_url }}">Voltar</a>
+    </div>
+  </div>
+{% endblock %}

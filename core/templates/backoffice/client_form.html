@@ -1,0 +1,112 @@
+{% extends "backoffice/base.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title=title %}
+
+  <div class="card backoffice-form-card wide">
+    <div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% if return_to %}
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+        {% endif %}
+        {{ form.non_field_errors }}
+
+        <div class="mb-3">
+          <label class="form-label">Nome completo</label>
+          {{ form.full_name }}
+          {% if form.full_name.errors %}<div class="text-danger small">{{ form.full_name.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">NIF</label>
+          {{ form.nif }}
+          {% if form.nif.errors %}<div class="text-danger small">{{ form.nif.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Telefone</label>
+          {{ form.phone }}
+          {% if form.phone.errors %}<div class="text-danger small">{{ form.phone.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          {{ form.email }}
+          {% if email_error %}<div class="text-danger small">{{ email_error }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Género</label>
+          {{ form.gender }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Morada</label>
+          {{ form.address_line1 }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Morada (linha 2)</label>
+          {{ form.address_line2 }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Código postal</label>
+          {{ form.postal_code }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Localidade</label>
+          {{ form.locality }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Concelho</label>
+          {{ form.county }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Distrito</label>
+          {{ form.district }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">País</label>
+          {{ form.country }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Parceria</label>
+          {{ form.partner }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Tipo de desconto</label>
+          {{ form.discount_type }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Percentagem</label>
+          {{ form.discount_percent }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Valor fixo</label>
+          {{ form.discount_amount }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Etiqueta</label>
+          {{ form.discount_label }}
+        </div>
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Guardar</button>
+          {% url 'backoffice_clients' as backoffice_clients_url %}
+          <a class="btn btn-outline-secondary" href="{{ return_to|default:backoffice_clients_url }}">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

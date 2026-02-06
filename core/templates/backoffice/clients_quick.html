@@ -1,0 +1,38 @@
+{% extends "backoffice/base.html" %}
+{% load backoffice_extras %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Utentes" subtitle="Pesquisa rápida (read-only)." %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      {% include "backoffice/partials/filters_bar.html" with q=q per_page=per_page placeholder="Pesquisar por nome, NIF ou telefone" auto_submit=True %}
+    </div>
+  </div>
+
+  {% if clients %}
+    <div class="card">
+      {% include "backoffice/partials/table_open.html" with header_cols="Nome,Telefone,NIF,Tem user?,Ações"|split_csv %}
+      {% for c in clients %}
+        <tr>
+          <td>{{ c.full_name|default:c.user.get_full_name|default:c.user.username }}</td>
+          <td>{{ c.phone|default:"-" }}</td>
+          <td>{{ c.nif|default:"-" }}</td>
+          <td>{% if c.user_id %}Sim{% else %}Não{% endif %}</td>
+          <td class="text-end">
+            <div class="bo-btn-row">
+              {% if c.user_id %}
+                <a class="btn btn-outline-secondary btn-sm" href="/admin/auth/user/{{ c.user_id }}/change/" target="_blank">Abrir no admin</a>
+              {% endif %}
+              <a class="btn btn-outline-secondary btn-sm" href="/backoffice/agenda/?q={{ c.nif|default:c.full_name|urlencode }}">Ver agenda</a>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      {% include "backoffice/partials/table_close.html" %}
+    </div>
+    {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    {% include "backoffice/partials/empty_state.html" with title="Sem resultados" description="Não há utentes para os filtros atuais." %}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,310 @@
+{% extends "core/base_duralux.html" %}
+{% load static %}
+
+{% block main_wrapper %}
+    <div class="page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">{% if is_edit %}Editar Cliente{% else %}Novo Cliente{% endif %}</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ back_to_clients_url }}">Utentes</a></li>
+                <li class="breadcrumb-item">{% if is_edit %}Editar{% else %}Criar{% endif %}</li>
+            </ul>
+        </div>
+        <div class="page-header-right ms-auto">
+            <div class="page-header-right-items">
+                <div class="d-flex d-md-none">
+                    <a href="{{ back_to_clients_url }}" class="page-header-right-close-toggle">
+                        <i class="feather-arrow-left me-2"></i>
+                        <span>Voltar</span>
+                    </a>
+                </div>
+                <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                    <a href="{{ back_to_clients_url }}" class="btn btn-light-brand">
+                        <i class="feather-arrow-left me-2"></i>
+                        <span>Cancelar</span>
+                    </a>
+                    <button type="submit" form="client-create-form" class="btn btn-primary">
+                        <i class="feather-user-plus me-2"></i>
+                        <span>{% if is_edit %}Guardar Alterações{% else %}Guardar Cliente{% endif %}</span>
+                    </button>
+                </div>
+            </div>
+            <div class="d-md-none d-flex align-items-center">
+                <a href="javascript:void(0)" class="page-header-right-open-toggle">
+                    <i class="feather-align-right fs-20"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="alert alert-warning">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form id="client-create-form" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="date" value="{{ selected_date }}">
+        <input type="hidden" name="time" value="{{ selected_time }}">
+        <input type="hidden" name="service_id" value="{{ selected_service_id }}">
+        <input type="hidden" name="professional_id" value="{{ selected_professional_id }}">
+        <input type="hidden" name="week" value="{{ week }}">
+        <input type="hidden" name="status" value="{{ status }}">
+        <input type="hidden" name="q" value="{{ q }}">
+        <input type="hidden" name="prefill_profile_id" value="{{ prefill_profile_id }}">
+
+        <div class="main-content">
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="card border-top-0">
+                        <div class="card-header p-0">
+                            {% include "core/partials/customer_tabs_nav.html" with active_tab="profile" show_password=True %}
+                        </div>
+                        <div class="tab-content">
+                            {% include "core/partials/tab_profile.html" with read_only=False active_tab="profile" %}
+                            {% include "core/partials/tab_password.html" with read_only=False active_tab="profile" %}
+                            {% include "core/partials/tab_movimentos.html" with active_tab="profile" %}
+                            {% include "core/partials/tab_notificacoes.html" with active_tab="profile" %}
+                            {% include "core/partials/tab_ficha_clinica.html" with read_only=False active_tab="profile" %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <script>
+        (function () {
+            const postal1 = document.querySelector("input[name='postal_code_1']");
+            const postal2 = document.querySelector("input[name='postal_code_2']");
+            const locality = document.querySelector("select[name='locality']");
+            const county = document.querySelector("select[name='county']");
+            const district = document.querySelector("select[name='district']");
+            if (!postal1 || !postal2 || !locality || !county || !district) return;
+
+            let geoData = null;
+            let geoIndex = null;
+            let lastLookup = "";
+            let activeController = null;
+
+            const normalizeText = (value) => {
+                return (value || "")
+                    .toString()
+                    .trim()
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "");
+            };
+
+            const buildGeoIndex = (data) => {
+                const districts = data.filter((item) => item && item.level === 1);
+                const concelhos = data.filter((item) => item && item.level === 2);
+                const freguesias = data.filter((item) => item && item.level === 3);
+                const districtByName = new Map(
+                    districts.map((d) => [normalizeText(d.name), d.code])
+                );
+                const concelhoByCode = new Map(concelhos.map((c) => [c.code, c.name]));
+                const concelhoByName = new Map(concelhos.map((c) => [normalizeText(c.name), c.code]));
+                return {
+                    districts,
+                    concelhos,
+                    freguesias,
+                    districtByName,
+                    concelhoByCode,
+                    concelhoByName,
+                };
+            };
+
+            const loadGeoData = () => {
+                if (geoData) return Promise.resolve(geoData);
+                return fetch("/static/core/data/distritos-concelhos-freguesias-Portugal.json")
+                    .then((response) => {
+                        if (!response.ok) throw new Error("geo");
+                        return response.json();
+                    })
+                    .then((data) => {
+                        geoData = Array.isArray(data) ? data : [];
+                        geoIndex = buildGeoIndex(geoData);
+                        return geoData;
+                    })
+                    .catch(() => []);
+            };
+
+            const renderDistrictOptions = () => {
+                return loadGeoData().then(() => {
+                    if (!geoIndex) return;
+                    const districts = geoIndex.districts
+                        .map((d) => d.name)
+                        .filter(Boolean)
+                        .sort((a, b) => a.localeCompare(b, "pt-PT"));
+
+                    district.innerHTML = '<option value="">— escolher —</option>';
+                    districts.forEach((name) => {
+                        const option = document.createElement("option");
+                        option.value = name;
+                        option.textContent = name;
+                        district.appendChild(option);
+                    });
+
+                    const initial = district.dataset.initial || "";
+                    if (initial && districts.includes(initial)) {
+                        district.value = initial;
+                    } else {
+                        district.value = "";
+                    }
+                });
+            };
+
+            const renderCountyOptions = (districtName, selectedValue) => {
+                return loadGeoData().then(() => {
+                    if (!geoIndex) return;
+                    const districtKey = normalizeText(districtName);
+                    const districtCode = geoIndex.districtByName.get(districtKey);
+                    const items = geoIndex.concelhos
+                        .filter((item) => districtCode && Math.floor(item.code / 100) === districtCode)
+                        .map((item) => item.name)
+                        .filter(Boolean)
+                        .sort((a, b) => a.localeCompare(b, "pt-PT"));
+
+                    county.innerHTML = '<option value="">— escolher —</option>';
+                    items.forEach((name) => {
+                        const option = document.createElement("option");
+                        option.value = name;
+                        option.textContent = name;
+                        county.appendChild(option);
+                    });
+
+                    const initial = selectedValue || county.dataset.initial || "";
+                    if (initial && items.includes(initial)) {
+                        county.value = initial;
+                    } else {
+                        county.value = "";
+                    }
+                });
+            };
+
+            const renderLocalityOptions = (countyName, selectedValue) => {
+                return loadGeoData().then(() => {
+                    if (!geoIndex) return;
+                    const countyKey = normalizeText(countyName);
+                    const countyCode = geoIndex.concelhoByName.get(countyKey);
+                    const items = geoIndex.freguesias
+                        .filter((item) => countyCode && Math.floor(item.code / 100) === countyCode)
+                        .map((item) => item.name)
+                        .filter(Boolean)
+                        .sort((a, b) => a.localeCompare(b, "pt-PT"));
+
+                    locality.innerHTML = '<option value="">— escolher —</option>';
+                    items.forEach((name) => {
+                        const option = document.createElement("option");
+                        option.value = name;
+                        option.textContent = name;
+                        locality.appendChild(option);
+                    });
+
+                    const initial = selectedValue || locality.dataset.initial || "";
+                    if (initial && items.includes(initial)) {
+                        locality.value = initial;
+                    } else {
+                        locality.value = "";
+                    }
+                });
+            };
+
+            const parsePostal = () => {
+                const part1 = (postal1.value || "").trim();
+                const part2 = (postal2.value || "").trim();
+                if (part1.length !== 4 || part2.length !== 3) return null;
+                if (!/^\d{4}$/.test(part1) || !/^\d{3}$/.test(part2)) return null;
+                return `${part1}-${part2}`;
+            };
+
+            const lookupPostal = () => {
+                const cp = parsePostal();
+                if (!cp || cp === lastLookup) return;
+                lastLookup = cp;
+
+                if (activeController) activeController.abort();
+                activeController = new AbortController();
+
+                fetch(`https://api.zippopotam.us/pt/${cp}`, { signal: activeController.signal })
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error("not-found");
+                        }
+                        return response.json();
+                    })
+                    .then((data) => {
+                        const place = Array.isArray(data.places) ? data.places[0] : null;
+                        const placeName = place && place["place name"] ? String(place["place name"]) : "";
+                        const stateName = place && place["state"] ? String(place["state"]) : "";
+
+                        renderDistrictOptions().then(() => {
+                            if (stateName) {
+                                district.value = stateName;
+                            }
+                            renderCountyOptions(district.value, "").then(() => {
+                                if (!geoIndex) return;
+                                if (placeName && district.value) {
+                                    const districtCode = geoIndex.districtByName.get(normalizeText(district.value));
+                                    const placeKey = normalizeText(placeName);
+                                    const freguesiaMatch = geoIndex.freguesias.find(
+                                        (item) =>
+                                            item &&
+                                            districtCode &&
+                                            Math.floor(item.code / 10000) === districtCode &&
+                                            normalizeText(item.name) === placeKey
+                                    );
+                                    if (freguesiaMatch) {
+                                        const concelhoCode = Math.floor(freguesiaMatch.code / 100);
+                                        const concelhoName = geoIndex.concelhoByCode.get(concelhoCode);
+                                        if (concelhoName) {
+                                            county.value = concelhoName;
+                                        }
+                                    }
+                                }
+                                renderLocalityOptions(county.value, placeName);
+                            });
+                        });
+                    })
+                    .catch((err) => {
+                        if (err.name === "AbortError") return;
+                    });
+            };
+
+            district.addEventListener("change", () => {
+                renderCountyOptions(district.value).then(() => {
+                    renderLocalityOptions(county.value);
+                });
+            });
+
+            county.addEventListener("change", () => {
+                renderLocalityOptions(county.value);
+            });
+
+            const sanitizePostal = (input, max) => {
+                input.value = (input.value || "").replace(/\D/g, "").slice(0, max);
+            };
+
+            postal1.addEventListener("input", () => {
+                sanitizePostal(postal1, 4);
+                if (postal1.value.length === 4) {
+                    postal2.focus();
+                }
+                if (parsePostal()) lookupPostal();
+            });
+
+            postal2.addEventListener("input", () => {
+                sanitizePostal(postal2, 3);
+                if (parsePostal()) lookupPostal();
+            });
+
+            renderDistrictOptions().then(() => {
+                renderCountyOptions(district.value).then(() => {
+                    renderLocalityOptions(county.value);
+                });
+            });
+        })();
+    </script>
+{% endblock %}

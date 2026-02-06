@@ -1,0 +1,38 @@
+{% extends "backoffice/base.html" %}
+{% load backoffice_extras %}
+
+{% block backoffice_content %}
+  {% url 'backoffice_availability_new' as backoffice_availability_new_url %}
+  {% with return_qs=return_to|urlencode %}
+    {% with actions_html="<a class='btn btn-primary' href='"|add:backoffice_availability_new_url|add:"?return_to="|add:return_qs|add:"'>Nova disponibilidade</a>" %}
+    {% include "backoffice/partials/page_header.html" with title="Disponibilidades" subtitle="Gestão das disponibilidades semanais dos profissionais." actions=actions_html %}
+    {% endwith %}
+  {% endwith %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      {% include "backoffice/partials/filters_bar.html" with q=q per_page=per_page placeholder="Pesquisar profissional" auto_submit=True extra_fields=extra_fields %}
+    </div>
+  </div>
+
+  {% if availabilities %}
+    <div class="card">
+      {% include "backoffice/partials/table_open.html" with header_cols="Profissional,Dia,Início,Fim,Ação"|split_csv %}
+      {% for a in availabilities %}
+        <tr>
+          <td>{{ a.professional.user.get_full_name|default:a.professional.user.username }}</td>
+          <td>{{ a.get_weekday_display }}</td>
+          <td>{{ a.start_time|time:"H:i" }}</td>
+          <td>{{ a.end_time|time:"H:i" }}</td>
+          <td class="text-end">
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'backoffice_availability_edit' a.id %}?return_to={{ return_to|urlencode }}">Editar</a>
+          </td>
+        </tr>
+      {% endfor %}
+      {% include "backoffice/partials/table_close.html" %}
+    </div>
+    {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    {% include "backoffice/partials/empty_state.html" with title="Sem disponibilidades" description="Ainda não existem disponibilidades configuradas." action_text="Nova disponibilidade" action_url=backoffice_availability_new_url %}
+  {% endif %}
+{% endblock %}

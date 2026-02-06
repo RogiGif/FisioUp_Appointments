@@ -1,0 +1,62 @@
+{% extends "core/base.html" %}
+
+{% block title %}Turmas{% endblock %}
+
+{% block page_title %}Turmas · {{ service.name }}{% endblock %}
+{% block page_subtitle %}
+  <div class="muted">Escolhe uma sessão e inscreve-te.</div>
+{% endblock %}
+
+{% block content %}
+  <div class="card">
+    {% if sessions %}
+      <table class="table-compact">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Hora</th>
+            <th>Profissional</th>
+            <th>Vagas</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sessions %}
+            <tr>
+              <td>{{ s.date|date:"M. j, Y" }}</td>
+              <td>{{ s.time|time:"H:i" }}</td>
+              <td>
+                {% if s.professional %}
+                  {{ s.professional.user.get_full_name|default:s.professional.user.username }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ s.spots_left }}/{{ s.capacity_value }}</td>
+              <td>
+                {% if s.id in enrolled_ids %}
+                  <span class="pill">Já inscrito</span>
+                {% else %}
+                  {% if s.spots_left > 0 %}
+                    <form method="post" action="{% url 'enroll_group_session' s.id %}">
+                      {% csrf_token %}
+                      <button class="btn secondary btn-compact" type="submit">Inscrever</button>
+                    </form>
+                  {% else %}
+                    <span class="pill">Cheia</span>
+                  {% endif %}
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted">Sem sessões disponíveis.</div>
+    {% endif %}
+
+    <div class="card-actions" style="margin-top:10px;">
+      <a class="btn secondary" href="{% url 'book' %}">Voltar</a>
+    </div>
+  </div>
+{% endblock %}

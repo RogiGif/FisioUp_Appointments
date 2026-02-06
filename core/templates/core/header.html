@@ -1,0 +1,32 @@
+<div class="top">
+  <div class="top-left">
+    <h1>{% block page_title %}Marcações{% endblock %}</h1>
+    {% block page_subtitle %}{% endblock %}
+  </div>
+
+  <nav class="top-nav">
+    <a class="btn secondary" href="{% url 'home' %}">Home</a>
+
+    {% if request.user.is_authenticated %}
+      {% if request.user.professional or request.user.is_staff %}
+        <a class="btn secondary" href="{% url 'professional_calendar' %}">Calendário</a>
+        <a class="btn secondary" href="{% url 'professional_clients' %}">Utentes</a>
+        <a class="btn secondary" href="{% url 'professional_clients' %}">Marcar</a>
+        <a class="btn secondary" href="{% url 'professional_calendar' %}">Minhas marcações</a>
+      {% else %}
+        <a class="btn secondary" href="{% url 'book' %}">Marcar</a>
+        <a class="btn secondary" href="{% url 'my_appointments' %}">Minhas marcações</a>
+        <a class="btn secondary" href="{% url 'profile' %}">Perfil</a>
+      {% endif %}
+
+      {% if request.user.is_staff %}
+        <a class="btn secondary" href="/admin/">Admin</a>
+      {% endif %}
+
+      <a class="btn secondary" href="{% url 'logout' %}">Sair</a>
+
+    {% else %}
+      <a class="btn secondary" href="{% url 'login' %}">Iniciar sessão</a>
+    {% endif %}
+  </nav>
+</div>

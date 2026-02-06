@@ -1,0 +1,146 @@
+{% extends "core/base.html" %}
+
+{% block title %}Minhas marcações{% endblock %}
+
+{% block page_title %}Minhas marcações{% endblock %}
+{% block page_subtitle %}
+  <div class="muted">Vê a tua próxima consulta, histórico e cancela/reagenda se necessário.</div>
+{% endblock %}
+
+{% block content %}
+
+  <div class="grid" style="grid-template-columns:1.3fr 1fr;">
+
+    <!-- COLUNA ESQUERDA -->
+    <div>
+
+      {% if next_appointment %}
+        <div class="card" style="border:1px solid #eee;">
+          <h3 style="margin:0 0 6px 0;">Próxima marcação</h3>
+
+          <div class="muted">
+            <strong>{{ next_appointment.date }}</strong>
+            {% if next_appointment.time %} às <strong>{{ next_appointment.time }}</strong>{% endif %}
+          </div>
+
+          <div style="margin-top:8px;">
+            <span class="pill">Serviço: <strong>{{ next_appointment.service.name }}</strong></span>
+            <span class="pill">Profissional: <strong>{{ next_appointment.professional.user.username }}</strong></span>
+            <span class="pill">Estado: <strong>{{ next_appointment.status_label|default:next_appointment.status }}</strong></span>
+          </div>
+
+          <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+            <a class="btn" href="{% url 'book' %}">Marcar nova</a>
+
+            {% if next_appointment.status != "completed" and next_appointment.status != "cancelled" %}
+              <a class="btn secondary"
+               href="{% url 'reschedule_appointment' next_appointment.id %}">
+                Reagendar
+              </a>
+            {% endif %}
+
+            {% if next_appointment.status == "scheduled" %}
+              <form method="post" action="{% url 'cancel_appointment' next_appointment.id %}" style="margin:0;">
+                {% csrf_token %}
+                <button class="btn secondary" type="submit"
+                        onclick="return confirm('Queres cancelar esta marcação?');">
+                  Cancelar
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="card" style="margin-top:14px;">
+        <h3 style="margin:0 0 8px 0;">Futuras / por concluir</h3>
+
+        {% if upcoming %}
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Serviço</th>
+                <th>Profissional</th>
+                <th>Estado</th>
+                <th style="text-align:right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in upcoming %}
+                <tr>
+                  <td>
+                    {{ a.date }}
+                    {% if a.time %}<br><span class="muted">{{ a.time }}</span>{% endif %}
+                  </td>
+                  <td>{{ a.service.name }}</td>
+                  <td>{{ a.professional.user.username }}</td>
+                  <td>{{ a.status_label|default:a.status }}</td>
+
+                  <td style="text-align:right;white-space:nowrap;">
+                    {% if a.status != "completed" and a.status != "cancelled" %}
+                      <a class="btn secondary"
+                      href="{% url 'reschedule_appointment' a.id %}">
+                      Reagendar
+                      </a>
+                    {% endif %}
+
+                    {% if a.status == "scheduled" %}
+                      <form method="post" action="{% url 'cancel_appointment' a.id %}" style="margin:0; display:inline;">
+                        {% csrf_token %}
+                        <button class="btn secondary" type="submit"
+                                onclick="return confirm('Queres cancelar esta marcação?');">
+                          Cancelar
+                        </button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="muted">Não tens marcações futuras.</div>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- COLUNA DIREITA -->
+    <div>
+      <div class="card">
+        <h3 style="margin:0 0 8px 0;">Histórico</h3>
+
+        {% if past %}
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Serviço</th>
+                <th>Profissional</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in past %}
+                <tr>
+                  <td>
+                    {{ a.date }}
+                    {% if a.time %}<br><span class="muted">{{ a.time }}</span>{% endif %}
+                  </td>
+                  <td>{{ a.service.name }}</td>
+                  <td>{{ a.professional.user.username }}</td>
+                  <td>{{ a.status_label|default:a.status }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="muted">Ainda não tens histórico.</div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+{% endblock %}

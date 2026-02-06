@@ -1,0 +1,61 @@
+{% extends "core/base.html" %}
+
+{% block title %}Conteúdos{% endblock %}
+
+{% block content %}
+  <div class="content-header">
+    <h1 class="content-title">Conteúdos</h1>
+    <p class="content-subtitle">Notícias, promoções e avisos da clínica.</p>
+  </div>
+
+  <div class="content-kinds">
+    <a class="content-kind {% if not kind %}is-active{% endif %}" href="{% url 'content_list' %}">Todos</a>
+    {% for value,label in kinds %}
+      <a class="content-kind {% if kind == value %}is-active{% endif %}" href="{% url 'content_list' %}?kind={{ value }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+
+  {% if posts %}
+    <div class="content-grid">
+      {% for post in posts %}
+        <article class="content-card">
+          {% if post.cover_image %}
+            <div class="content-card-media">
+              <img src="{{ post.cover_image.url }}" alt="{{ post.title }}">
+            </div>
+          {% endif %}
+          <div class="content-card-body">
+            <span class="content-badge">{{ post.get_kind_display }}</span>
+            <h2 class="content-card-title">{{ post.title }}</h2>
+            <div class="content-card-meta">
+              {{ post.published_at|date:"d M Y" }}
+            </div>
+            {% if post.excerpt %}
+              <p class="content-card-text">{{ post.excerpt }}</p>
+            {% else %}
+              <p class="content-card-text">{{ post.body|truncatechars:160 }}</p>
+            {% endif %}
+            <a class="btn" href="{% url 'content_detail' post.slug %}">Ler mais</a>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+      <div class="content-pagination">
+        {% if page_obj.has_previous %}
+          <a class="btn secondary" href="?{% if kind %}kind={{ kind }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        {% endif %}
+        <span class="content-page">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+          <a class="btn secondary" href="?{% if kind %}kind={{ kind }}&{% endif %}page={{ page_obj.next_page_number }}">Seguinte</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="content-empty">
+      <h3>Sem conteúdos publicados</h3>
+      <p>Em breve teremos novidades para si.</p>
+    </div>
+  {% endif %}
+{% endblock %}

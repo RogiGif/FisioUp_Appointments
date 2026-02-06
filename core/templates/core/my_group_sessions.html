@@ -1,0 +1,104 @@
+{% extends "core/base.html" %}
+
+{% block title %}Minhas turmas{% endblock %}
+
+{% block page_title %}Minhas turmas{% endblock %}
+{% block page_subtitle %}
+  <div class="muted">As tuas inscrições em turmas.</div>
+{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <h3 style="margin:0;">Próximas</h3>
+      <form method="get" style="display:flex;gap:8px;align-items:center;">
+        <label class="muted" style="font-size:12px;">Mês</label>
+        <select name="month" onchange="this.form.submit()">
+          <option value="">Todos</option>
+          {% for m in upcoming_months %}
+            {% with val=m|date:"Y-m" %}
+              <option value="{{ val }}" {% if selected_month == val %}selected{% endif %}>
+                {{ m|date:"F Y" }}
+              </option>
+            {% endwith %}
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+    {% if upcoming %}
+      <table class="table-compact">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Hora</th>
+            <th>Serviço</th>
+            <th>Profissional</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in upcoming %}
+            <tr>
+              <td>{{ e.session.date|date:"M. j, Y" }}</td>
+              <td>{{ e.session.time|time:"H:i" }}</td>
+              <td>{{ e.session.service.name }}</td>
+              <td>
+                {% if e.session.professional %}
+                  {{ e.session.professional.user.get_full_name|default:e.session.professional.user.username }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if upcoming.paginator.num_pages > 1 %}
+        <div class="card-actions" style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;align-items:center;">
+          {% if upcoming.has_previous %}
+            <a class="btn secondary btn-compact" href="?page={{ upcoming.previous_page_number }}{% if selected_month %}&month={{ selected_month }}{% endif %}">Anterior</a>
+          {% endif %}
+          <span class="muted">Página {{ upcoming.number }} de {{ upcoming.paginator.num_pages }}</span>
+          {% if upcoming.has_next %}
+            <a class="btn secondary btn-compact" href="?page={{ upcoming.next_page_number }}{% if selected_month %}&month={{ selected_month }}{% endif %}">Seguinte</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="muted">Sem turmas futuras.</div>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <h3 style="margin:0 0 8px 0;">Histórico</h3>
+    {% if past %}
+      <table class="table-compact">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Hora</th>
+            <th>Serviço</th>
+            <th>Profissional</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in past %}
+            <tr>
+              <td>{{ e.session.date|date:"M. j, Y" }}</td>
+              <td>{{ e.session.time|time:"H:i" }}</td>
+              <td>{{ e.session.service.name }}</td>
+              <td>
+                {% if e.session.professional %}
+                  {{ e.session.professional.user.get_full_name|default:e.session.professional.user.username }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted">Sem histórico.</div>
+    {% endif %}
+  </div>
+{% endblock %}

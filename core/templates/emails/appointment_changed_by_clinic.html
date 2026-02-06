@@ -1,0 +1,18 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Alteração na tua marcação{% endblock %}
+
+{% block content %}
+Olá {{ client_name }},
+<br><br>
+A clínica alterou a tua marcação.
+<br><br>
+<strong>Tipo de alteração:</strong> {{ change_type }}<br>
+<strong>Serviço:</strong> {{ service_name }}<br>
+<strong>Profissional:</strong> {{ professional_name }}<br>
+{% if old_date %}<strong>Data anterior:</strong> {{ old_date }} {{ old_time }}<br>{% endif %}
+{% if new_date %}<strong>Nova data:</strong> {{ new_date }} {{ new_time }}<br>{% endif %}
+{% if reason %}<strong>Motivo:</strong> {{ reason }}<br>{% endif %}
+<br>
+Podes gerir as tuas marcações aqui: <a href="{{ manage_url }}" style="color:#29abe2;">{{ manage_url }}</a>
+{% endblock %}

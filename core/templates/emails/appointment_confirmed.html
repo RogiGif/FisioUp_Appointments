@@ -1,0 +1,17 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Marcação confirmada{% endblock %}
+
+{% block content %}
+Olá {{ client_name }},
+<br><br>
+A tua marcação foi confirmada com os seguintes detalhes:
+<br><br>
+<strong>Serviço:</strong> {{ service_name }}<br>
+<strong>Profissional:</strong> {{ professional_name }}<br>
+<strong>Data:</strong> {{ date }}<br>
+<strong>Hora:</strong> {{ time }}<br>
+{% if notes %}<strong>Notas:</strong> {{ notes }}<br>{% endif %}
+<br>
+Podes gerir as tuas marcações aqui: <a href="{{ manage_url }}" style="color:#29abe2;">{{ manage_url }}</a>
+{% endblock %}

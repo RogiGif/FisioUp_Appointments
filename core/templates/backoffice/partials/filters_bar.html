@@ -1,0 +1,39 @@
+{% load backoffice_extras %}
+<form method="get" class="row g-2 align-items-end" id="{{ form_id|default:'filtersForm' }}" {% if auto_submit %}data-auto-submit="1"{% endif %}>
+  {% for key, value in request.GET.items %}
+    {% if key != "q" and key != "per_page" and key != "page" %}
+      <input type="hidden" name="{{ key }}" value="{{ value }}">
+    {% endif %}
+  {% endfor %}
+
+  {% if show_search|default:True %}
+    <div class="col-12 col-md-6 col-lg-5">
+      <label class="form-label">Pesquisar</label>
+      <input class="form-control" type="text" name="q" value="{{ q|default:'' }}" placeholder="{{ placeholder|default:'Pesquisar' }}">
+    </div>
+  {% endif %}
+
+  {% if show_per_page|default:True %}
+    <div class="col-6 col-md-3 col-lg-2">
+      <label class="form-label">Por página</label>
+      <select class="form-select" name="per_page" {% if auto_submit %}data-auto-submit{% endif %}>
+        {% for size in "5,10,15,25,50"|split_csv %}
+          <option value="{{ size }}" {% if per_page|stringformat:"s" == size %}selected{% endif %}>{{ size }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  {% endif %}
+
+  {% if extra_fields %}
+    {{ extra_fields }}
+  {% endif %}
+
+  <div class="col-6 col-md-3 col-lg-2">
+    <button class="btn btn-outline-secondary w-100" type="submit">Filtrar</button>
+  </div>
+
+  <div class="col-12 col-md-auto">
+    <a class="btn btn-outline-secondary w-100" href="{{ request.path }}">Limpar</a>
+  </div>
+
+</form>

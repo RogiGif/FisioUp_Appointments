@@ -1,0 +1,15 @@
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h5 mb-1">{{ title }}</h1>
+    {% if subtitle %}
+      <p class="text-muted mb-0">{{ subtitle }}</p>
+    {% else %}
+      <div class="bo-subtitle-spacer"></div>
+    {% endif %}
+  </div>
+  {% if actions %}
+    <div class="bo-actions-right">
+      {{ actions|safe }}
+    </div>
+  {% endif %}
+</div>

@@ -1,0 +1,52 @@
+{% extends "backoffice/base.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title=title subtitle="Define o profissional, dia da semana e horário." %}
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post" class="row g-3" novalidate>
+        {% csrf_token %}
+        {% if return_to %}
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+        {% endif %}
+
+        <div class="col-12 col-lg-6">
+          <label class="form-label">Profissional</label>
+          {{ form.professional }}
+          {% if form.professional.errors %}<div class="text-danger small">{{ form.professional.errors }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-lg-6">
+          <label class="form-label">Dia da semana</label>
+          {{ form.weekday }}
+          {% if form.weekday.errors %}<div class="text-danger small">{{ form.weekday.errors }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-lg-6">
+          <label class="form-label">Hora de início</label>
+          {{ form.start_time }}
+          {% if form.start_time.errors %}<div class="text-danger small">{{ form.start_time.errors }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-lg-6">
+          <label class="form-label">Hora de fim</label>
+          {{ form.end_time }}
+          {% if form.end_time.errors %}<div class="text-danger small">{{ form.end_time.errors }}</div>{% endif %}
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="col-12">
+            <div class="alert alert-danger mb-0">{{ form.non_field_errors }}</div>
+          </div>
+        {% endif %}
+
+        <div class="col-12 d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary" type="submit">Guardar</button>
+          {% if return_to %}
+            <a class="btn btn-outline-secondary" href="{{ return_to }}">Cancelar</a>
+          {% else %}
+            <a class="btn btn-outline-secondary" href="{% url 'backoffice_availabilities' %}">Cancelar</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

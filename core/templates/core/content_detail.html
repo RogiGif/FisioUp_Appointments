@@ -1,0 +1,29 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ post.title }}{% endblock %}
+
+{% block content %}
+  <article class="content-detail">
+    <div class="content-detail-header">
+      <span class="content-badge">{{ post.get_kind_display }}</span>
+      <h1 class="content-detail-title">{{ post.title }}</h1>
+      <div class="content-detail-meta">
+        {{ post.published_at|date:"d M Y" }}
+      </div>
+    </div>
+
+    {% if post.cover_image %}
+      <div class="content-detail-media">
+        <img src="{{ post.cover_image.url }}" alt="{{ post.title }}">
+      </div>
+    {% endif %}
+
+    <div class="content-detail-body">
+      {{ post.body|linebreaksbr }}
+    </div>
+  </article>
+
+  <div class="content-detail-actions">
+    <a class="btn secondary" href="{% url 'content_list' %}">Voltar aos conteúdos</a>
+  </div>
+{% endblock %}

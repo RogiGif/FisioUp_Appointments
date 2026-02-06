@@ -1,0 +1,158 @@
+:root {
+  --softui-primary: #29abe2;
+}
+
+.softui-link {
+  display: flex;
+  align-items: center;
+  padding: 0.675rem 1rem;
+  margin: 0.2rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  color: #344767;
+  background: transparent;
+  transition: all 0.15s ease;
+}
+
+.softui-link:hover {
+  background: #f8fafc;
+  color: var(--softui-primary);
+}
+
+.softui-btn-primary {
+  background: var(--softui-primary);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+}
+
+.softui-btn-primary:hover {
+  filter: brightness(0.95);
+}
+
+.softui-btn-secondary {
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+}
+
+.softui-btn-secondary.disabled,
+.softui-btn-primary.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.softui-input {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.softui-input:focus {
+  outline: none;
+  border-color: var(--softui-primary);
+  box-shadow: 0 0 0 3px rgba(41, 171, 226, 0.15);
+}
+
+.muted {
+  color: #64748b;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.75rem;
+  margin-left: 0.35rem;
+}
+
+.btn-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.pagination {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.page-current {
+  background: var(--softui-primary);
+  color: #fff;
+}
+
+.menu-card {
+  position: absolute;
+  right: 0;
+  top: 46px;
+  min-width: 160px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(0,0,0,.12);
+  padding: 8px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+.menu-card.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.menu-link {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #2b3a42;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.menu-link:hover {
+  background: #f2f7fa;
+}
+
+.calendar-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.slot-menu {
+  position: fixed;
+  min-width: 180px;
+  z-index: 90;
+}
+
+.table-responsive-soft {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+  .softui-btn-primary,
+  .softui-btn-secondary {
+    width: 100%;
+    text-align: center;
+  }
+}

@@ -1,0 +1,167 @@
+:root {
+  --brand-primary: #29abe2;
+}
+
+.softui-icon {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  margin-right: 0.5rem;
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.softui-active {
+  background: #fff;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.08);
+  font-weight: 600;
+  color: #344767;
+}
+
+.softui-active .softui-icon {
+  background: var(--brand-primary);
+  box-shadow: 0 6px 14px rgba(41, 171, 226, 0.3);
+}
+
+.softui-active svg path,
+.softui-active svg .fill-slate-800,
+.softui-active svg .opacity-60 {
+  fill: #fff !important;
+}
+
+.btn-soft-primary {
+  background: var(--brand-primary);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.btn-soft-primary:hover {
+  filter: brightness(0.95);
+}
+
+.btn-soft-secondary {
+  background: #f8fafc;
+  color: #344767;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid #e2e8f0;
+}
+
+.softui-btn-fixed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+}
+
+.softui-action-buttons > a,
+.softui-action-buttons > button {
+  margin-right: 0.75rem;
+}
+
+.softui-action-buttons > a:last-child,
+.softui-action-buttons > button:last-child {
+  margin-right: 0;
+}
+
+.badge-soft {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.input-soft {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.input-soft:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(41, 171, 226, 0.2);
+}
+
+.text-brand {
+  color: var(--brand-primary);
+}
+
+.softui-filters-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .softui-filters-row {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
+    column-gap: 1rem;
+    align-items: end;
+    width: 100%;
+  }
+
+  .softui-filters-row--compact {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
+  }
+
+  .softui-filter-search {
+    max-width: none;
+  }
+
+  .softui-filter-order {
+    max-width: none;
+  }
+
+  .softui-filter-page {
+    max-width: none;
+  }
+
+  .softui-filter-submit {
+    max-width: none;
+    align-self: end;
+  }
+
+  .softui-filters-row > * {
+    min-width: 0;
+  }
+
+  .softui-filter-submit button {
+    min-height: 42px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .softui-filter-order a {
+    min-height: 42px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .softui-filter-search input,
+  .softui-filter-page select {
+    min-height: 42px;
+    box-sizing: border-box;
+  }
+}

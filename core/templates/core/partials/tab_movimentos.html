@@ -1,0 +1,68 @@
+<div class="tab-pane fade{% if active_tab == 'movements' %} show active{% endif %}" id="movementsTab" role="tabpanel">
+    <div class="card-body pass-info">
+        <div class="mb-4 d-flex align-items-center justify-content-between">
+            <h5 class="fw-bold mb-0 me-4">
+                <span class="d-block mb-2">Movimentos:</span>
+                <span class="fs-12 fw-normal text-muted text-truncate-1-line">Resumo financeiro do cliente.</span>
+            </h5>
+            <a href="javascript:void(0);" class="btn btn-sm btn-light-brand">Resumo</a>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-3">
+                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                    <div class="fs-12 text-muted">Total gasto</div>
+                    <div class="fs-16 fw-bold">—</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                    <div class="fs-12 text-muted">Mês atual</div>
+                    <div class="fs-16 fw-bold">—</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                    <div class="fs-12 text-muted">Saldo</div>
+                    <div class="fs-16 fw-bold">—</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                    <div class="fs-12 text-muted">Estado</div>
+                    <div class="fs-16 fw-bold">—</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <hr class="my-0">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descrição</th>
+                        <th>Valor</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if movements %}
+                        {% for movement in movements %}
+                            <tr>
+                                <td>{{ movement.date }}</td>
+                                <td>{{ movement.description }}</td>
+                                <td>{{ movement.amount }}</td>
+                                <td>{{ movement.status }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">Sem dados.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

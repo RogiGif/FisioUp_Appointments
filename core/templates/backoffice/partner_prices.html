@@ -1,0 +1,74 @@
+{% extends "backoffice/base.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Preços por parceria" subtitle="Seleciona uma parceria e define preços por serviço." %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-6 col-lg-4">
+          <label class="form-label">Parceria</label>
+          <select class="form-select" name="partner_id" onchange="this.form.submit();">
+            <option value="">— escolher parceria —</option>
+            {% for p in partners %}
+              <option value="{{ p.id }}" {% if selected_partner and selected_partner.id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if selected_partner %}
+    <div class="card">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="partner_id" value="{{ selected_partner.id }}">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Serviço</th>
+                <th>Modo</th>
+                <th>Preço único</th>
+                <th>1ª consulta</th>
+                <th>Seguintes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in service_rows %}
+                {% with s=row.service psp=row.psp %}
+                <tr>
+                  <td>{{ s.name }}</td>
+                  <td>
+                    <select class="form-select form-select-sm" name="service_{{ s.id }}_pricing_mode">
+                      <option value="single" {% if psp and psp.pricing_mode == "single" %}selected{% endif %}>Único</option>
+                      <option value="first_followup" {% if psp and psp.pricing_mode == "first_followup" %}selected{% endif %}>1ª/Seguintes</option>
+                    </select>
+                  </td>
+                  <td>
+                    <input class="form-control form-control-sm" type="text" name="service_{{ s.id }}_price" value="{% if psp %}{{ psp.price }}{% endif %}">
+                  </td>
+                  <td>
+                    <input class="form-control form-control-sm" type="text" name="service_{{ s.id }}_price_first" value="{% if psp %}{{ psp.price_first }}{% endif %}">
+                  </td>
+                  <td>
+                    <input class="form-control form-control-sm" type="text" name="service_{{ s.id }}_price_followup" value="{% if psp %}{{ psp.price_followup }}{% endif %}">
+                  </td>
+                </tr>
+                {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card-body border-top d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Guardar preços</button>
+          <a class="btn btn-outline-secondary" href="{% url 'backoffice_partners' %}">Voltar</a>
+        </div>
+      </form>
+    </div>
+  {% else %}
+    {% include "backoffice/partials/empty_state.html" with title="Sem parceria selecionada" description="Seleciona uma parceria para editar preços." %}
+  {% endif %}
+{% endblock %}

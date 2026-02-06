@@ -1,0 +1,14 @@
+{% extends "emails/base.txt" %}
+
+{% block content %}
+Olá {{ client_name }},
+
+A tua marcação foi confirmada:
+- Serviço: {{ service_name }}
+- Profissional: {{ professional_name }}
+- Data: {{ date }}
+- Hora: {{ time }}
+{% if notes %}- Notas: {{ notes }}{% endif %}
+
+Gerir marcações: {{ manage_url }}
+{% endblock %}

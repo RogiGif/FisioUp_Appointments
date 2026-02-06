@@ -1,0 +1,51 @@
+{% load backoffice_extras %}
+{% if page_obj and page_obj.paginator.num_pages > 1 %}
+  {% with start=page_obj.start_index end=page_obj.end_index total=page_obj.paginator.count %}
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3">
+      <div class="text-muted">
+        Mostrando {{ start }}–{{ end }} de {{ total }}
+      </div>
+      <nav>
+        <ul class="pagination mb-0">
+          {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?{% querystring_with request page=page_obj.number|add:'-1' %}">Anterior</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+          {% endif %}
+
+          {% if page_obj.number|add:"-2" > 1 %}
+            <li class="page-item">
+              <a class="page-link" href="?{% querystring_with request page=1 %}">1</a>
+            </li>
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+
+          {% for p in page_obj.paginator.page_range %}
+            {% if p >= page_obj.number|add:"-2" and p <= page_obj.number|add:"2" %}
+              <li class="page-item {% if p == page_obj.number %}active{% endif %}">
+                <a class="page-link" href="?{% querystring_with request page=p %}">{{ p }}</a>
+              </li>
+            {% endif %}
+          {% endfor %}
+
+          {% if page_obj.number|add:"2" < page_obj.paginator.num_pages %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+            <li class="page-item">
+              <a class="page-link" href="?{% querystring_with request page=page_obj.paginator.num_pages %}">{{ page_obj.paginator.num_pages }}</a>
+            </li>
+          {% endif %}
+
+          {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?{% querystring_with request page=page_obj.number|add:'1' %}">Seguinte</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">Seguinte</span></li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+  {% endwith %}
+{% endif %}

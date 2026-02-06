@@ -1,0 +1,11 @@
+<div class="card">
+  <div class="card-body text-center">
+    <h3 class="h6 mb-2">{{ title|default:"Sem resultados" }}</h3>
+    {% if description %}
+      <p class="text-muted mb-3">{{ description }}</p>
+    {% endif %}
+    {% if action_text and action_url %}
+      <a class="btn btn-primary" href="{{ action_url }}">{{ action_text }}</a>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,207 @@
+{% extends "backoffice/base.html" %}
+{% load backoffice_extras %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Agenda" subtitle="Visão diária/semanal das marcações." actions="" %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end" data-auto-submit="1">
+        <div class="col-12 col-md-3">
+          <label class="form-label">Data</label>
+          <input class="form-control" type="date" name="date" value="{{ date|date:'Y-m-d' }}" data-auto-submit>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Vista</label>
+          <select class="form-select" name="view_mode" data-auto-submit>
+            <option value="day" {% if view_mode == 'day' %}selected{% endif %}>Dia</option>
+            <option value="week" {% if view_mode == 'week' %}selected{% endif %}>Semana</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Tipo</label>
+          <select class="form-select" name="type" data-auto-submit>
+            <option value="all" {% if type == 'all' %}selected{% endif %}>Todos</option>
+            <option value="appointment" {% if type == 'appointment' %}selected{% endif %}>Consultas</option>
+            <option value="group" {% if type == 'group' %}selected{% endif %}>Turmas</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Profissional</label>
+          <select class="form-select" name="professional_id" data-auto-submit>
+            <option value="">Todos</option>
+            {% for prof in professionals %}
+              <option value="{{ prof.id }}" {% if professional_id|stringformat:'s' == prof.id|stringformat:'s' %}selected{% endif %}>
+                {{ prof.user.get_full_name|default:prof.user.username }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Serviço</label>
+          <select class="form-select" name="service_id" data-auto-submit>
+            <option value="">Todos</option>
+            {% for service in services %}
+              <option value="{{ service.id }}" {% if service_id|stringformat:'s' == service.id|stringformat:'s' %}selected{% endif %}>
+                {{ service.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Estado</label>
+          <select class="form-select" name="status" data-auto-submit>
+            <option value="">Todos</option>
+            <option value="scheduled" {% if status == 'scheduled' %}selected{% endif %}>Agendada</option>
+            <option value="completed" {% if status == 'completed' %}selected{% endif %}>Concluída</option>
+            <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Cancelada</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Pesquisar</label>
+          <input class="form-control" type="text" name="q" value="{{ q|default:'' }}" placeholder="Nome, telefone, NIF">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Por página</label>
+          <select class="form-select" name="per_page" data-auto-submit>
+            {% for size in "10,25,50"|split_csv %}
+              <option value="{{ size }}" {% if per_page|stringformat:'s' == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <button class="btn btn-outline-secondary w-100" type="submit">Filtrar</button>
+        </div>
+        <div class="col-12 col-md-auto">
+          <a class="btn btn-outline-secondary w-100" href="{{ request.path }}">Limpar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="text-muted">Resultados: {{ page_obj.paginator.count }}</div>
+    {% if can_quick_create %}
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#boQuickCreateModal">+ Nova marcação</button>
+    {% endif %}
+  </div>
+
+  {% if items %}
+    <div class="card">
+      {% include "backoffice/partials/table_open.html" with header_cols="Data,Hora,Serviço,Profissional,Cliente/Inscritos,Estado,Preço,Ações"|split_csv %}
+      {% for item in items %}
+        <tr>
+          <td>{{ item.date|date:"M j, Y" }}</td>
+          <td>{{ item.time|time:"H:i" }}</td>
+          <td>{{ item.service_name }}</td>
+          <td>{{ item.professional_name }}</td>
+          <td>{{ item.client_label }}</td>
+          <td>
+            <span class="badge text-bg-light">{{ item.status_label }}</span>
+          </td>
+          <td>{{ item.price_label }}</td>
+          <td class="text-end">
+            <div class="bo-btn-row">
+              <a class="btn btn-outline-secondary btn-sm" href="{{ item.open_url }}">Abrir</a>
+              {% if item.cancel_url and item.status_raw == "scheduled" %}
+                <a class="btn btn-outline-danger btn-sm" href="{{ item.cancel_url }}" data-confirm="Cancelar marcação?">Cancelar</a>
+              {% endif %}
+              {% if item.complete_url and item.status_raw == "scheduled" %}
+                <a class="btn btn-outline-success btn-sm" href="{{ item.complete_url }}" data-confirm="Concluir marcação?">Concluir</a>
+              {% endif %}
+              {% if item.reschedule_url and item.status_raw == "scheduled" %}
+                <a class="btn btn-outline-secondary btn-sm" href="{{ item.reschedule_url }}">Reagendar</a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      {% include "backoffice/partials/table_close.html" %}
+    </div>
+    {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    {% include "backoffice/partials/empty_state.html" with title="Sem marcações" description="Não existem marcações para os filtros atuais." %}
+  {% endif %}
+
+  <div class="modal fade" id="boQuickCreateModal" tabindex="-1" aria-labelledby="boQuickCreateLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <form method="post" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="action" value="quick_create">
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+          <input type="hidden" name="client_id" id="boClientId" value="{{ quick_form.client_id }}">
+          <input type="hidden" name="client_label" id="boClientLabel" value="{{ quick_form.client_label }}">
+          <div class="modal-header">
+            <h5 class="modal-title" id="boQuickCreateLabel">Nova marcação</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body">
+            {% if quick_errors %}
+              <div class="alert alert-danger">
+                {% for err in quick_errors %}<div>{{ err }}</div>{% endfor %}
+              </div>
+            {% endif %}
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">Cliente</label>
+                <input class="form-control" type="text" id="boClientSearch" placeholder="Pesquisar cliente" value="{{ quick_form.client_label }}" autocomplete="off" aria-label="Pesquisar cliente">
+                <div class="list-group bo-client-results" id="boClientResults"></div>
+                <div class="form-text">Seleciona um cliente na lista.</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Serviço</label>
+                <select class="form-select" name="service_id" id="boServiceSelect" aria-label="Serviço">
+                  <option value="">Selecionar</option>
+                  {% for service in services %}
+                    <option value="{{ service.id }}" {% if quick_form.service_id|stringformat:'s' == service.id|stringformat:'s' %}selected{% endif %}>{{ service.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Profissional</label>
+                <select class="form-select" name="professional_id" id="boProfessionalSelect" aria-label="Profissional">
+                  <option value="">Selecionar</option>
+                  {% for prof in professionals %}
+                    <option value="{{ prof.id }}" {% if quick_form.professional_id|stringformat:'s' == prof.id|stringformat:'s' %}selected{% endif %}>{{ prof.user.get_full_name|default:prof.user.username }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Data</label>
+                <input class="form-control" type="date" name="date" id="boDateInput" value="{{ quick_form.date|default:date|date:'Y-m-d' }}" aria-label="Data">
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Hora</label>
+                <select class="form-select" name="time" id="boTimeSelect" aria-label="Hora">
+                  <option value="">Selecionar</option>
+                  {% for slot in quick_slots %}
+                    <option value="{{ slot }}" {% if quick_form.time == slot %}selected{% endif %}>{{ slot }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Notas (opcional)</label>
+                <textarea class="form-control" name="notes" rows="3">{{ quick_form.notes }}</textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <a class="btn btn-outline-secondary" href="/prof/marcar/">Abrir marcação completa</a>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Criar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {% if quick_modal_open %}
+    <script>
+      window.addEventListener("load", function () {
+        var modal = new bootstrap.Modal(document.getElementById("boQuickCreateModal"));
+        modal.show();
+      });
+    </script>
+  {% endif %}
+{% endblock %}

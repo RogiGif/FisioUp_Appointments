@@ -1,0 +1,29 @@
+{% if messages %}
+  {% for message in messages %}
+    {% if "error" in message.tags %}
+      {% with "danger" as alert_tag %}
+        <div class="alert alert-{{ alert_tag }} alert-dismissible fade show mb-3" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+        </div>
+      {% endwith %}
+    {% elif "success" in message.tags %}
+      <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+      </div>
+    {% elif "warning" in message.tags %}
+      <div class="alert alert-warning alert-dismissible fade show mb-3" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+      </div>
+    {% else %}
+      <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+      </div>
+    {% endif %}
+  {% endfor %}
+{% else %}
+  <div class="bo-alert-spacer"></div>
+{% endif %}

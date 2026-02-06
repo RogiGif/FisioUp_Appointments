@@ -1,0 +1,17 @@
+{% extends "emails/base.html" %}
+
+{% block title %}{{ event_title }}{% endblock %}
+
+{% block content %}
+Evento: {{ event_type }}
+<br><br>
+<strong>Cliente:</strong> {{ client_name }}{% if client_phone %} ({{ client_phone }}){% endif %}<br>
+<strong>Serviço:</strong> {{ service_name }}<br>
+<strong>Profissional:</strong> {{ professional_name }}<br>
+{% if old_date %}<strong>Data anterior:</strong> {{ old_date }} {{ old_time }}<br>{% endif %}
+{% if new_date %}<strong>Nova data:</strong> {{ new_date }} {{ new_time }}<br>{% endif %}
+{% if cancelled_at %}<strong>Cancelado em:</strong> {{ cancelled_at }}<br>{% endif %}
+<strong>Autor:</strong> {{ actor }}
+<br><br>
+{% if admin_url %}Abrir: <a href="{{ admin_url }}" style="color:#29abe2;">{{ admin_url }}</a>{% endif %}
+{% endblock %}
