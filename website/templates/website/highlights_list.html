@@ -1,0 +1,70 @@
+{% extends "website/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="site-blocks-cover overlay inner-page" style="background-image: url({% static 'website/dente/images/replacements/fisioup_hero_background.png' %});" data-aos="fade" data-stellar-background-ratio="0.5">
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-md-7">
+        <span class="sub-text">Novidades e artigos</span>
+        <h1>Os Nossos <strong>Destaques</strong></h1>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="site-section">
+  <div class="container">
+    <div class="row mb-5">
+      {% for post in posts %}
+        <div class="col-md-6 col-lg-4 mb-4">
+          <div class="post-entry bg-white">
+            <div class="image">
+              <img src="{% if post.cover_url %}{{ post.cover_url }}{% else %}{% static 'website/dente/images/img_2.jpg' %}{% endif %}" alt="{{ post.title }}" class="img-fluid">
+            </div>
+            <div class="text p-4">
+              <h2 class="h5 text-black"><a href="{% url 'website:highlight_detail' post.slug %}">{{ post.title }}</a></h2>
+              <span class="text-uppercase date d-block mb-3"><small>{{ post.published|date:'d M, Y' }}</small></span>
+              <p class="mb-0">{{ post.excerpt }}</p>
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="col-12 text-center">
+          <p>Ainda nao existem destaques publicados.</p>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if page_obj.has_other_pages %}
+      <div class="row">
+        <div class="col-md-12 text-center">
+          <div class="site-block-27">
+            <ul>
+              {% if page_obj.has_previous %}
+                <li><a href="?page={{ page_obj.previous_page_number }}">&lt;</a></li>
+              {% else %}
+                <li><span>&lt;</span></li>
+              {% endif %}
+
+              {% for number in page_obj.paginator.page_range %}
+                {% if number == page_obj.number %}
+                  <li class="active"><span>{{ number }}</span></li>
+                {% else %}
+                  <li><a href="?page={{ number }}">{{ number }}</a></li>
+                {% endif %}
+              {% endfor %}
+
+              {% if page_obj.has_next %}
+                <li><a href="?page={{ page_obj.next_page_number }}">&gt;</a></li>
+              {% else %}
+                <li><span>&gt;</span></li>
+              {% endif %}
+            </ul>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

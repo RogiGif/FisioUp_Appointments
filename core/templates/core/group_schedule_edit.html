@@ -1,0 +1,598 @@
+{% extends "core/base_duralux.html" %}
+
+{% block content %}
+    {% url 'group_sessions_admin_list' as group_sessions_admin_list_url %}
+    {% with back_url=return_to|default:group_sessions_admin_list_url %}
+        <div class="page-header group-sessions-page-header">
+            <div class="page-header-left d-flex align-items-center">
+                <div class="page-header-title">
+                    <h5 class="m-b-10">Editar turma recorrente</h5>
+                </div>
+                <ul class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'backoffice_dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'group_sessions_admin_list' %}">Turmas</a></li>
+                    <li class="breadcrumb-item">Editar</li>
+                </ul>
+            </div>
+            <div class="page-header-right ms-auto">
+                <div class="page-header-right-items">
+                    <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                        <a class="btn btn-outline-secondary" href="{{ back_url }}">Voltar</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endwith %}
+
+    <div class="main-content">
+        <div class="row">
+            <div class="col-12 col-xl-10">
+                <div class="card border-top-0">
+                    <div class="card-header p-0">
+                        <ul class="nav nav-tabs flex-wrap w-100 text-center" role="tablist">
+                            <li class="nav-item flex-fill" role="presentation">
+                                <a class="nav-link{% if active_tab == 'edit' %} active{% endif %}" href="{{ tab_urls.edit }}" role="tab">Editar</a>
+                            </li>
+                            <li class="nav-item flex-fill" role="presentation">
+                                <a class="nav-link{% if active_tab == 'enrollments' %} active{% endif %}" href="{{ tab_urls.enrollments }}" role="tab">Inscritos</a>
+                            </li>
+                            <li class="nav-item flex-fill" role="presentation">
+                                <a class="nav-link{% if active_tab == 'monthly' %} active{% endif %}" href="{{ tab_urls.monthly }}" role="tab">Mensalidade</a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        {% if errors %}
+                            <div class="alert alert-danger">
+                                {% for err in errors %}
+                                    <div>{{ err }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        {% if active_tab == 'edit' %}
+                            {% if family_weekday_labels %}
+                                <div class="alert alert-light border mb-3">
+                                    <strong>Repetição:</strong> {{ family_weekday_labels|join:", " }} ({{ family_repeat_count }}x por semana)
+                                </div>
+                            {% endif %}
+                            <form method="post" class="row g-3">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="save_edit">
+                                <input type="hidden" name="tab" value="edit">
+                                <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                {% if return_to %}
+                                    <input type="hidden" name="return_to" value="{{ return_to }}">
+                                {% endif %}
+                                <div class="col-12">
+                                    <label class="form-label">Nome da turma</label>
+                                    <input type="text" name="name" class="form-control" value="{{ schedule.name|default:schedule.service.name }}" required>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Serviço (turma)</label>
+                                    <select name="service_id" class="form-select" id="group-session-service" required>
+                                        <option value="">— escolher —</option>
+                                        {% for s in services %}
+                                            <option value="{{ s.id }}" {% if schedule.service_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Profissional</label>
+                                    <select name="professional_id" class="form-select" id="group-session-professional" required>
+                                        <option value="">— escolher —</option>
+                                        {% for p in professionals %}
+                                            <option value="{{ p.id }}" {% if schedule.professional_id == p.id %}selected{% endif %}>{{ p.user.get_full_name|default:p.user.username }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Data de início</label>
+                                    <input type="date" name="start_date" class="form-control" value="{{ schedule.start_date|date:'Y-m-d' }}" required>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Dias da semana</label>
+                                    <div class="d-flex flex-wrap gap-3">
+                                        {% for value, label in weekday_choices %}
+                                            <div class="form-check">
+                                                <input
+                                                    class="form-check-input"
+                                                    type="checkbox"
+                                                    name="weekdays"
+                                                    value="{{ value }}"
+                                                    id="edit-wd{{ value }}"
+                                                    {% if value in selected_weekdays %}checked{% endif %}
+                                                >
+                                                <label class="form-check-label" for="edit-wd{{ value }}">{{ label }}</label>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="form-text text-muted">Podes escolher mais do que um dia (segunda a sexta).</div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Hora</label>
+                                    <input type="time" name="time" class="form-control" value="{{ schedule.time|time:'H:i' }}" required>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Capacidade (opcional)</label>
+                                    <input type="number" name="capacity" class="form-control" min="1" value="{{ schedule.capacity|default:'' }}">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Duração (min, opcional)</label>
+                                    <input type="number" name="duration_minutes" class="form-control" min="1" value="{{ schedule.duration_minutes|default:'' }}">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Notas</label>
+                                    <textarea name="notes" rows="3" class="form-control">{{ schedule.notes }}</textarea>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="is_active" id="schedule-is-active" {% if schedule.is_active %}checked{% endif %}>
+                                        <label class="form-check-label" for="schedule-is-active">Turma ativa</label>
+                                    </div>
+                                </div>
+                                <div class="col-12 d-flex gap-2">
+                                    <button class="btn btn-primary" type="submit">Guardar alterações</button>
+                                    <a class="btn btn-outline-secondary" href="{{ return_to|default:group_sessions_admin_list_url }}">Cancelar</a>
+                                </div>
+                            </form>
+                        {% elif active_tab == 'enrollments' %}
+                            {% if session %}
+                                <div class="small text-muted mb-2">Sessão de referência: {{ session.date|date:"d/m/Y" }} às {{ session.time|time:"H:i" }}</div>
+                                <div class="d-flex flex-wrap gap-2 mb-3">
+                                    <span class="badge text-bg-light">
+                                        Profissional: <strong>{% if session.professional %}{{ session.professional.user.get_full_name|default:session.professional.user.username }}{% else %}—{% endif %}</strong>
+                                    </span>
+                                    <span class="badge text-bg-light">Vagas: <strong>{{ session.spots_left }}/{{ session.capacity_value }}</strong></span>
+                                    <span class="badge text-bg-light">Estado: <strong>{{ session.get_status_display }}</strong></span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 mb-4">
+                                    {% if session.status == "scheduled" %}
+                                        <form method="post">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="complete_session">
+                                            <input type="hidden" name="tab" value="enrollments">
+                                            <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                            {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                            <button class="btn btn-sm btn-outline-success" type="submit">Marcar como concluída</button>
+                                        </form>
+                                        <form method="post">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="cancel_session">
+                                            <input type="hidden" name="tab" value="enrollments">
+                                            <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                            {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                            <button class="btn btn-sm btn-outline-danger" type="submit">Cancelar sessão</button>
+                                        </form>
+                                        <form method="post">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="cancel_schedule">
+                                            <input type="hidden" name="tab" value="enrollments">
+                                            <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                            {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                            <button class="btn btn-sm btn-outline-danger" type="submit">Cancelar recorrência</button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+
+                                <div class="card border-0 mb-4">
+                                    <div class="card-body p-0">
+                                        <h6 class="mb-3">Adicionar cliente</h6>
+                                        <form method="post" class="row g-2 align-items-start">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="add_enrolment">
+                                            <input type="hidden" name="tab" value="enrollments">
+                                            <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                            {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                            <input type="hidden" name="client_id" id="group-session-client-id">
+                                            <input type="hidden" name="client_profile_id" id="group-session-client-profile-id">
+                                            <div class="col-12 col-lg-7">
+                                                <input type="text" class="form-control" id="group-session-client-search" placeholder="Pesquisar cliente...">
+                                                <div class="small text-muted mt-1">Escreve pelo menos 2 letras.</div>
+                                                <div class="list-group mt-2 d-none" id="group-session-client-results"></div>
+                                            </div>
+                                            <div class="col-12 col-lg-5">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    name="monthly_price_override"
+                                                    class="form-control"
+                                                    placeholder="Preço mensal personalizado (opcional)"
+                                                >
+                                                <div class="form-text text-muted">Se vazio, usa o preço mensal do serviço.</div>
+                                            </div>
+                                            <div class="col-12">
+                                                <div class="d-flex flex-wrap gap-3">
+                                                    {% for value, label in family_weekday_choices %}
+                                                        <div class="form-check">
+                                                            <input
+                                                                class="form-check-input"
+                                                                type="checkbox"
+                                                                name="enrolment_weekdays"
+                                                                value="{{ value }}"
+                                                                id="enrolment-wd{{ value }}"
+                                                                checked
+                                                            >
+                                                            <label class="form-check-label" for="enrolment-wd{{ value }}">{{ label }}</label>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <div class="form-text text-muted">Seleciona os dias em que este cliente participa na turma.</div>
+                                            </div>
+                                            <div class="col-12">
+                                                <button class="btn btn-primary" type="submit">Adicionar / Atualizar plano</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <h3 class="h6 mb-2">Inscritos</h3>
+                                {% if booked_enrolments %}
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Cliente</th>
+                                                    <th>Username</th>
+                                                    <th>Telefone</th>
+                                                    <th>Dias</th>
+                                                    <th>Mensalidade personalizada</th>
+                                                    <th>Estado</th>
+                                                    <th class="text-end">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for e in booked_enrolments %}
+                                                    <tr>
+                                                        <td>{{ e.client.client_profile.full_name|default:e.client.username }}</td>
+                                                        <td>{{ e.client.username }}</td>
+                                                        <td>{{ e.client.client_profile.phone|default:"—" }}</td>
+                                                        <td>{{ e.membership_days_label|default:"Todos os dias da turma" }}</td>
+                                                        <td>
+                                                            {% if e.membership_monthly_price_override != None %}
+                                                                {{ e.membership_monthly_price_override|floatformat:2 }} €
+                                                            {% else %}
+                                                                <span class="text-muted">Preço do serviço</span>
+                                                            {% endif %}
+                                                        </td>
+                                                        <td>{{ e.get_status_display }}</td>
+                                                        <td class="text-end">
+                                                            <div class="d-inline-flex gap-1">
+                                                                <form method="post">
+                                                                    {% csrf_token %}
+                                                                    <input type="hidden" name="action" value="mark_attended">
+                                                                    <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                                    <input type="hidden" name="tab" value="enrollments">
+                                                                    <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                                                    {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                                                    <button class="btn btn-sm btn-outline-success" type="submit">Presença</button>
+                                                                </form>
+                                                                <form method="post">
+                                                                    {% csrf_token %}
+                                                                    <input type="hidden" name="action" value="mark_no_show">
+                                                                    <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                                    <input type="hidden" name="tab" value="enrollments">
+                                                                    <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                                                    {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                                                    <button class="btn btn-sm btn-outline-warning" type="submit">Falta</button>
+                                                                </form>
+                                                                <form method="post">
+                                                                    {% csrf_token %}
+                                                                    <input type="hidden" name="action" value="cancel_enrolment">
+                                                                    <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                                    <input type="hidden" name="tab" value="enrollments">
+                                                                    <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                                                    {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                                                    <button class="btn btn-sm btn-outline-danger" type="submit">Remover</button>
+                                                                </form>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {% else %}
+                                    <div class="text-muted">Sem inscrições.</div>
+                                {% endif %}
+
+                                <h3 class="h6 mt-4 mb-2">Lista de espera</h3>
+                                {% if waitlist_enrolments %}
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Cliente</th>
+                                                    <th>Username</th>
+                                                    <th>Telefone</th>
+                                                    <th class="text-end">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for e in waitlist_enrolments %}
+                                                    <tr>
+                                                        <td>{{ e.client.client_profile.full_name|default:e.client.username }}</td>
+                                                        <td>{{ e.client.username }}</td>
+                                                        <td>{{ e.client.client_profile.phone|default:"—" }}</td>
+                                                        <td class="text-end">
+                                                            <div class="d-inline-flex gap-1">
+                                                                <form method="post">
+                                                                    {% csrf_token %}
+                                                                    <input type="hidden" name="action" value="promote_waitlist">
+                                                                    <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                                    <input type="hidden" name="tab" value="enrollments">
+                                                                    <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                                                    {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                                                    <button class="btn btn-sm btn-outline-primary" type="submit">Promover</button>
+                                                                </form>
+                                                                <form method="post">
+                                                                    {% csrf_token %}
+                                                                    <input type="hidden" name="action" value="cancel_enrolment">
+                                                                    <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                                    <input type="hidden" name="tab" value="enrollments">
+                                                                    <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                                                    {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                                                    <button class="btn btn-sm btn-outline-danger" type="submit">Remover</button>
+                                                                </form>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {% else %}
+                                    <div class="text-muted">Sem lista de espera.</div>
+                                {% endif %}
+                            {% else %}
+                                <div class="text-muted">Esta turma ainda não tem sessões para gerir inscritos.</div>
+                            {% endif %}
+                        {% else %}
+                            <h3 class="h6 mb-2">Mensalidades da turma</h3>
+                            <form method="get" class="row g-2 align-items-end mb-3">
+                                <input type="hidden" name="tab" value="monthly">
+                                {% if return_to %}
+                                    <input type="hidden" name="return_to" value="{{ return_to }}">
+                                {% endif %}
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Mês de faturação</label>
+                                    <input class="form-control" type="month" name="billing_month" value="{{ billing_month }}">
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <button class="btn btn-outline-primary" type="submit">Ver mês</button>
+                                </div>
+                            </form>
+
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <span class="badge text-bg-light">Total: <strong>{{ monthly_totals.total|floatformat:2 }} €</strong></span>
+                                <span class="badge text-bg-light">Pagas: <strong>{{ monthly_totals.paid_count }} ({{ monthly_totals.paid|floatformat:2 }} €)</strong></span>
+                                <span class="badge text-bg-light">Em dívida: <strong>{{ monthly_totals.unpaid_count }} ({{ monthly_totals.unpaid|floatformat:2 }} €)</strong></span>
+                            </div>
+
+                            {% if monthly_charges %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Cliente</th>
+                                                <th>Mensalidade base</th>
+                                                <th>Desconto</th>
+                                                <th>Valor final</th>
+                                                <th>Estado</th>
+                                                <th class="text-end">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for charge in monthly_charges %}
+                                                <tr>
+                                                    <td>{{ charge.client.client_profile.full_name|default:charge.client.username }}</td>
+                                                    <td>{{ charge.base_price|floatformat:2 }} €</td>
+                                                    <td>
+                                                        {% if charge.discount_type == "percent" %}
+                                                            {{ charge.discount_value|floatformat:2 }}%
+                                                        {% elif charge.discount_type == "fixed" %}
+                                                            {{ charge.discount_value|floatformat:2 }} €
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="fw-semibold">{{ charge.final_price|floatformat:2 }} €</td>
+                                                    <td>
+                                                        {% if charge.status == "paid" %}
+                                                            <span class="badge text-bg-success">Paga</span>
+                                                        {% elif charge.status == "unpaid" %}
+                                                            <span class="badge text-bg-warning">Em dívida</span>
+                                                        {% else %}
+                                                            <span class="badge text-bg-secondary">{{ charge.get_status_display }}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="text-end">
+                                                        {% if charge.status == "paid" %}
+                                                            <form method="post" class="d-inline">
+                                                                {% csrf_token %}
+                                                                <input type="hidden" name="action" value="mark_monthly_unpaid">
+                                                                <input type="hidden" name="charge_id" value="{{ charge.id }}">
+                                                                <input type="hidden" name="tab" value="monthly">
+                                                                <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                                                {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                                                <button class="btn btn-sm btn-outline-warning" type="submit">Marcar em dívida</button>
+                                                            </form>
+                                                        {% else %}
+                                                            <form method="post" class="d-inline">
+                                                                {% csrf_token %}
+                                                                <input type="hidden" name="action" value="mark_monthly_paid">
+                                                                <input type="hidden" name="charge_id" value="{{ charge.id }}">
+                                                                <input type="hidden" name="tab" value="monthly">
+                                                                <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                                                {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                                                <button class="btn btn-sm btn-outline-success" type="submit">Marcar paga</button>
+                                                            </form>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="text-muted">Sem mensalidades geradas para este mês.</div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .group-sessions-page-header {
+            position: static;
+            top: auto;
+            z-index: auto;
+        }
+    </style>
+
+    <script>
+        (function () {
+            const serviceSelect = document.getElementById("group-session-service");
+            const professionalSelect = document.getElementById("group-session-professional");
+            if (!serviceSelect || !professionalSelect) return;
+
+            const selectedProfessional = professionalSelect.value;
+            const initialOptions = Array.from(professionalSelect.options).map((opt) => ({
+                value: opt.value,
+                label: opt.textContent,
+            }));
+
+            function setOptions(options) {
+                professionalSelect.innerHTML = "";
+                options.forEach((opt) => {
+                    const optionEl = document.createElement("option");
+                    optionEl.value = opt.value;
+                    optionEl.textContent = opt.label;
+                    if (selectedProfessional && selectedProfessional === String(opt.value)) {
+                        optionEl.selected = true;
+                    }
+                    professionalSelect.appendChild(optionEl);
+                });
+            }
+
+            function resetOptions() {
+                setOptions(initialOptions);
+            }
+
+            serviceSelect.addEventListener("change", () => {
+                const serviceId = serviceSelect.value;
+                if (!serviceId) {
+                    resetOptions();
+                    return;
+                }
+                fetch(`/backoffice/api/professionals/by-service/?service_id=${encodeURIComponent(serviceId)}`)
+                    .then((res) => res.json())
+                    .then((data) => {
+                        const opts = [{ value: "", label: "— escolher —" }];
+                        (data.results || []).forEach((p) => {
+                            opts.push({ value: String(p.id), label: p.label });
+                        });
+                        setOptions(opts);
+                    })
+                    .catch(() => resetOptions());
+            });
+        })();
+
+        (function () {
+            const input = document.getElementById("group-session-client-search");
+            const results = document.getElementById("group-session-client-results");
+            const hidden = document.getElementById("group-session-client-id");
+            const hiddenProfile = document.getElementById("group-session-client-profile-id");
+            const url = "{% url 'backoffice_api_clients_search' %}";
+            if (!input || !results || !hidden || !hiddenProfile) return;
+
+            function clearResults() {
+                results.innerHTML = "";
+                results.classList.add("d-none");
+            }
+            function renderResults(items) {
+                results.innerHTML = "";
+                if (!items.length) {
+                    const empty = document.createElement("div");
+                    empty.className = "list-group-item text-muted";
+                    empty.textContent = "Sem resultados.";
+                    results.appendChild(empty);
+                    results.classList.remove("d-none");
+                    return;
+                }
+                items.forEach((item) => {
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.className = "list-group-item list-group-item-action";
+                    btn.textContent = item.label;
+                    if (!item.user_id || item.has_user === false) {
+                        btn.textContent += " (sem login)";
+                    }
+                    btn.addEventListener("click", () => {
+                        input.value = item.label;
+                        hidden.value = item.user_id || "";
+                        hiddenProfile.value = item.id || "";
+                        clearResults();
+                    });
+                    results.appendChild(btn);
+                });
+                results.classList.remove("d-none");
+            }
+
+            const debounce = (window.AppUtils && typeof window.AppUtils.debounce === "function")
+                ? window.AppUtils.debounce
+                : ((fn, wait) => {
+                    let timer = null;
+                    const wrapped = () => {
+                        if (timer) window.clearTimeout(timer);
+                        timer = window.setTimeout(fn, wait);
+                    };
+                    wrapped.cancel = () => {
+                        if (timer) window.clearTimeout(timer);
+                    };
+                    return wrapped;
+                });
+
+            const debouncedSearch = debounce(() => {
+                fetch(`${url}?q=${encodeURIComponent((input.value || "").trim())}`)
+                    .then((res) => res.json())
+                    .then((data) => renderResults(data.results || []))
+                    .catch(() => clearResults());
+            }, 250);
+
+            input.addEventListener("input", () => {
+                hidden.value = "";
+                hiddenProfile.value = "";
+                const term = (input.value || "").trim();
+                if (term.length < 2) {
+                    debouncedSearch.cancel();
+                    clearResults();
+                    return;
+                }
+                debouncedSearch();
+            });
+            input.addEventListener("keydown", (event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                debouncedSearch.cancel();
+                const term = (input.value || "").trim();
+                if (term.length < 2) {
+                    clearResults();
+                    return;
+                }
+                fetch(`${url}?q=${encodeURIComponent(term)}`)
+                    .then((res) => res.json())
+                    .then((data) => renderResults(data.results || []))
+                    .catch(() => clearResults());
+            });
+            document.addEventListener("click", (event) => {
+                if (!results.contains(event.target) && event.target !== input) {
+                    clearResults();
+                }
+            });
+        })();
+    </script>
+{% endblock %}

@@ -49,7 +49,9 @@
           <label><strong>Frequência</strong></label>
           <select name="freq">
             <option value="daily" {% if freq == "daily" %}selected{% endif %}>Diário</option>
-            <option value="weekdays" {% if freq == "weekdays" %}selected{% endif %}>Dias úteis</option>
+            <option value="2x_week" {% if freq == "2x_week" %}selected{% endif %}>2x semana</option>
+            <option value="3x_week" {% if freq == "3x_week" %}selected{% endif %}>3x semana</option>
+            <option value="4x_week" {% if freq == "4x_week" %}selected{% endif %}>4x semana</option>
             <option value="weekly" {% if freq == "weekly" %}selected{% endif %}>Semanal</option>
           </select>
         </div>
@@ -195,8 +197,8 @@
         </table>
 
         <div style="margin-top:12px;">
-          <label><strong>Notas globais (opcional)</strong></label>
-          <textarea name="notes_global" rows="3" placeholder="Opcional..."></textarea>
+          <label><strong>Sintomatologia (opcional)</strong></label>
+          <textarea name="symptomatology_global" rows="3" placeholder="Opcional..."></textarea>
         </div>
 
         <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">

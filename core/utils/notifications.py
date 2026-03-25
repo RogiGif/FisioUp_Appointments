@@ -35,18 +35,10 @@ def parse_emails(text: str) -> List[str]:
 
 
 def get_clinic_notification_emails() -> List[str]:
-    settings_obj = get_clinic_settings()
-    if settings_obj:
-        emails = parse_emails(settings_obj.notification_emails)
-        if emails:
-            return emails
-
-    fallback = getattr(settings, "CLINIC_NOTIFICATION_EMAILS", None)
-    if fallback:
-        return list(fallback)
-
-    default_from = getattr(settings, "DEFAULT_FROM_EMAIL", "")
-    return [default_from] if default_from else []
+    target = (getattr(settings, "INTERNAL_NOTIFICATION_EMAIL", "") or "").strip()
+    if target:
+        return [target]
+    return ["admin@fisio-up.pt"]
 
 
 def get_from_email() -> str:

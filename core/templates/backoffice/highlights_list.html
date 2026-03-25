@@ -1,0 +1,91 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  {% url 'backoffice_highlight_new' as highlight_new_url %}
+  {% with return_qs=return_to|urlencode %}
+    {% with actions_html="<a class='btn btn-primary' href='"|add:highlight_new_url|add:"?return_to="|add:return_qs|add:"'>Novo destaque</a>" %}
+      {% include "backoffice/partials/page_header.html" with title="Destaques" subtitle="Gestão de publicações exibidas no website institucional." actions=actions_html %}
+    {% endwith %}
+  {% endwith %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-5">
+          <label class="form-label">Pesquisar</label>
+          <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Título ou descrição">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Estado</label>
+          <select name="status" class="form-select">
+            <option value="all" {% if status == "all" %}selected{% endif %}>Todos</option>
+            <option value="draft" {% if status == "draft" %}selected{% endif %}>Rascunho</option>
+            <option value="published" {% if status == "published" %}selected{% endif %}>Publicado</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Por página</label>
+          <select name="per_page" class="form-select">
+            <option value="6" {% if per_page == 6 %}selected{% endif %}>6</option>
+            <option value="12" {% if per_page == 12 %}selected{% endif %}>12</option>
+            <option value="24" {% if per_page == 24 %}selected{% endif %}>24</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-1 d-grid">
+          <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
+        </div>
+        <div class="col-6 col-md-1 d-grid">
+          <a class="btn btn-outline-secondary" href="{% url 'backoffice_highlights' %}">Limpar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if posts %}
+    <div class="row g-3">
+      {% for post in posts %}
+        <div class="col-12 col-md-6 col-xl-4">
+          <div class="card h-100">
+            <div style="aspect-ratio: 4/3; background:#f5f6fb; overflow:hidden; border-top-left-radius: .75rem; border-top-right-radius: .75rem;">
+              {% if post.cover_image %}
+                <img src="{{ post.cover_image.url }}" alt="{{ post.title }}" style="width:100%; height:100%; object-fit:cover;">
+              {% else %}
+                <div class="d-flex align-items-center justify-content-center w-100 h-100 text-muted">Sem imagem</div>
+              {% endif %}
+            </div>
+            <div class="card-body d-flex flex-column">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                {% if post.status == "published" %}
+                  <span class="badge bg-soft-success text-success">Publicado</span>
+                {% else %}
+                  <span class="badge bg-soft-warning text-warning">Rascunho</span>
+                {% endif %}
+                {% if post.is_featured %}
+                  <span class="badge bg-soft-primary text-primary">Principal</span>
+                {% endif %}
+              </div>
+
+              <h6 class="mb-2">{{ post.title }}</h6>
+              <p class="text-muted mb-3">{{ post.excerpt|default:post.body|truncatechars:140 }}</p>
+
+              <div class="mt-auto">
+                <div class="text-muted fs-12 mb-2">
+                  Atualizado: {{ post.updated_at|date:"d/m/Y H:i" }}
+                </div>
+                <div class="d-flex gap-2">
+                  <a class="btn btn-sm btn-outline-secondary" href="{% url 'backoffice_highlight_edit' post.id %}?return_to={{ request.get_full_path|urlencode }}">Editar</a>
+                  {% if post.slug and post.status == "published" %}
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" href="/website/destaques/{{ post.slug }}/">Ver no website</a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    {% include "backoffice/partials/empty_state.html" with title="Sem destaques" description="Ainda não existem destaques para os filtros atuais." action_text="Novo destaque" action_url=highlight_new_url %}
+  {% endif %}
+{% endblock %}

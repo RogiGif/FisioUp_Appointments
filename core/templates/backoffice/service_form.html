@@ -1,96 +1,164 @@
-{% extends "backoffice/base.html" %}
+{% extends "core/base_duralux.html" %}
 
-{% block backoffice_content %}
-  {% include "backoffice/partials/page_header.html" with title=title %}
-
-  <div class="card backoffice-form-card">
-    <div class="card-body">
-      <form method="post" novalidate>
-        {% csrf_token %}
-        {% if return_to %}
-          <input type="hidden" name="return_to" value="{{ return_to }}">
-        {% endif %}
-        {{ form.non_field_errors }}
-
-        <div class="mb-3">
-          <label class="form-label">Nome</label>
-          {{ form.name }}
-          {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+{% block content %}
+    <div class="page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">{{ title }}</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'backoffice_dashboard' %}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'backoffice_services' %}">Serviços</a></li>
+                <li class="breadcrumb-item">{% if title %}{{ title }}{% else %}Editar{% endif %}</li>
+            </ul>
         </div>
-
-        <div class="mb-3">
-          <label class="form-label">Duração (min)</label>
-          {{ form.duration_minutes }}
-          {% if form.duration_minutes.errors %}<div class="text-danger small">{{ form.duration_minutes.errors }}</div>{% endif %}
+        <div class="page-header-right ms-auto">
+            <div class="page-header-right-items">
+                <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                    <button type="submit" form="service-form" class="btn btn-primary">
+                        <i class="feather-save me-2"></i>
+                        <span>Guardar</span>
+                    </button>
+                    {% url 'backoffice_services' as backoffice_services_url %}
+                    <a class="btn btn-outline-secondary" href="{{ return_to|default:backoffice_services_url }}">Cancelar</a>
+                </div>
+            </div>
         </div>
-
-        <div class="mb-3">
-          <label class="form-label">Tipo</label>
-          {{ form.service_type }}
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Capacidade (turmas)</label>
-          {{ form.capacity }}
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Modo de preço</label>
-          {{ form.pricing_mode }}
-        </div>
-
-        <div class="mb-3" data-price-base>
-          <label class="form-label">Preço base</label>
-          {{ form.price }}
-          {% if form.price.errors %}<div class="text-danger small">{{ form.price.errors }}</div>{% endif %}
-        </div>
-
-        <div class="mb-3" data-price-first>
-          <label class="form-label">Preço 1ª consulta</label>
-          {{ form.price_first }}
-          {% if form.price_first.errors %}<div class="text-danger small">{{ form.price_first.errors }}</div>{% endif %}
-        </div>
-
-        <div class="mb-3" data-price-followup>
-          <label class="form-label">Preço seguintes</label>
-          {{ form.price_followup }}
-          {% if form.price_followup.errors %}<div class="text-danger small">{{ form.price_followup.errors }}</div>{% endif %}
-        </div>
-
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary" type="submit">Guardar</button>
-          {% url 'backoffice_services' as backoffice_services_url %}
-          <a class="btn btn-outline-secondary" href="{{ return_to|default:backoffice_services_url }}">Cancelar</a>
-        </div>
-      </form>
     </div>
-  </div>
-  <script>
-    (function () {
-      const pricingSelect = document.querySelector('[name="pricing_mode"]');
-      const priceWrap = document.querySelector('[data-price-base]');
-      const priceFirstWrap = document.querySelector('[data-price-first]');
-      const priceFollowWrap = document.querySelector('[data-price-followup]');
-      if (!pricingSelect || !priceWrap) return;
-      const priceInput = priceWrap.querySelector('input');
-      const priceFirstInput = priceFirstWrap ? priceFirstWrap.querySelector('input') : null;
-      const priceFollowInput = priceFollowWrap ? priceFollowWrap.querySelector('input') : null;
-      const togglePrice = () => {
-        const isFirstFollow = pricingSelect.value === "first_followup";
-        priceWrap.style.display = isFirstFollow ? "none" : "block";
-        if (priceFirstWrap) priceFirstWrap.style.display = isFirstFollow ? "block" : "none";
-        if (priceFollowWrap) priceFollowWrap.style.display = isFirstFollow ? "block" : "none";
-        if (priceInput) {
-          priceInput.disabled = isFirstFollow;
-          if (isFirstFollow) {
-            priceInput.value = "0.00";
-          }
-        }
-        if (priceFirstInput) priceFirstInput.disabled = !isFirstFollow;
-        if (priceFollowInput) priceFollowInput.disabled = !isFirstFollow;
-      };
-      togglePrice();
-      pricingSelect.addEventListener("change", togglePrice);
-    })();
-  </script>
+
+    <div class="main-content">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <form id="service-form" method="post" novalidate>
+                            {% csrf_token %}
+                            {% if return_to %}
+                                <input type="hidden" name="return_to" value="{{ return_to }}">
+                            {% endif %}
+
+                            {% if form.non_field_errors %}
+                                <div class="alert alert-warning">{{ form.non_field_errors }}</div>
+                            {% endif %}
+
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Nome</label>
+                                    {{ form.name }}
+                                    {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label">Duração (min)</label>
+                                    {{ form.duration_minutes }}
+                                    {% if form.duration_minutes.errors %}<div class="text-danger small">{{ form.duration_minutes.errors }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label">Tipo</label>
+                                    {{ form.service_type }}
+                                    {% if form.service_type.errors %}<div class="text-danger small">{{ form.service_type.errors }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-md-3" data-service-capacity>
+                                    <label class="form-label">Capacidade (turmas)</label>
+                                    {{ form.capacity }}
+                                    {% if form.capacity.errors %}<div class="text-danger small">{{ form.capacity.errors }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-md-3" data-service-waitlist>
+                                    <label class="form-label d-block">Lista de espera</label>
+                                    <div class="form-check">
+                                        {{ form.allow_waitlist }}
+                                        <label class="form-check-label" for="{{ form.allow_waitlist.id_for_label }}">Permitir</label>
+                                    </div>
+                                    {% if form.allow_waitlist.errors %}<div class="text-danger small">{{ form.allow_waitlist.errors }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label">Modo de preço</label>
+                                    {{ form.pricing_mode }}
+                                    {% if form.pricing_mode.errors %}<div class="text-danger small">{{ form.pricing_mode.errors }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-md-3" data-price-base>
+                                    <label class="form-label">Preço base</label>
+                                    {{ form.price }}
+                                    {% if form.price.errors %}<div class="text-danger small">{{ form.price.errors }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-md-3" data-price-first>
+                                    <label class="form-label">Preço 1ª consulta</label>
+                                    {{ form.price_first }}
+                                    {% if form.price_first.errors %}<div class="text-danger small">{{ form.price_first.errors }}</div>{% endif %}
+                                </div>
+                                <div class="col-12 col-md-3" data-price-followup>
+                                    <label class="form-label">Preço seguintes</label>
+                                    {{ form.price_followup }}
+                                    {% if form.price_followup.errors %}<div class="text-danger small">{{ form.price_followup.errors }}</div>{% endif %}
+                                </div>
+                            </div>
+
+                            <div class="mt-4 d-flex gap-2">
+                                <button class="btn btn-primary" type="submit">Guardar</button>
+                                {% url 'backoffice_services' as backoffice_services_url %}
+                                <a class="btn btn-outline-secondary" href="{{ return_to|default:backoffice_services_url }}">Cancelar</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const pricingSelect = document.querySelector('[name="pricing_mode"]');
+            const serviceTypeSelect = document.querySelector('[name="service_type"]');
+            const capacityWrap = document.querySelector('[data-service-capacity]');
+            const waitlistWrap = document.querySelector('[data-service-waitlist]');
+            const priceWrap = document.querySelector('[data-price-base]');
+            const priceFirstWrap = document.querySelector('[data-price-first]');
+            const priceFollowWrap = document.querySelector('[data-price-followup]');
+            if (!pricingSelect || !priceWrap) return;
+            const priceInput = priceWrap.querySelector('input');
+            const priceFirstInput = priceFirstWrap ? priceFirstWrap.querySelector('input') : null;
+            const priceFollowInput = priceFollowWrap ? priceFollowWrap.querySelector('input') : null;
+            const capacityInput = capacityWrap ? capacityWrap.querySelector('input') : null;
+            const waitlistInput = waitlistWrap ? waitlistWrap.querySelector('input') : null;
+            const togglePrice = () => {
+                const isFirstFollow = pricingSelect.value === "first_followup";
+                priceWrap.style.display = isFirstFollow ? "none" : "block";
+                if (priceFirstWrap) priceFirstWrap.style.display = isFirstFollow ? "block" : "none";
+                if (priceFollowWrap) priceFollowWrap.style.display = isFirstFollow ? "block" : "none";
+                if (priceInput) {
+                    priceInput.disabled = isFirstFollow;
+                    if (isFirstFollow) {
+                        priceInput.value = "0.00";
+                    }
+                }
+                if (priceFirstInput) priceFirstInput.disabled = !isFirstFollow;
+                if (priceFollowInput) priceFollowInput.disabled = !isFirstFollow;
+            };
+            const toggleServiceType = () => {
+                const isGroup = serviceTypeSelect && serviceTypeSelect.value === "group";
+                if (capacityWrap) capacityWrap.style.display = isGroup ? "block" : "none";
+                if (waitlistWrap) waitlistWrap.style.display = isGroup ? "block" : "none";
+                if (capacityInput) {
+                    capacityInput.disabled = !isGroup;
+                    if (!isGroup) capacityInput.value = "";
+                }
+                if (waitlistInput) {
+                    waitlistInput.disabled = !isGroup;
+                    if (!isGroup) waitlistInput.checked = false;
+                }
+            };
+            togglePrice();
+            toggleServiceType();
+            pricingSelect.addEventListener("change", togglePrice);
+            if (serviceTypeSelect) {
+                serviceTypeSelect.addEventListener("change", toggleServiceType);
+            }
+        })();
+    </script>
 {% endblock %}

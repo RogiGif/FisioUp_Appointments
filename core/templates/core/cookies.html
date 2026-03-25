@@ -1,0 +1,47 @@
+{% extends "core/base_public.html" %}
+
+{% block title %}Política de Cookies{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10 col-xl-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4 p-md-5">
+                    <h1 class="h4 fw-bolder mb-3">Política de Cookies</h1>
+                    <p class="text-muted mb-4">
+                        Utilizamos cookies para garantir o funcionamento da plataforma e, se autorizado,
+                        para melhorar a experiência de utilização.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">Cookies necessários</h6>
+                    <ul class="mb-4">
+                        <li><strong>sessionid</strong>: mantém a sessão ativa e a autenticação.</li>
+                        <li><strong>csrftoken</strong>: protege os formulários contra ataques CSRF.</li>
+                    </ul>
+
+                    <h6 class="fw-semibold mb-2">Cookies analíticos (opcionais)</h6>
+                    <p class="text-muted mb-4">
+                        Se ativados, ajudam-nos a analisar o tráfego e a melhorar o serviço.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">Cookies de marketing (opcionais)</h6>
+                    <p class="text-muted mb-4">
+                        Se ativados, podem ser usados para personalização de conteúdos e campanhas.
+                    </p>
+
+                    <h6 class="fw-semibold mb-2">Gerir preferências</h6>
+                    <p class="text-muted mb-4">
+                        Podes alterar as tuas preferências a qualquer momento.
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="javascript:void(0)" class="btn btn-sm btn-primary" data-cookie-preferences>
+                            Gerir cookies
+                        </a>
+                        <a href="{% url 'privacy' %}" class="btn btn-sm btn-light-brand">Política de Privacidade</a>
+                        <a href="{% url 'terms' %}" class="btn btn-sm btn-light-brand">Termos e Condições</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

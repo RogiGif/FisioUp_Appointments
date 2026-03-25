@@ -24,6 +24,21 @@
       </div>
     {% endif %}
   {% endfor %}
-{% else %}
-  <div class="bo-alert-spacer"></div>
+  <script>
+    (function () {
+      const alerts = document.querySelectorAll(".alert.alert-success");
+      if (!alerts.length) return;
+      alerts.forEach((alert) => {
+        setTimeout(() => {
+          if (typeof bootstrap !== "undefined" && bootstrap.Alert) {
+            bootstrap.Alert.getOrCreateInstance(alert).close();
+          } else {
+            alert.classList.remove("show");
+            alert.classList.add("hide");
+            setTimeout(() => alert.remove(), 300);
+          }
+        }, 3500);
+      });
+    })();
+  </script>
 {% endif %}

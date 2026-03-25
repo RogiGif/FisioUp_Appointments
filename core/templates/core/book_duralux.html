@@ -4,11 +4,11 @@
     <div class="page-header">
         <div class="page-header-left d-flex align-items-center">
             <div class="page-header-title">
-                <h5 class="m-b-10">Marcar consulta</h5>
+                <h5 class="m-b-10">{% if reschedule_appointment %}Reagendar consulta{% else %}Marcar consulta{% endif %}</h5>
             </div>
             <ul class="breadcrumb">
                 <li class="breadcrumb-item"><a href="{{ back_to_appointments_url }}">Marcações</a></li>
-                <li class="breadcrumb-item">Nova</li>
+                <li class="breadcrumb-item">{% if reschedule_appointment %}Reagendar{% else %}Nova{% endif %}</li>
             </ul>
         </div>
         <div class="page-header-right ms-auto">
@@ -16,97 +16,306 @@
         </div>
     </div>
 
-    {% if info_message %}
-        <div class="alert alert-info">{{ info_message }}</div>
-    {% endif %}
-
-    {% if message %}
-        <div class="alert alert-warning">{{ message }}</div>
-    {% endif %}
-
-    <div class="card stretch stretch-full">
-        <div class="card-body">
-            <form method="get" id="filtersForm">
-                <div class="row g-3">
-                    <div class="col-12 col-lg-6">
-                        <label class="form-label">Serviço</label>
-                        <select id="serviceSelect" name="service_id" class="form-select" required>
-                            <option value="">— escolher —</option>
-                            {% for s in services %}
-                                <option value="{{ s.id }}" {% if selected_service_id == s.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ s.name }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-12 col-lg-6">
-                        <label class="form-label">Profissional</label>
-                        <select id="professionalSelect" name="professional_id" class="form-select" data-selected="{{ selected_professional_id }}" required>
-                            <option value="">— escolher —</option>
-                            {% for p in professionals %}
-                                <option value="{{ p.id }}" {% if selected_professional_id == p.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ p.user.get_full_name|default:p.user.username }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-12 col-lg-6">
-                        <label class="form-label">Data</label>
-                        <input type="date" id="dateSelect" name="date" class="form-control" value="{{ selected_date }}" {% if not selected_professional_id %}disabled{% endif %}>
-                    </div>
-                    <div class="col-12 col-lg-6 d-flex align-items-end">
-                        {% if selected_service_id and selected_professional_id %}
-                            <button class="btn btn-outline-primary" type="submit">Ver horários</button>
-                        {% else %}
-                            <button class="btn btn-outline-secondary" type="submit" disabled>Escolhe serviço e profissional</button>
-                        {% endif %}
-                    </div>
-                </div>
-            </form>
-        </div>
+    <div class="d-flex flex-wrap gap-2 mb-3 mt-3">
+        <a href="{% url 'book' %}" class="btn {% if booking_mode != 'serie' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            Consulta única
+        </a>
+        <a href="{% url 'book' %}?mode=serie" class="btn {% if booking_mode == 'serie' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            Marcação em série
+        </a>
     </div>
 
-    <div class="card stretch stretch-full mt-3">
-        <div class="card-header d-flex align-items-center justify-content-between">
-            <h5 class="mb-0">Horários disponíveis</h5>
-            <a class="btn btn-outline-secondary btn-sm" href="{{ back_to_appointments_url }}">Cancelar</a>
-        </div>
-        <div class="card-body">
-            {% if slots %}
-                <form method="post">
-                    {% csrf_token %}
-                    <input type="hidden" name="service_id" value="{{ selected_service_id }}">
-                    <input type="hidden" name="professional_id" value="{{ selected_professional_id }}">
-                    <input type="hidden" name="date" value="{{ selected_date }}">
-
-                    <div class="d-flex flex-wrap gap-2">
-                        {% for t in slots %}
-                            <input type="radio" class="btn-check" name="time" id="slot-{{ forloop.counter }}" value="{{ t }}" required>
-                            <label class="btn btn-outline-secondary" for="slot-{{ forloop.counter }}"><strong>{{ t }}</strong></label>
-                        {% endfor %}
-                    </div>
-
-                    <div class="mt-3">
-                        <label class="form-label">Notas</label>
-                        <textarea name="notes" class="form-control" rows="3" placeholder="Opcional..."></textarea>
-                    </div>
-
-                    <div class="mt-3 d-flex flex-wrap gap-2">
-                        <button class="btn btn-primary" type="submit">Confirmar marcação</button>
-                        <a class="btn btn-outline-secondary" href="{{ back_to_appointments_url }}">Voltar</a>
-                    </div>
-                </form>
-            {% else %}
-                <div class="text-muted">
-                    {% if selected_service_id and selected_professional_id and selected_date %}
-                        Sem horários disponíveis para a data escolhida.
-                    {% else %}
-                        Escolhe serviço, profissional e data para ver horários.
-                    {% endif %}
+        {% if booking_mode != "serie" %}
+            {% if reschedule_appointment %}
+                <div class="alert alert-info">
+                    Estás a reagendar uma marcação. Seleciona o novo horário e confirma.
                 </div>
             {% endif %}
+            {% if info_message %}
+                <div class="alert alert-info">{{ info_message }}</div>
+            {% endif %}
+
+        {% if message %}
+            <div class="alert alert-warning">{{ message }}</div>
+        {% endif %}
+    {% endif %}
+
+    {% if booking_mode != "serie" %}
+        <div class="card stretch stretch-full mt-3">
+            <div class="card-body">
+                <form method="get" id="filtersForm">
+                    {% if reschedule_id %}
+                        <input type="hidden" name="reschedule_id" value="{{ reschedule_id }}">
+                    {% endif %}
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label">Data</label>
+                            <input type="date" id="dateSelect" name="date" class="form-control"
+                                   value="{{ selected_date }}"
+                                   min="{{ today|date:'Y-m-d' }}"
+                                   required>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label">Serviço</label>
+                            <select id="serviceSelect" name="service_id" class="form-select" required {% if not selected_date %}disabled{% endif %}>
+                                <option value="">— escolher —</option>
+                                {% for s in services %}
+                                    <option value="{{ s.id }}" {% if selected_service_id == s.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ s.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if selected_date and no_services_for_date %}
+                                <div class="form-text text-warning mt-1">
+                                    Sem serviços disponíveis nesta data.
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label">Técnico</label>
+                            <select id="professionalSelect" name="professional_id" class="form-select" data-selected="{{ selected_professional_id }}" required {% if not selected_date or not selected_service_id %}disabled{% endif %}>
+                                <option value="">— escolher —</option>
+                                {% for p in professionals %}
+                                    <option value="{{ p.id }}" {% if selected_professional_id == p.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ p.user.get_full_name|default:p.user.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label d-none d-lg-block">&nbsp;</label>
+                            <div class="d-flex align-items-end">
+                                <button id="slotsButton"
+                                        class="btn {% if selected_date and selected_service_id and selected_professional_id %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}"
+                                        type="submit"
+                                        {% if not selected_date or not selected_service_id or not selected_professional_id %}disabled{% endif %}>
+                                    {% if selected_date and selected_service_id and selected_professional_id %}
+                                        Ver horários disponíveis
+                                    {% else %}
+                                        Escolhe data, serviço e técnico
+                                    {% endif %}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
-    </div>
+    {% else %}
+        {% if series_general_errors %}
+            <div class="alert alert-warning">
+                {% for e in series_general_errors %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="card stretch stretch-full mt-3">
+            <div class="card-body">
+                <form method="get">
+                    <input type="hidden" name="mode" value="serie">
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label">Serviço</label>
+                            <select name="service_id" id="series-service-select" class="form-select" required>
+                                <option value="">— escolher —</option>
+                                {% for s in services %}
+                                    <option value="{{ s.id }}" {% if series_service_id == s.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ s.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label">Técnico</label>
+                            <select
+                                name="professional_id"
+                                id="series-professional-select"
+                                class="form-select"
+                                data-selected="{{ series_preferred_professional_id }}"
+                                {% if not series_service_id %}disabled{% endif %}
+                            >
+                                <option value="">— escolher —</option>
+                                {% for p in series_professionals %}
+                                    <option value="{{ p.id }}" {% if series_preferred_professional_id == p.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ p.user.get_full_name|default:p.user.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <label class="form-label">Data inicial</label>
+                            <input type="date" name="start_date" class="form-control" value="{{ series_start_date }}" required>
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <label class="form-label">N.º sessões</label>
+                            <input type="number" name="count" class="form-control" min="1" max="20" value="{{ series_count|default:'10' }}" required>
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <label class="form-label">Frequência</label>
+                            <select name="freq" id="series-freq-select" class="form-select">
+                                <option value="daily" {% if series_freq == "daily" %}selected{% endif %}>Diário</option>
+                                <option value="2x_week" {% if series_freq == "2x_week" %}selected{% endif %}>2x semana</option>
+                                <option value="3x_week" {% if series_freq == "3x_week" %}selected{% endif %}>3x semana</option>
+                                <option value="4x_week" {% if series_freq == "4x_week" %}selected{% endif %}>4x semana</option>
+                                <option value="weekly" {% if series_freq == "weekly" %}selected{% endif %}>Semanal</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Dias da semana</label>
+                            <div class="d-flex flex-wrap gap-3">
+                                {% for day_value, day_label in series_weekday_options %}
+                                    <div class="form-check">
+                                        <input
+                                            class="form-check-input series-weekday-checkbox"
+                                            type="checkbox"
+                                            id="series-weekday-{{ day_value }}"
+                                            name="weekdays"
+                                            value="{{ day_value }}"
+                                            {% if day_value in series_weekdays %}checked{% endif %}
+                                        >
+                                        <label class="form-check-label" for="series-weekday-{{ day_value }}">{{ day_label }}</label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <div class="form-text" id="series-weekdays-help">
+                                Para 2x/3x/4x semana, seleciona exatamente os dias que pretendes.
+                            </div>
+                        </div>
+                        <div class="col-12 d-flex align-items-end">
+                            <button class="btn btn-outline-primary" type="submit">Gerar plano</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if series_sessions %}
+            <div class="card stretch stretch-full mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0">Plano de sessões</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="bulkConfirmForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="mode" value="serie">
+                        <input type="hidden" name="action" value="confirm">
+                        <input type="hidden" name="service_id" value="{{ series_service_id }}">
+                        <input type="hidden" name="start_date" value="{{ series_start_date }}">
+                        <input type="hidden" name="count" value="{{ series_count }}">
+                        <input type="hidden" name="freq" value="{{ series_freq }}">
+                        <input type="hidden" name="professional_id" value="{{ series_preferred_professional_id }}">
+                        {% for day_value in series_weekdays %}
+                            <input type="hidden" name="weekdays" value="{{ day_value }}">
+                        {% endfor %}
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Técnico</th>
+                                        <th>Hora</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for s in series_sessions %}
+                                        <tr class="bulk-row" data-date="{{ s.date_value }}">
+                                            <td>
+                                                <div class="fw-semibold">
+                                                    {{ s.date_display|date:"d/m/Y" }} - {{ s.date_display|date:"l" }}
+                                                </div>
+                                                <input type="hidden" name="session_date" value="{{ s.date_value }}">
+                                            </td>
+                                            <td>
+                                                <select class="form-select prof-select" name="session_professional_id" required>
+                                                    <option value="">— escolher —</option>
+                                                    {% for p in series_professionals %}
+                                                        <option value="{{ p.id }}" {% if s.professional_id == p.id|stringformat:"s" %}selected{% endif %}>
+                                                            {{ p.user.get_full_name|default:p.user.username }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="form-select time-select" name="session_time" data-selected-time="{{ s.time|default:'' }}" required>
+                                                    <option value="">— escolher —</option>
+                                                </select>
+                                                <div class="row-status fs-12 text-danger mt-1">{% if s.error %}{{ s.error }}{% endif %}</div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label">Sintomatologia (opcional)</label>
+                            <textarea name="symptomatology_global" class="form-control" rows="3" placeholder="Opcional..."></textarea>
+                        </div>
+
+                        <div class="mt-3 d-flex flex-wrap gap-2">
+                            <button class="btn btn-primary" type="submit">Confirmar marcações</button>
+                            <a class="btn btn-outline-secondary" href="{% url 'book' %}">Voltar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+
+    {% if booking_mode != "serie" %}
+        <div class="card stretch stretch-full mt-3">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h5 class="mb-0">Horários disponíveis</h5>
+                <a class="btn btn-outline-secondary btn-sm" href="{{ back_to_appointments_url }}">Cancelar</a>
+            </div>
+            <div class="card-body">
+                {% if slots %}
+                    <form method="post">
+                        {% csrf_token %}
+                        {% if reschedule_id %}
+                            <input type="hidden" name="reschedule_id" value="{{ reschedule_id }}">
+                        {% endif %}
+                        <input type="hidden" name="service_id" value="{{ selected_service_id }}">
+                        <input type="hidden" name="professional_id" value="{{ selected_professional_id }}">
+                        <input type="hidden" name="date" value="{{ selected_date }}">
+
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for t in slots %}
+                                <input type="radio" class="btn-check" name="time" id="slot-{{ forloop.counter }}" value="{{ t }}" {% if selected_time == t %}checked{% endif %} required>
+                                <label class="btn btn-outline-secondary" for="slot-{{ forloop.counter }}"><strong>{{ t }}</strong></label>
+                            {% endfor %}
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label">Sintomatologia</label>
+                            <textarea name="symptomatology" class="form-control" rows="3" placeholder="Opcional..."></textarea>
+                        </div>
+
+                        <div class="mt-3 d-flex flex-wrap gap-2">
+                            <button class="btn btn-primary" type="submit">
+                                {% if reschedule_appointment %}Confirmar reagendamento{% else %}Confirmar marcação{% endif %}
+                            </button>
+                            <a class="btn btn-outline-secondary" href="{{ back_to_appointments_url }}">Voltar</a>
+                        </div>
+                    </form>
+                {% else %}
+                    <div class="text-muted">
+                        {% if selected_service_id and selected_professional_id and selected_date %}
+                            Sem horários disponíveis para a data escolhida.
+                        {% elif not selected_date %}
+                            Escolhe primeiro a data.
+                        {% elif selected_date and not selected_service_id %}
+                            Escolhe um serviço para a data selecionada.
+                        {% elif selected_service_id and not selected_professional_id %}
+                            Escolhe um técnico para ver horários.
+                        {% else %}
+                            Escolhe data, serviço e técnico para ver horários.
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
 
     <div class="card stretch stretch-full mt-3">
         <div class="card-header d-flex align-items-center justify-content-between">
@@ -148,66 +357,212 @@
 
     <script>
         (function () {
+            const form = document.getElementById("filtersForm");
+            const dateInput = document.getElementById("dateSelect");
             const serviceSelect = document.getElementById("serviceSelect");
             const professionalSelect = document.getElementById("professionalSelect");
-            const selectedProfessionalId = professionalSelect ? (professionalSelect.dataset.selected || "") : "";
+            if (!form || !dateInput || !serviceSelect || !professionalSelect) return;
 
-            function resetProfessionals(msg = "— escolher —") {
-                if (!professionalSelect) return;
-                professionalSelect.innerHTML = `<option value="">${msg}</option>`;
-                professionalSelect.disabled = true;
+            function submitFilters() {
+                form.submit();
             }
 
-            async function loadProfessionals(serviceId) {
-                resetProfessionals("A carregar...");
-                try {
-                    const r = await fetch(`/api/profissionais/?service_id=${encodeURIComponent(serviceId)}`, {
-                        headers: {"X-Requested-With": "XMLHttpRequest"}
-                    });
-                    const data = await r.json();
-
-                    professionalSelect.innerHTML = `<option value="">— escolher —</option>`;
-                    for (const p of data.results) {
-                        const opt = document.createElement("option");
-                        opt.value = p.id;
-                        opt.textContent = p.label;
-                        professionalSelect.appendChild(opt);
-                    }
-
-                    if (selectedProfessionalId) {
-                        professionalSelect.value = selectedProfessionalId;
-                    } else if (data.results.length === 1) {
-                        professionalSelect.value = String(data.results[0].id);
-                        document.getElementById("filtersForm").submit();
-                        return;
-                    }
-
-                    professionalSelect.disabled = false;
-
-                    if (data.results.length === 0) {
-                        resetProfessionals("Sem profissionais para este serviço");
-                    }
-                } catch (e) {
-                    resetProfessionals("Erro a carregar profissionais");
-                }
-            }
-
-            if (professionalSelect) {
-                resetProfessionals("Escolhe primeiro o serviço");
-            }
-
-            serviceSelect.addEventListener("change", () => {
-                const serviceId = serviceSelect.value;
-                if (!serviceId) {
-                    resetProfessionals("Escolhe primeiro o serviço");
-                    return;
-                }
-                loadProfessionals(serviceId);
+            dateInput.addEventListener("change", function () {
+                serviceSelect.value = "";
+                professionalSelect.value = "";
+                submitFilters();
             });
 
-            if (serviceSelect.value) {
-                loadProfessionals(serviceSelect.value);
+            serviceSelect.addEventListener("change", function () {
+                professionalSelect.value = "";
+                submitFilters();
+            });
+
+            professionalSelect.addEventListener("change", function () {
+                submitFilters();
+            });
+        })();
+    </script>
+
+    <script>
+        (function() {
+            const seriesServiceSelect = document.getElementById("series-service-select");
+            const seriesProfessionalSelect = document.getElementById("series-professional-select");
+            const freqSelect = document.getElementById("series-freq-select");
+            const weekdayHelp = document.getElementById("series-weekdays-help");
+            const weekdayChecks = Array.from(document.querySelectorAll(".series-weekday-checkbox"));
+            const quotaMap = { "2x_week": 2, "3x_week": 3, "4x_week": 4 };
+            const professionalsApiUrl = "{% url 'api_professionals_by_service' %}";
+
+            function populateSeriesProfessionals(professionals, selectedId) {
+                if (!seriesProfessionalSelect) return;
+                seriesProfessionalSelect.innerHTML = '<option value="">— escolher —</option>';
+                (professionals || []).forEach((professional) => {
+                    const option = document.createElement("option");
+                    option.value = String(professional.id);
+                    option.textContent = professional.label;
+                    seriesProfessionalSelect.appendChild(option);
+                });
+                if (selectedId && seriesProfessionalSelect.querySelector('option[value="' + selectedId + '"]')) {
+                    seriesProfessionalSelect.value = selectedId;
+                } else {
+                    seriesProfessionalSelect.value = "";
+                }
             }
+
+            function setSeriesProfessionalAvailability(enabled) {
+                if (!seriesProfessionalSelect) return;
+                seriesProfessionalSelect.disabled = !enabled;
+                if (!enabled) {
+                    populateSeriesProfessionals([], "");
+                }
+            }
+
+            function loadProfessionalsForSeriesService(serviceId, preferredProfessionalId) {
+                if (!seriesProfessionalSelect) return;
+                if (!serviceId) {
+                    setSeriesProfessionalAvailability(false);
+                    return;
+                }
+                fetch(professionalsApiUrl + "?service_id=" + encodeURIComponent(serviceId))
+                    .then((response) => response.json())
+                    .then((payload) => {
+                        const results = payload && Array.isArray(payload.results) ? payload.results : [];
+                        setSeriesProfessionalAvailability(true);
+                        populateSeriesProfessionals(results, preferredProfessionalId || "");
+                    })
+                    .catch(() => {
+                        setSeriesProfessionalAvailability(false);
+                    });
+            }
+
+            function updateWeekdayHint() {
+                if (!freqSelect || !weekdayHelp) return;
+                const freqValue = freqSelect.value || "";
+                const required = quotaMap[freqValue];
+                if (required) {
+                    weekdayHelp.textContent = `Seleciona exatamente ${required} dia(s) da semana para esta frequência.`;
+                } else if (freqValue === "daily") {
+                    weekdayHelp.textContent = "No modo Diário, os dias da semana são opcionais e não limitam o plano.";
+                } else if (freqValue === "weekly") {
+                    weekdayHelp.textContent = "Na frequência semanal, os dias da semana ficam inativos.";
+                } else {
+                    weekdayHelp.textContent = "Seleciona os dias da semana pretendidos (segunda a sexta).";
+                }
+            }
+
+            function enforceWeekdayMax(changedInput) {
+                if (!freqSelect || !weekdayChecks.length) return;
+                const freqValue = freqSelect.value || "";
+                if (freqValue === "weekly") {
+                    weekdayChecks.forEach((input) => {
+                        input.checked = false;
+                        input.disabled = true;
+                    });
+                    return;
+                }
+                weekdayChecks.forEach((input) => {
+                    input.disabled = false;
+                });
+                const maxAllowed = quotaMap[freqValue];
+                if (!maxAllowed) return;
+                const checked = weekdayChecks.filter((input) => input.checked);
+                if (checked.length <= maxAllowed) return;
+                if (changedInput) {
+                    changedInput.checked = false;
+                } else {
+                    checked.slice(maxAllowed).forEach((input) => {
+                        input.checked = false;
+                    });
+                }
+            }
+
+            if (freqSelect) {
+                freqSelect.addEventListener("change", function () {
+                    enforceWeekdayMax(null);
+                    updateWeekdayHint();
+                });
+                enforceWeekdayMax(null);
+                updateWeekdayHint();
+            }
+
+            weekdayChecks.forEach((input) => {
+                input.addEventListener("change", function () {
+                    enforceWeekdayMax(input);
+                });
+            });
+
+            if (seriesServiceSelect) {
+                if (!seriesServiceSelect.value) {
+                    setSeriesProfessionalAvailability(false);
+                } else if (seriesProfessionalSelect) {
+                    loadProfessionalsForSeriesService(
+                        seriesServiceSelect.value,
+                        seriesProfessionalSelect.getAttribute("data-selected") || seriesProfessionalSelect.value || ""
+                    );
+                }
+
+                seriesServiceSelect.addEventListener("change", function () {
+                    const selectedService = seriesServiceSelect.value || "";
+                    if (!selectedService) {
+                        setSeriesProfessionalAvailability(false);
+                        return;
+                    }
+                    setSeriesProfessionalAvailability(false);
+                    loadProfessionalsForSeriesService(selectedService, "");
+                });
+            }
+
+            const serviceId = "{{ series_service_id|default:'' }}";
+            if (!serviceId) return;
+
+            function loadSlotsForRow(row) {
+                const profSelect = row.querySelector(".prof-select");
+                const timeSelect = row.querySelector(".time-select");
+                const statusEl = row.querySelector(".row-status");
+                const date = row.dataset.date;
+                const profId = profSelect ? profSelect.value : "";
+
+                timeSelect.innerHTML = '<option value="">— escolher —</option>';
+                statusEl.textContent = "";
+
+                if (!profId) {
+                    statusEl.textContent = "Escolhe o profissional.";
+                    return;
+                }
+
+                fetch(`/api/slots/?service_id=${serviceId}&professional_id=${profId}&date=${date}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (!data.ok) {
+                            statusEl.textContent = data.message || "Sem horários.";
+                            return;
+                        }
+                        data.slots.forEach(t => {
+                            const opt = document.createElement("option");
+                            opt.value = t;
+                            opt.textContent = t;
+                            timeSelect.appendChild(opt);
+                        });
+                        const selected = timeSelect.dataset.selectedTime;
+                        if (selected) {
+                            timeSelect.value = selected;
+                        }
+                    })
+                    .catch(() => {
+                        statusEl.textContent = "Erro a carregar horários.";
+                    });
+            }
+
+            document.querySelectorAll(".bulk-row").forEach(row => {
+                const profSelect = row.querySelector(".prof-select");
+                if (profSelect) {
+                    profSelect.addEventListener("change", () => loadSlotsForRow(row));
+                    if (profSelect.value) {
+                        loadSlotsForRow(row);
+                    }
+                }
+            });
         })();
     </script>
 {% endblock %}

@@ -1,0 +1,153 @@
+{% extends "core/base_duralux.html" %}
+
+{% block content %}
+    <div class="page-header professionals-page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Profissionais</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'backoffice_dashboard' %}">Home</a></li>
+                <li class="breadcrumb-item">Profissionais</li>
+            </ul>
+        </div>
+        <div class="page-header-right ms-auto">
+            <div class="page-header-right-items">
+                <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                    <a href="{% url 'backoffice_professional_new' %}?return_to={{ return_to|urlencode }}" class="btn btn-primary">
+                        <i class="feather-plus me-2"></i>
+                        <span>Novo Profissional</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card mb-3 professionals-filters-card">
+                    <div class="card-body py-2">
+                        <form method="get" class="row g-1 align-items-end">
+                            <div class="col-12 col-md-5">
+                                <label class="form-label small mb-0">Pesquisar</label>
+                                <input type="text" name="q" class="form-control form-control-sm" placeholder="Nome ou especialidade" value="{{ q }}">
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label small mb-0">Tipo</label>
+                                <select name="employment" class="form-select form-select-sm">
+                                    <option value="">Todos</option>
+                                    <option value="employee" {% if employment == "employee" %}selected{% endif %}>Empregado</option>
+                                    <option value="independent" {% if employment == "independent" %}selected{% endif %}>Subcontratado</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label class="form-label small mb-0">Por página</label>
+                                <select name="per_page" class="form-select form-select-sm">
+                                    <option value="5" {% if per_page|stringformat:"s" == "5" %}selected{% endif %}>5</option>
+                                    <option value="10" {% if per_page|stringformat:"s" == "10" %}selected{% endif %}>10</option>
+                                    <option value="15" {% if per_page|stringformat:"s" == "15" %}selected{% endif %}>15</option>
+                                    <option value="25" {% if per_page|stringformat:"s" == "25" %}selected{% endif %}>25</option>
+                                    <option value="50" {% if per_page|stringformat:"s" == "50" %}selected{% endif %}>50</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-2 d-flex gap-2">
+                                <button type="submit" class="btn btn-outline-primary btn-sm w-100">Filtrar</button>
+                                <a href="{% url 'backoffice_professionals' %}" class="btn btn-outline-secondary btn-sm w-100">Limpar</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                {% if professionals %}
+                    <div class="card professionals-table-card">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Profissional</th>
+                                            <th>Especialidade</th>
+                                            <th>Tipo</th>
+                                            <th>Percentagem</th>
+                                            <th>Serviços</th>
+                                            <th class="text-end">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for p in professionals %}
+                                            <tr>
+                                                <td class="fw-semibold">{{ p.user.get_full_name|default:p.user.username }}</td>
+                                                <td>{{ p.speciality|default:"—" }}</td>
+                                                <td>{% if p.is_independent %}Subcontratado{% else %}Empregado{% endif %}</td>
+                                                <td>
+                                                    {% if p.is_independent %}
+                                                        {% if p.subcontract_percentage or p.subcontract_percentage == 0 %}
+                                                            {{ p.subcontract_percentage|floatformat:2 }}%
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    {% else %}
+                                                        —
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% for s in p.services.all %}
+                                                        {{ s.name }}{% if not forloop.last %}, {% endif %}
+                                                    {% empty %}
+                                                        —
+                                                    {% endfor %}
+                                                </td>
+                                                <td class="text-end">
+                                                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'backoffice_professional_edit' p.id %}?return_to={{ return_to|urlencode }}">Editar</a>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if page_obj.paginator.num_pages > 1 %}
+                        {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+                    {% endif %}
+                {% else %}
+                    <div class="card stretch stretch-full">
+                        <div class="card-body text-center py-5">
+                            <h5 class="mb-2">Sem profissionais</h5>
+                            <p class="text-muted mb-3">Ainda não existem profissionais registados.</p>
+                            <a class="btn btn-primary" href="{% url 'backoffice_professional_new' %}?return_to={{ return_to|urlencode }}">Criar profissional</a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .professionals-page-header {
+            position: static;
+            top: auto;
+            z-index: auto;
+        }
+        .professionals-filters-card .card-body {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        .professionals-filters-card .form-label {
+            margin-bottom: 0.25rem;
+        }
+        .professionals-filters-card .form-control,
+        .professionals-filters-card .form-select {
+            min-height: 32px;
+        }
+    </style>
+{% endblock %}

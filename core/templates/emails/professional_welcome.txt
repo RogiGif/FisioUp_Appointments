@@ -1,0 +1,10 @@
+Olá {{ user.get_full_name|default:user.username }},
+
+Foste adicionado(a) à plataforma de marcações da Fisio-UP.
+
+Username: {{ user.username }}
+
+Link de acesso:
+{{ login_url }}
+
+Se tiveres alguma dúvida, responde a este email.

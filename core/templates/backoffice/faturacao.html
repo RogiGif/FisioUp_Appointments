@@ -1,8 +1,8 @@
-{% extends "backoffice/base.html" %}
+{% extends "backoffice/base_duralux.html" %}
 {% load backoffice_extras %}
 
 {% block backoffice_content %}
-  {% include "backoffice/partials/page_header.html" with title="Faturação" subtitle="Resumo diário das marcações concluídas." %}
+  {% include "backoffice/partials/page_header.html" with title="Faturação" subtitle="Resumo financeiro de consultas concluídas e mensalidades de turmas." %}
 
   <div class="card mb-3">
     <div class="card-body">
@@ -75,6 +75,33 @@
         <div class="card-body">
           <div class="text-muted small">Marcações concluídas</div>
           <div class="h5 mb-0">{{ total_count }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+      <div class="card h-100 border-warning">
+        <div class="card-body">
+          <div class="text-muted small">Clientes em dívida</div>
+          <div class="h5 mb-0">{{ debt_clients }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card h-100 border-warning">
+        <div class="card-body">
+          <div class="text-muted small">Marcações em dívida</div>
+          <div class="h5 mb-0">{{ debt_appointments }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card h-100 border-warning">
+        <div class="card-body">
+          <div class="text-muted small">Total de dívida</div>
+          <div class="h5 mb-0">{{ debt_total|floatformat:2 }} €</div>
         </div>
       </div>
     </div>

@@ -1,52 +1,150 @@
-{% extends "backoffice/base.html" %}
-{% load backoffice_extras %}
+{% extends "core/base_duralux.html" %}
 
-{% block backoffice_content %}
-  {% include "backoffice/partials/page_header.html" with title="Serviços" subtitle="Gestão de serviços e preços." %}
-
-  <div class="card mb-3">
-    <div class="card-body">
-      <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
-        <div class="text-muted">Lista de serviços da clínica.</div>
-        <a class="btn btn-primary" href="{% url 'backoffice_service_new' %}?return_to={{ return_to|urlencode }}">Criar serviço</a>
-      </div>
-      {% include "backoffice/partials/filters_bar.html" with q=q per_page=per_page placeholder="Nome do serviço" auto_submit=True %}
+{% block content %}
+    <div class="page-header services-page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Serviços</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'backoffice_dashboard' %}">Home</a></li>
+                <li class="breadcrumb-item">Serviços</li>
+            </ul>
+        </div>
+        <div class="page-header-right ms-auto">
+            <div class="page-header-right-items">
+                <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                    <a href="{% url 'backoffice_service_new' %}?return_to={{ return_to|urlencode }}" class="btn btn-primary">
+                        <i class="feather-plus me-2"></i>
+                        <span>Novo Serviço</span>
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
 
-  {% if services %}
-    <div class="card">
-      {% include "backoffice/partials/table_open.html" with header_cols="Serviço,Duração,Tipo,Modo,Preço,Preço 1ª/Seguintes,Ação"|split_csv %}
-      {% for s in services %}
-        <tr>
-          <td>{{ s.name }}</td>
-          <td>{{ s.duration_minutes }} min</td>
-          <td>{{ s.get_service_type_display }}</td>
-          <td>{{ s.get_pricing_mode_display }}</td>
-          <td>
-            {% if s.pricing_mode == "single" %}
-              {{ s.price|floatformat:2 }} €
-            {% else %}
-              —
-            {% endif %}
-          </td>
-          <td>
-            {% if s.pricing_mode == "first_followup" %}
-              {{ s.price_first|floatformat:2 }} € / {{ s.price_followup|floatformat:2 }} €
-            {% else %}
-              —
-            {% endif %}
-          </td>
-          <td class="text-end">
-            <a class="btn btn-outline-secondary btn-sm" href="{% url 'backoffice_service_edit' s.id %}?return_to={{ return_to|urlencode }}">Editar</a>
-          </td>
-        </tr>
-      {% endfor %}
-      {% include "backoffice/partials/table_close.html" %}
+    <div class="main-content">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card mb-3 services-filters-card">
+                    <div class="card-body py-2">
+                        <form method="get" class="row g-1 align-items-end">
+                            <div class="col-12 col-md-5">
+                                <label class="form-label small mb-0">Pesquisar</label>
+                                <input type="text" name="q" class="form-control form-control-sm" placeholder="Nome do serviço" value="{{ q }}">
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label small mb-0">Tipo</label>
+                                <select name="type" class="form-select form-select-sm">
+                                    <option value="">Todos</option>
+                                    {% for value, label in service_type_choices %}
+                                        <option value="{{ value }}" {% if service_type == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label class="form-label small mb-0">Por página</label>
+                                <select name="per_page" class="form-select form-select-sm">
+                                    <option value="5" {% if per_page|stringformat:"s" == "5" %}selected{% endif %}>5</option>
+                                    <option value="10" {% if per_page|stringformat:"s" == "10" %}selected{% endif %}>10</option>
+                                    <option value="15" {% if per_page|stringformat:"s" == "15" %}selected{% endif %}>15</option>
+                                    <option value="25" {% if per_page|stringformat:"s" == "25" %}selected{% endif %}>25</option>
+                                    <option value="50" {% if per_page|stringformat:"s" == "50" %}selected{% endif %}>50</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-2 d-flex gap-2">
+                                <button type="submit" class="btn btn-outline-primary btn-sm w-100">Filtrar</button>
+                                <a href="{% url 'backoffice_services' %}" class="btn btn-outline-secondary btn-sm w-100">Limpar</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                {% if services %}
+                    <div class="card services-table-card">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Serviço</th>
+                                            <th>Duração</th>
+                                            <th>Tipo</th>
+                                            <th>Modo</th>
+                                            <th>Preço</th>
+                                            <th>Preço 1ª/Seguintes</th>
+                                            <th class="text-end">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for s in services %}
+                                            <tr>
+                                                <td class="fw-semibold">{{ s.name }}</td>
+                                                <td>{{ s.duration_minutes }} min</td>
+                                                <td>{{ s.get_service_type_display }}</td>
+                                                <td>{{ s.get_pricing_mode_display }}</td>
+                                                <td>
+                                                    {% if s.pricing_mode == "single" %}
+                                                        {{ s.price|floatformat:2 }} €
+                                                    {% else %}
+                                                        —
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% if s.pricing_mode == "first_followup" %}
+                                                        {{ s.price_first|floatformat:2 }} € / {{ s.price_followup|floatformat:2 }} €
+                                                    {% else %}
+                                                        —
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-end">
+                                                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'backoffice_service_edit' s.id %}?return_to={{ return_to|urlencode }}">Editar</a>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+                {% else %}
+                    <div class="card stretch stretch-full">
+                        <div class="card-body text-center py-5">
+                            <h5 class="mb-2">Sem serviços</h5>
+                            <p class="text-muted mb-3">Ainda não existem serviços registados.</p>
+                            <a class="btn btn-primary" href="{% url 'backoffice_service_new' %}?return_to={{ return_to|urlencode }}">Criar serviço</a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
-    {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
-  {% else %}
-    {% url 'backoffice_service_new' as backoffice_services_create_url %}
-    {% include "backoffice/partials/empty_state.html" with title="Sem serviços" description="Ainda não existem serviços registados." action_text="Criar serviço" action_url=backoffice_services_create_url %}
-  {% endif %}
+
+    <style>
+        .services-page-header {
+            position: static;
+            top: auto;
+            z-index: auto;
+        }
+        .services-filters-card .card-body {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        .services-filters-card .form-label {
+            margin-bottom: 0.25rem;
+        }
+        .services-filters-card .form-control,
+        .services-filters-card .form-select {
+            min-height: 32px;
+        }
+    </style>
 {% endblock %}

@@ -5,8 +5,8 @@ def is_receptionist(user, *, ensure_group=False):
     if not user.is_authenticated:
         return False
     if ensure_group:
-        Group.objects.get_or_create(name="receptionist")
-    return user.groups.filter(name="receptionist").exists()
+        Group.objects.get_or_create(name="RECEPTION")
+    return user.groups.filter(name="RECEPTION").exists()
 
 
 def is_technician(user):
@@ -24,34 +24,30 @@ def _in_group(user, name):
 def can_view_all_calendar(user):
     if not user.is_authenticated:
         return False
-    if user.is_staff:
+    if user.is_superuser:
         return True
-    if user.has_perm("core.can_view_all_calendar"):
-        return True
-    if is_receptionist(user, ensure_group=True):
-        return True
-    return _in_group(user, "ADMIN") or _in_group(user, "RECEPTION")
+    return user.has_perm("core.can_view_all_calendar")
 
 
 def can_book_for_any_professional(user):
     if not user.is_authenticated:
         return False
-    if user.is_staff:
+    if user.is_superuser:
         return True
-    if user.has_perm("core.can_book_for_any_professional"):
-        return True
-    if is_receptionist(user, ensure_group=True):
-        return True
-    return _in_group(user, "ADMIN") or _in_group(user, "RECEPTION")
+    return user.has_perm("core.can_book_for_any_professional")
 
 
 def can_access_backoffice(user):
     if not user.is_authenticated:
         return False
-    if user.is_staff:
+    if user.is_superuser:
         return True
-    if user.has_perm("core.can_access_backoffice"):
+    return user.has_perm("core.can_access_backoffice")
+
+
+def is_admin_role(user):
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
         return True
-    if is_receptionist(user, ensure_group=True):
-        return True
-    return _in_group(user, "ADMIN") or _in_group(user, "RECEPTION")
+    return _in_group(user, "ADMIN")

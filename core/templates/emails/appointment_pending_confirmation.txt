@@ -1,0 +1,15 @@
+{% extends "emails/base.txt" %}
+
+{% block content %}
+Olá {{ client_name }},
+
+{% if is_reschedule %}Recebemos o teu pedido de reagendamento.{% else %}Recebemos o teu pedido de marcação.{% endif %}
+A marcação está em confirmação:
+- Serviço: {{ service_name }}
+- Profissional: {{ professional_name }}
+- Data: {{ date }}
+- Hora: {{ time }}
+{% if symptomatology %}- Sintomatologia: {{ symptomatology }}{% endif %}
+
+Gerir marcações: {{ manage_url }}
+{% endblock %}

@@ -1,0 +1,132 @@
+{% extends "website/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="site-blocks-cover overlay inner-page" style="background-image: url({% static 'website/dente/images/replacements/fisioup_hero_background.png' %});" data-aos="fade" data-stellar-background-ratio="0.5">
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-md-7">
+        <span class="sub-text">Cuidados personalizados</span>
+        <h1>Os Nossos <strong>Servicos</strong></h1>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="site-section bg-light">
+  <div class="container">
+    <div class="row">
+      {% for service in services %}
+        <div class="col-md-6 col-lg-4">
+          <div class="site-block-feature-2 d-flex rounded mb-5">
+            <div class="mr-3">
+              <span
+                class="service-icon-img service-icon-mask"
+                style="--service-icon: url('{% static 'website/dente/images/service-icons/'|add:service.icon_filename %}');"
+                role="img"
+                aria-label="Icone {{ service.name }}"
+              ></span>
+            </div>
+            <div class="text">
+              <h3>{{ service.name }}</h3>
+              <p class="mb-2">{{ service.summary }}</p>
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="col-12">
+          <p>Sem servicos disponiveis de momento.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="site-section site-block-3">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-6 mb-5 mb-lg-0">
+        <img
+          id="service-preview-image"
+          src="{% if services %}{{ services.0.preview_image_url }}{% else %}{% static 'website/dente/images/img_1.jpg' %}{% endif %}"
+          alt="Servico {{ services.0.name|default:clinic.clinic_name }}"
+          class="img-fluid service-preview-image"
+        >
+      </div>
+      <div class="col-lg-6">
+        <div class="row row-items">
+          {% for service in services|slice:':4' %}
+            <div class="col-md-6">
+              <button
+                type="button"
+                class="d-flex text-center feature service-selector js-service-selector p-4 mb-4{% if forloop.first %} active{% endif %}"
+                data-service-image="{{ service.preview_image_url }}"
+                data-service-name="{{ service.name }}"
+                aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}"
+              >
+                <span class="align-self-center w-100">
+                  <span class="d-block mb-3">
+                    <span
+                      class="service-box-icon-img service-icon-mask"
+                      style="--service-icon: url('{% static 'website/dente/images/service-icons/'|add:service.icon_filename %}');"
+                      role="img"
+                      aria-label="Icone {{ service.name }}"
+                    ></span>
+                  </span>
+                  <h3>{{ service.name }}</h3>
+                </span>
+              </button>
+            </div>
+          {% empty %}
+            <div class="col-12"><p>Atualizaremos brevemente os nossos servicos.</p></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="promo py-5 bg-primary">
+  <div class="container text-center">
+    <span class="d-block h4 mb-3 font-weight-light text-white">Marque a sua avaliacao inicial com a equipa {{ clinic.clinic_name }}</span>
+    <a href="{% url 'website:book_now' %}" class="btn btn-light">Marque ja</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const previewImage = document.getElementById("service-preview-image");
+    const selectors = document.querySelectorAll(".js-service-selector");
+    if (!previewImage || !selectors.length) {
+      return;
+    }
+
+    function activate(selector) {
+      selectors.forEach((item) => {
+        const isActive = item === selector;
+        item.classList.toggle("active", isActive);
+        item.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+
+      const imageUrl = selector.getAttribute("data-service-image");
+      const serviceName = selector.getAttribute("data-service-name") || "servico";
+      if (!imageUrl || previewImage.getAttribute("src") === imageUrl) {
+        return;
+      }
+
+      previewImage.classList.add("is-updating");
+      window.setTimeout(() => {
+        previewImage.setAttribute("src", imageUrl);
+        previewImage.setAttribute("alt", `Servico ${serviceName}`);
+        previewImage.classList.remove("is-updating");
+      }, 120);
+    }
+
+    selectors.forEach((selector) => {
+      selector.addEventListener("click", () => activate(selector));
+    });
+  })();
+</script>
+{% endblock %}

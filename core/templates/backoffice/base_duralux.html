@@ -1,0 +1,14 @@
+{% extends "core/base_duralux.html" %}
+{% load static %}
+
+{% block content %}
+    <div class="main-content">
+        {% include "backoffice/partials/alerts.html" %}
+        {% block backoffice_content %}{% endblock %}
+    </div>
+{% endblock %}
+
+{% block extra_scripts %}
+    {{ block.super }}
+    <script src="{% static 'backoffice/backoffice.js' %}?v=20260316-1"></script>
+{% endblock %}

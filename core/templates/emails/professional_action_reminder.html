@@ -1,0 +1,15 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Ações pendentes na agenda{% endblock %}
+
+{% block content %}
+Olá {{ professional_name }},
+<br><br>
+Tens ações pendentes na tua agenda:
+<br>
+- <strong>{{ confirm_count }}</strong> marcações para confirmar
+<br>
+- <strong>{{ review_count }}</strong> marcações para rever
+<br><br>
+Abre a agenda: <a href="{{ calendar_url }}" style="color:#29abe2;">{{ calendar_url }}</a>
+{% endblock %}

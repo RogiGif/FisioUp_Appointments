@@ -25,10 +25,21 @@
                         <i class="feather-arrow-left me-2"></i>
                         <span>Voltar</span>
                     </a>
-                    <a href="{% url 'prof_customer_edit' client_profile.id %}" class="btn btn-primary">
-                        <i class="feather-edit me-2"></i>
-                        <span>Editar</span>
-                    </a>
+                    {% if can_edit_clients %}
+                        <a href="{% url 'prof_customer_edit' client_profile.id %}" class="btn btn-primary">
+                            <i class="feather-edit me-2"></i>
+                            <span>Editar</span>
+                        </a>
+                    {% endif %}
+                    {% if can_delete_clients %}
+                        <form method="post" action="{% url 'prof_customer_delete' client_profile.id %}" class="d-inline" onsubmit="return confirm('Tens a certeza que queres apagar este cliente? Esta ação não pode ser revertida.');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">
+                                <i class="feather-trash-2 me-2"></i>
+                                <span>Apagar</span>
+                            </button>
+                        </form>
+                    {% endif %}
                 </div>
             </div>
             <div class="d-md-none d-flex align-items-center">
@@ -48,18 +59,26 @@
                             <div class="wd-150 ht-150 mx-auto mb-3 position-relative">
                                 <div class="avatar-image wd-150 ht-150 border border-5 border-gray-3">
                                     {% if client_profile.profile_photo %}
-                                        <img src="{{ client_profile.profile_photo.url }}" alt="" class="img-fluid">
+                                        <img src="{{ client_profile.profile_photo.url }}" alt="" class="w-100 h-100" style="object-fit:cover;">
                                     {% else %}
-                                        <img src="{% static 'duralux/assets/images/avatar/1.png' %}" alt="" class="img-fluid">
+                                        <div class="bg-soft-primary text-primary fw-bold d-flex align-items-center justify-content-center" style="width:100%;height:100%;border-radius:50%;font-size:72px;line-height:1;">
+                                            {% if client_profile.full_name %}
+                                                {{ client_profile.full_name|slice:":1"|upper }}
+                                            {% elif client_user %}
+                                                {{ client_user.username|slice:":1"|upper }}
+                                            {% else %}
+                                                ?
+                                            {% endif %}
+                                        </div>
                                     {% endif %}
                                 </div>
-                                <div class="wd-10 ht-10 text-success rounded-circle position-absolute translate-middle" style="top: 76%; right: 10px">
-                                    <i class="bi bi-patch-check-fill"></i>
+                                <div class="wd-30 ht-30 bg-success text-white rounded-circle d-flex align-items-center justify-content-center position-absolute translate-middle" style="top: 88%; right: 6px;">
+                                    <i class="bi bi-patch-check-fill" style="font-size:16px;line-height:1;"></i>
                                 </div>
                             </div>
                             <div class="mb-4">
                                 <a href="javascript:void(0);" class="fs-14 fw-bold d-block">{{ client_profile.full_name|default:"-" }}</a>
-                                <a href="javascript:void(0);" class="fs-12 fw-normal text-muted d-block">{{ client_user.email|default:"-" }}</a>
+                                <a href="javascript:void(0);" class="fs-12 fw-normal text-muted d-block">{% if client_user %}{{ client_user.email|default:"-" }}{% else %}-{% endif %}</a>
                             </div>
                             <div class="fs-12 fw-normal text-muted text-center d-flex flex-wrap gap-3 mb-4">
                                 <div class="flex-fill py-3 px-4 rounded-1 d-none d-sm-block border border-dashed border-gray-5">
@@ -87,109 +106,44 @@
                             </li>
                             <li class="hstack justify-content-between mb-0">
                                 <span class="text-muted fw-medium hstack gap-3"><i class="feather-mail"></i>Email</span>
-                                <span class="float-end">{{ client_user.email|default:"-" }}</span>
+                                <span class="float-end">{% if client_user %}{{ client_user.email|default:"-" }}{% else %}-{% endif %}</span>
                             </li>
                         </ul>
-                        <div class="d-flex gap-2 text-center pt-4">
-                            <a href="{% url 'professional_clients' %}" class="w-50 btn btn-light-brand">
+                        <div class="d-flex flex-wrap gap-2 text-center pt-4">
+                            <a href="{% url 'professional_clients' %}" class="btn btn-light-brand">
                                 <i class="feather-arrow-left me-2"></i>
                                 <span>Voltar</span>
                             </a>
-                            <a href="{% url 'prof_customer_edit' client_profile.id %}" class="w-50 btn btn-primary">
-                                <i class="feather-edit me-2"></i>
-                                <span>Editar</span>
-                            </a>
+                            {% if can_edit_clients %}
+                                <a href="{% url 'prof_customer_edit' client_profile.id %}" class="btn btn-primary">
+                                    <i class="feather-edit me-2"></i>
+                                    <span>Editar</span>
+                                </a>
+                            {% endif %}
+                            {% if can_delete_clients %}
+                                <form method="post" action="{% url 'prof_customer_delete' client_profile.id %}" class="d-inline" onsubmit="return confirm('Tens a certeza que queres apagar este cliente? Esta ação não pode ser revertida.');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger">
+                                        <i class="feather-trash-2 me-2"></i>
+                                        <span>Apagar</span>
+                                    </button>
+                                </form>
+                            {% endif %}
                         </div>
                     </div>
-                </div>
-                <div class="card stretch stretch-full">
-                    <div class="card-header">
-                        <h5 class="card-title">Dados rápidos</h5>
-                        <div class="dropdown">
-                            <a href="javascript:void(0);" class="avatar-text avatar-sm" data-bs-toggle="dropdown" data-bs-offset="25,25">
-                                <i class="feather feather-more-vertical"></i>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <a href="javascript:void(0);" class="dropdown-item">
-                                        <i class="feather feather-lock me-3"></i>
-                                        <span>Apenas leitura</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="avatar-text bg-gray-100">
-                                <i class="feather feather-hash"></i>
-                            </div>
-                            <span class="mx-2 text-gray-300">/</span>
-                            <span class="text-truncate-1-line">NIF: <span class="text-muted">{{ client_profile.nif|default:"-" }}</span></span>
-                        </div>
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="avatar-text bg-gray-100">
-                                <i class="feather feather-map"></i>
-                            </div>
-                            <span class="mx-2 text-gray-300">/</span>
-                            <span class="text-truncate-1-line">Distrito: <span class="text-muted">{{ client_profile.district|default:"-" }}</span></span>
-                        </div>
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="avatar-text bg-gray-100">
-                                <i class="feather feather-flag"></i>
-                            </div>
-                            <span class="mx-2 text-gray-300">/</span>
-                            <span class="text-truncate-1-line">Concelho: <span class="text-muted">{{ client_profile.county|default:"-" }}</span></span>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <div class="avatar-text bg-gray-100">
-                                <i class="feather feather-briefcase"></i>
-                            </div>
-                            <span class="mx-2 text-gray-300">/</span>
-                            <span class="text-truncate-1-line">Parceria: <span class="text-muted">{{ client_profile.partner.name|default:"-" }}</span></span>
-                        </div>
-                    </div>
-                    <a href="javascript:void(0);" class="ladda-button zoom-out" data-bs-toggle="tooltip" data-bs-trigger="hover" title="Refresh Now">
-                        <span>Refresh</span>
-                        <span class="spinner"></span>
-                    </a>
-                </div>
-                <div class="card stretch stretch-full">
-                    <div class="card-header">
-                        <h2 class="card-title">Notas rápidas</h2>
-                        <div class="dropdown">
-                            <a href="javascript:void(0);" class="avatar-text avatar-sm" data-bs-toggle="dropdown" data-bs-offset="25,25">
-                                <i class="feather feather-more-vertical"></i>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <a href="javascript:void(0);" class="dropdown-item">
-                                        <i class="feather feather-lock me-3"></i>
-                                        <span>Sem dados</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="text-muted">Sem notas adicionais.</div>
-                    </div>
-                    <a href="javascript:void(0);" class="ladda-button zoom-out" data-bs-toggle="tooltip" data-bs-trigger="hover" title="Refresh Now">
-                        <span>Refresh</span>
-                        <span class="spinner"></span>
-                    </a>
                 </div>
             </div>
             <div class="col-xxl-8 col-xl-6">
                 <div class="card border-top-0">
                     <div class="card-header p-0">
-                        {% include "core/partials/customer_tabs_nav.html" with active_tab="clinical" show_password=False %}
+                        {% include "core/partials/customer_tabs_nav.html" with active_tab=active_tab|default:"profile" show_password=False %}
                     </div>
                     <div class="tab-content">
-                        {% include "core/partials/tab_ficha_clinica.html" with read_only=True active_tab="clinical" %}
-                        {% include "core/partials/tab_profile.html" with read_only=True active_tab="clinical" %}
-                        {% include "core/partials/tab_movimentos.html" with active_tab="clinical" %}
-                        {% include "core/partials/tab_notificacoes.html" with active_tab="clinical" %}
+                        {% include "core/partials/tab_ficha_clinica.html" with read_only=True active_tab=active_tab|default:"profile" %}
+                        {% include "core/partials/tab_partners_discounts.html" with read_only=True active_tab=active_tab|default:"profile" %}
+                        {% include "core/partials/tab_profile.html" with read_only=True active_tab=active_tab|default:"profile" %}
+                        {% include "core/partials/tab_movimentos.html" with active_tab=active_tab|default:"profile" %}
+                        {% include "core/partials/tab_notificacoes.html" with active_tab=active_tab|default:"profile" %}
                     </div>
                 </div>
             </div>

@@ -117,10 +117,13 @@
     const dateInput = modal.querySelector("#boDateInput");
     const timeSelect = modal.querySelector("#boTimeSelect");
 
-    let clientTimer = null;
-
     function clearResults() {
       if (clientResults) clientResults.innerHTML = "";
+    }
+
+    function clearClientSelection() {
+      if (clientId) clientId.value = "";
+      if (clientLabel) clientLabel.value = "";
     }
 
     function setClient(result) {
@@ -133,6 +136,13 @@
     function renderClientResults(results) {
       if (!clientResults) return;
       clientResults.innerHTML = "";
+      if (!results.length) {
+        const empty = document.createElement("div");
+        empty.className = "list-group-item text-muted";
+        empty.textContent = "Sem resultados.";
+        clientResults.appendChild(empty);
+        return;
+      }
       results.forEach((r) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -150,22 +160,44 @@
       });
     }
 
+    const debouncedClientSearch = (window.AppUtils && window.AppUtils.debounce
+      ? window.AppUtils.debounce
+      : (fn, wait) => {
+          let timer = null;
+          const wrapped = () => {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(fn, wait);
+          };
+          wrapped.cancel = () => {
+            if (timer) clearTimeout(timer);
+          };
+          return wrapped;
+        })(() => {
+      const q = clientSearch ? clientSearch.value.trim() : "";
+      if (q.length < 2) {
+        clearResults();
+        return;
+      }
+      fetch(`/backoffice/api/clients/search/?q=${encodeURIComponent(q)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          renderClientResults(data.results || []);
+        })
+        .catch(() => clearResults());
+    }, 250);
+
     if (clientSearch) {
       clientSearch.addEventListener("input", () => {
         const q = clientSearch.value.trim();
-        if (clientTimer) clearTimeout(clientTimer);
+        if (!clientLabel || q !== clientLabel.value) {
+          clearClientSelection();
+        }
         if (q.length < 2) {
+          debouncedClientSearch.cancel();
           clearResults();
           return;
         }
-        clientTimer = setTimeout(() => {
-          fetch(`/backoffice/api/clients/search/?q=${encodeURIComponent(q)}`)
-            .then((res) => res.json())
-            .then((data) => {
-              renderClientResults(data.results || []);
-            })
-            .catch(() => clearResults());
-        }, 250);
+        debouncedClientSearch();
       });
     }
 

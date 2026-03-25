@@ -1,0 +1,245 @@
+{% extends "core/base_duralux.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">Notificações</h5>
+        </div>
+        <ul class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'professional_calendar' %}">Calendário</a></li>
+            <li class="breadcrumb-item">Notificações</li>
+        </ul>
+    </div>
+</div>
+
+<div class="main-content">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted small">A confirmar</div>
+                            <h3 class="mb-0">{{ pending_count }}</h3>
+                        </div>
+                        <span class="badge bg-soft-warning text-warning">pendentes</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted small">Para validar</div>
+                            <h3 class="mb-0">{{ review_count }}</h3>
+                            <div class="text-muted fs-12 mt-1">
+                                {% if review_status_counts.awaiting_validation %}
+                                    {{ review_status_counts.awaiting_validation }} a aguardar validação
+                                {% endif %}
+                                {% if review_status_counts.scheduled %}
+                                    {% if review_status_counts.awaiting_validation %} · {% endif %}
+                                    {{ review_status_counts.scheduled }} agendadas
+                                {% endif %}
+                                {% if review_status_counts.pending_confirmation %}
+                                    {% if review_status_counts.awaiting_validation or review_status_counts.scheduled %} · {% endif %}
+                                    {{ review_status_counts.pending_confirmation }} em confirmação
+                                {% endif %}
+                            </div>
+                        </div>
+                        <span class="badge bg-soft-primary text-primary">revisão</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <form id="bulkNotificationsForm" method="post">
+                {% csrf_token %}
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 p-3 border-bottom">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAllNotifications">
+                        <label class="form-check-label" for="selectAllNotifications">Selecionar tudo</label>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" name="bulk_action" value="mark_completed_and_paid_selected" class="btn btn-sm btn-success">
+                            Marcar como concluída e paga
+                        </button>
+                        <button type="submit" name="bulk_action" value="mark_no_show_selected" class="btn btn-sm btn-outline-danger">
+                            Marcar como falta
+                        </button>
+                        <button type="submit" name="bulk_action" value="mark_in_debt_selected" class="btn btn-sm btn-outline-warning">
+                            Marcar em dívida
+                        </button>
+                        <button type="submit" name="bulk_action" value="mark_completed_selected" class="btn btn-sm btn-outline-primary">
+                            Marcar como concluída
+                        </button>
+                    </div>
+                </div>
+                <div id="selectedAppointmentIds"></div>
+            </form>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 42px;"></th>
+                            <th>Data</th>
+                            <th>Hora</th>
+                            <th>Utente</th>
+                            {% if show_all_professionals %}
+                                <th>Profissional</th>
+                            {% endif %}
+                            <th>Serviço</th>
+                            <th>Estado</th>
+                            <th class="text-end pe-3">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for appt in pending_items %}
+                            <tr>
+                                <td>
+                                    <input class="form-check-input row-check" type="checkbox" value="{{ appt.id }}">
+                                </td>
+                                <td>{{ appt.date|date:"d/m/Y" }}</td>
+                                <td>{{ appt.time|time:"H:i" }}</td>
+                                <td>{{ appt.client.get_full_name|default:appt.client.username }}</td>
+                                {% if show_all_professionals %}
+                                    <td>{{ appt.professional.user.get_full_name|default:appt.professional.user.username }}</td>
+                                {% endif %}
+                                <td>{{ appt.service.name|default:"—" }}</td>
+                                <td>
+                                    <span class="badge bg-soft-warning text-warning">Em confirmação</span>
+                                </td>
+                                <td class="text-end pe-3">
+                                    <div class="d-inline-flex gap-2">
+                                        <form method="post" action="{% url 'professional_confirm_appointment' appt.id %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="return_to" value="{{ request.get_full_path }}">
+                                            <button type="submit" class="btn btn-sm btn-success">Confirmar</button>
+                                        </form>
+                                        <form method="post" action="{% url 'professional_cancel_appointment' appt.id %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="return_to" value="{{ request.get_full_path }}">
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Cancelar esta marcação?');">Cancelar</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+
+                        {% for appt in review_items %}
+                            <tr>
+                                <td>
+                                    <input class="form-check-input row-check" type="checkbox" value="{{ appt.id }}">
+                                </td>
+                                <td>{{ appt.date|date:"d/m/Y" }}</td>
+                                <td>{{ appt.time|time:"H:i" }}</td>
+                                <td>{{ appt.client.get_full_name|default:appt.client.username }}</td>
+                                {% if show_all_professionals %}
+                                    <td>{{ appt.professional.user.get_full_name|default:appt.professional.user.username }}</td>
+                                {% endif %}
+                                <td>{{ appt.service.name|default:"—" }}</td>
+                                <td>
+                                    {% if appt.status == "awaiting_validation" %}
+                                        <span class="badge bg-soft-info text-info">A aguardar validação</span>
+                                    {% elif appt.status == "scheduled" %}
+                                        <span class="badge bg-soft-success text-success">Agendada</span>
+                                    {% elif appt.status == "pending_confirmation" %}
+                                        <span class="badge bg-soft-warning text-warning">Em confirmação</span>
+                                    {% elif appt.status == "no_show" %}
+                                        <span class="badge bg-soft-danger text-danger">Falta</span>
+                                    {% else %}
+                                        <span class="badge bg-soft-primary text-primary">{{ appt.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3">
+                                    <a href="{% url 'professional_appointment_detail' appt.id %}?return_to={{ request.get_full_path|urlencode }}" class="btn btn-sm btn-primary">
+                                        Validar
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+
+                        {% if not pending_items and not review_items %}
+                            <tr>
+                                <td colspan="{% if show_all_professionals %}8{% else %}7{% endif %}" class="text-center text-muted py-4">Sem notificações pendentes.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    const bulkForm = document.getElementById("bulkNotificationsForm");
+    const selectAll = document.getElementById("selectAllNotifications");
+    const hiddenContainer = document.getElementById("selectedAppointmentIds");
+    if (!selectAll || !bulkForm || !hiddenContainer) return;
+    const rowChecks = Array.from(document.querySelectorAll(".row-check"));
+
+    selectAll.addEventListener("change", function () {
+      rowChecks.forEach(function (el) {
+        el.checked = selectAll.checked;
+      });
+    });
+
+    rowChecks.forEach(function (el) {
+      el.addEventListener("change", function () {
+        if (!rowChecks.length) {
+          selectAll.checked = false;
+          return;
+        }
+        selectAll.checked = rowChecks.every(function (i) { return i.checked; });
+      });
+    });
+
+    bulkForm.addEventListener("submit", function (event) {
+      const checked = rowChecks.filter(function (el) { return el.checked; });
+      hiddenContainer.innerHTML = "";
+
+      if (!checked.length) {
+        event.preventDefault();
+        alert("Seleciona pelo menos uma marcação.");
+        return;
+      }
+
+      checked.forEach(function (el) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "appointment_ids";
+        input.value = el.value;
+        hiddenContainer.appendChild(input);
+      });
+
+      const action = event.submitter ? event.submitter.value : "";
+      const confirmMessages = {
+        mark_no_show_selected: "Marcar as marcações selecionadas como falta?",
+        mark_in_debt_selected: "Marcar as marcações selecionadas como em dívida?",
+        mark_completed_and_paid_selected: "Marcar as marcações selecionadas como concluídas e pagas?",
+        mark_completed_selected: "Marcar as marcações selecionadas como concluídas? (apenas pagas serão concluídas)",
+      };
+      const confirmText = confirmMessages[action];
+      if (confirmText && !window.confirm(confirmText)) {
+        event.preventDefault();
+      }
+    });
+  })();
+</script>
+{% endblock %}

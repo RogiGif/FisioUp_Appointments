@@ -1,0 +1,39 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title=title subtitle="" %}
+
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_dashboard' %}">Resumo</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_products' %}">Produtos</a>
+    <a class="btn btn-primary btn-sm" href="{% url 'backoffice_stock_categories' %}">Categorias</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_entries' %}">Entradas</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_adjustments' %}">Ajustes</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_movements' %}">Movimentos</a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label">Nome</label>
+            {{ form.name }}
+            {% if form.name.errors %}
+              <div class="text-danger small">{{ form.name.errors }}</div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-4">
+          <button type="submit" class="btn btn-primary">Guardar</button>
+          {% if return_to %}
+            <a class="btn btn-outline-secondary" href="{{ return_to }}">Voltar</a>
+          {% else %}
+            <a class="btn btn-outline-secondary" href="{% url 'backoffice_stock_categories' %}">Voltar</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,143 @@
+<div class="tab-pane fade{% if active_tab == 'partners_discounts' %} show active{% endif %}" id="partnersDiscountsTab" role="tabpanel">
+    {% if read_only %}
+        <div class="card-body additional-info">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 me-4">
+                    <span class="d-block mb-2">Parcerias e Descontos:</span>
+                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Informação de parceria e desconto.</span>
+                </h5>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Parceria:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.partner.name|default:"-" }}</div>
+                </div>
+            </div>
+
+            <hr class="my-2">
+            <h6 class="fw-semibold mb-4">Outros descontos</h6>
+
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Tipo de desconto:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.get_discount_type_display|default:"Sem desconto" }}</div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Valor:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">
+                        {% if client_profile.discount_type == "percent" and client_profile.discount_percent %}
+                            {{ client_profile.discount_percent }}%
+                        {% elif client_profile.discount_type == "fixed" and client_profile.discount_amount %}
+                            {{ client_profile.discount_amount }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Descrição:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="form-control-plaintext">{{ client_profile.discount_label|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="card-body additional-info">
+            <div class="mb-4 d-flex align-items-center justify-content-between">
+                <h5 class="fw-bold mb-0 me-4">
+                    <span class="d-block mb-2">Parcerias e Descontos:</span>
+                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Configurações de parceria e desconto do cliente.</span>
+                </h5>
+                <a href="javascript:void(0);" class="btn btn-sm btn-light-brand">Adicionar</a>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Parceria:</label>
+                </div>
+                <div class="col-lg-8">
+                    <select name="partner" class="form-control{% if form.partner.errors %} is-invalid{% endif %}">
+                        <option value="">— escolher —</option>
+                        {% for partner in form.partner.field.queryset %}
+                            <option value="{{ partner.id }}" {% if form.partner.value|default_if_none:''|stringformat:'s' == partner.id|stringformat:'s' %}selected{% endif %}>{{ partner.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.partner.errors %}
+                        <div class="invalid-feedback d-block">{{ form.partner.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <hr class="my-2">
+            <h6 class="fw-semibold mb-4">Outros descontos</h6>
+
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label class="fw-semibold">Tipo de desconto:</label>
+                </div>
+                <div class="col-lg-8">
+                    <select name="discount_type" class="form-control{% if form.discount_type.errors %} is-invalid{% endif %}">
+                        {% for value, label in form.discount_type.field.choices %}
+                            <option value="{{ value }}" {% if form.discount_type.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.discount_type.errors %}
+                        <div class="invalid-feedback d-block">{{ form.discount_type.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="discountPercentInput" class="fw-semibold">Desconto (%):</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-percent"></i></div>
+                        <input type="number" step="0.01" name="discount_percent" class="form-control{% if form.discount_percent.errors %} is-invalid{% endif %}" id="discountPercentInput" value="{{ form.discount_percent.value|default_if_none:'' }}" placeholder="0">
+                    </div>
+                    {% if form.discount_percent.errors %}
+                        <div class="invalid-feedback d-block">{{ form.discount_percent.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="discountAmountInput" class="fw-semibold">Desconto (valor):</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-dollar-sign"></i></div>
+                        <input type="number" step="0.01" name="discount_amount" class="form-control{% if form.discount_amount.errors %} is-invalid{% endif %}" id="discountAmountInput" value="{{ form.discount_amount.value|default_if_none:'' }}" placeholder="0">
+                    </div>
+                    {% if form.discount_amount.errors %}
+                        <div class="invalid-feedback d-block">{{ form.discount_amount.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="row mb-4 align-items-center">
+                <div class="col-lg-4">
+                    <label for="discountLabelInput" class="fw-semibold">Descrição do desconto:</label>
+                </div>
+                <div class="col-lg-8">
+                    <div class="input-group">
+                        <div class="input-group-text"><i class="feather-tag"></i></div>
+                        <input type="text" name="discount_label" class="form-control{% if form.discount_label.errors %} is-invalid{% endif %}" id="discountLabelInput" value="{{ form.discount_label.value|default_if_none:'' }}" placeholder="Descrição">
+                    </div>
+                    {% if form.discount_label.errors %}
+                        <div class="invalid-feedback d-block">{{ form.discount_label.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>

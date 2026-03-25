@@ -52,6 +52,7 @@
         <input type="hidden" name="week" value="{{ week }}">
         <input type="hidden" name="status" value="{{ status }}">
         <input type="hidden" name="q" value="{{ q }}">
+        <input type="hidden" name="return_to" value="{{ return_to }}">
         <input type="hidden" name="prefill_profile_id" value="{{ prefill_profile_id }}">
 
         <div class="main-content">
@@ -59,14 +60,15 @@
                 <div class="col-lg-12">
                     <div class="card border-top-0">
                         <div class="card-header p-0">
-                            {% include "core/partials/customer_tabs_nav.html" with active_tab="profile" show_password=True %}
+                            {% include "core/partials/customer_tabs_nav.html" with active_tab=active_tab|default:"profile" show_password=True password_tab_label="Utilizador" %}
                         </div>
                         <div class="tab-content">
-                            {% include "core/partials/tab_profile.html" with read_only=False active_tab="profile" %}
-                            {% include "core/partials/tab_password.html" with read_only=False active_tab="profile" %}
-                            {% include "core/partials/tab_movimentos.html" with active_tab="profile" %}
-                            {% include "core/partials/tab_notificacoes.html" with active_tab="profile" %}
-                            {% include "core/partials/tab_ficha_clinica.html" with read_only=False active_tab="profile" %}
+                            {% include "core/partials/tab_profile.html" with read_only=False active_tab=active_tab|default:"profile" %}
+                            {% include "core/partials/tab_password.html" with read_only=False active_tab=active_tab|default:"profile" client_has_user=client_has_user %}
+                            {% include "core/partials/tab_movimentos.html" with active_tab=active_tab|default:"profile" %}
+                            {% include "core/partials/tab_notificacoes.html" with active_tab=active_tab|default:"profile" %}
+                            {% include "core/partials/tab_ficha_clinica.html" with read_only=False active_tab=active_tab|default:"profile" %}
+                            {% include "core/partials/tab_partners_discounts.html" with read_only=False active_tab=active_tab|default:"profile" %}
                         </div>
                     </div>
                 </div>
@@ -287,17 +289,30 @@
                 input.value = (input.value || "").replace(/\D/g, "").slice(0, max);
             };
 
+            const schedulePostalLookup = window.AppUtils.debounce(() => {
+                if (!parsePostal()) return;
+                lookupPostal();
+            }, 400);
+
             postal1.addEventListener("input", () => {
                 sanitizePostal(postal1, 4);
                 if (postal1.value.length === 4) {
                     postal2.focus();
                 }
-                if (parsePostal()) lookupPostal();
+                if (!parsePostal()) {
+                    schedulePostalLookup.cancel();
+                    return;
+                }
+                schedulePostalLookup();
             });
 
             postal2.addEventListener("input", () => {
                 sanitizePostal(postal2, 3);
-                if (parsePostal()) lookupPostal();
+                if (!parsePostal()) {
+                    schedulePostalLookup.cancel();
+                    return;
+                }
+                schedulePostalLookup();
             });
 
             renderDistrictOptions().then(() => {

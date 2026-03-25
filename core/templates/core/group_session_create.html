@@ -1,0 +1,166 @@
+{% extends "core/base_duralux.html" %}
+
+{% block content %}
+    <div class="page-header group-sessions-page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Nova sessão de turma</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'backoffice_dashboard' %}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'group_sessions_admin_list' %}">Turmas</a></li>
+                <li class="breadcrumb-item">Nova sessão</li>
+            </ul>
+        </div>
+        <div class="page-header-right ms-auto">
+            <div class="page-header-right-items">
+                <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                    <a class="btn btn-outline-secondary" href="{% url 'group_sessions_admin_list' %}">Voltar</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="row">
+            <div class="col-12 col-lg-8">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        {% if errors %}
+                            <div class="alert alert-danger">
+                                {% for err in errors %}
+                                    <div>{{ err }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <form method="post" class="row g-3">
+                            {% csrf_token %}
+                            {% if return_to %}
+                                <input type="hidden" name="return_to" value="{{ return_to }}">
+                            {% endif %}
+                            <div class="col-12">
+                                <label class="form-label">Nome da turma</label>
+                                <input type="text" name="name" class="form-control" placeholder="Ex: Pilates Clínico - Turma A" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Serviço (turma)</label>
+                                <select name="service_id" class="form-select" id="group-session-service" required>
+                                    <option value="">— escolher —</option>
+                                    {% for s in services %}
+                                        <option value="{{ s.id }}">{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Profissional</label>
+                                <select name="professional_id" class="form-select" id="group-session-professional" required>
+                                    <option value="">— escolher —</option>
+                                    {% for p in professionals %}
+                                        <option value="{{ p.id }}">{{ p.user.get_full_name|default:p.user.username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Data de início</label>
+                                <input type="date" name="start_date" class="form-control" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Dias da semana</label>
+                                <div class="d-flex flex-wrap gap-3">
+                                    {% for value, label in weekday_choices %}
+                                        <div class="form-check">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                name="weekdays"
+                                                value="{{ value }}"
+                                                id="create-wd{{ value }}"
+                                                {% if value in selected_weekdays %}checked{% endif %}
+                                            >
+                                            <label class="form-check-label" for="create-wd{{ value }}">{{ label }}</label>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="form-text text-muted">Podes escolher mais do que um dia.</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Hora</label>
+                                <input type="time" name="time" class="form-control" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Capacidade (opcional)</label>
+                                <input type="number" name="capacity" class="form-control" min="1">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Duração (min, opcional)</label>
+                                <input type="number" name="duration_minutes" class="form-control" min="1">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Notas</label>
+                                <textarea name="notes" rows="3" class="form-control"></textarea>
+                            </div>
+                            <div class="col-12 d-flex gap-2">
+                                <button class="btn btn-primary" type="submit">Guardar</button>
+                                {% url 'group_sessions_admin_list' as list_url %}
+                                <a class="btn btn-outline-secondary" href="{{ return_to|default:list_url }}">Cancelar</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .group-sessions-page-header {
+            position: static;
+            top: auto;
+            z-index: auto;
+        }
+    </style>
+
+    <script>
+        (function () {
+            const serviceSelect = document.getElementById("group-session-service");
+            const professionalSelect = document.getElementById("group-session-professional");
+            if (!serviceSelect || !professionalSelect) return;
+
+            const initialOptions = Array.from(professionalSelect.options).map((opt) => ({
+                value: opt.value,
+                label: opt.textContent,
+            }));
+
+            function setOptions(options) {
+                professionalSelect.innerHTML = "";
+                options.forEach((opt) => {
+                    const optionEl = document.createElement("option");
+                    optionEl.value = opt.value;
+                    optionEl.textContent = opt.label;
+                    professionalSelect.appendChild(optionEl);
+                });
+            }
+
+            function resetOptions() {
+                setOptions(initialOptions);
+            }
+
+            serviceSelect.addEventListener("change", () => {
+                const serviceId = serviceSelect.value;
+                if (!serviceId) {
+                    resetOptions();
+                    return;
+                }
+                fetch(`/backoffice/api/professionals/by-service/?service_id=${encodeURIComponent(serviceId)}`)
+                    .then((res) => res.json())
+                    .then((data) => {
+                        const opts = [{ value: "", label: "— escolher —" }];
+                        (data.results || []).forEach((p) => {
+                            opts.push({ value: String(p.id), label: p.label });
+                        });
+                        setOptions(opts);
+                    })
+                    .catch(() => resetOptions());
+            });
+        })();
+    </script>
+{% endblock %}

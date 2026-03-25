@@ -1,0 +1,138 @@
+{% load static %}
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teste FullCalendar</title>
+  <link rel="stylesheet" href="{% static 'duralux/assets/css/bootstrap.min.css' %}">
+  <style>
+    :root {
+      --app-accent: var(--bs-primary, #00B6DF);
+      --app-accent-hover: var(--bs-primary, #00B6DF);
+      --app-accent-active: var(--bs-primary, #00B6DF);
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f8f9fa;
+      overflow: hidden;
+    }
+
+    #fc-page {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 12px;
+    }
+
+    #fc-calendar {
+      flex: 1 1 auto;
+      min-height: 0;
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 8px;
+      overflow: hidden;
+    }
+
+    #fc-calendar .fc {
+      height: 100%;
+    }
+
+    #fc-calendar .fc-view-harness,
+    #fc-calendar .fc-timegrid,
+    #fc-calendar .fc-scrollgrid {
+      min-height: 0;
+    }
+
+    #fc-calendar .fc .fc-scroller {
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+    }
+
+    #fc-calendar .fc .fc-header-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: #fff;
+      margin-bottom: 0;
+      padding: 8px 6px 10px;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    #fc-calendar .fc .btn-primary,
+    #fc-calendar .fc .fc-button-primary {
+      background-color: var(--app-accent);
+      border-color: var(--app-accent);
+      color: #fff;
+    }
+
+    #fc-calendar .fc .btn-primary:hover,
+    #fc-calendar .fc .fc-button-primary:hover,
+    #fc-calendar .fc .btn-primary:focus,
+    #fc-calendar .fc .fc-button-primary:focus {
+      background-color: var(--app-accent-hover);
+      border-color: var(--app-accent-hover);
+      color: #fff;
+      box-shadow: none;
+    }
+
+    #fc-calendar .fc .btn-primary:not(:disabled):not(.disabled).active,
+    #fc-calendar .fc .btn-primary:not(:disabled):not(.disabled):active,
+    #fc-calendar .fc .show > .btn-primary.dropdown-toggle,
+    #fc-calendar .fc .fc-button-primary:not(:disabled).fc-button-active {
+      background-color: var(--app-accent-active);
+      border-color: var(--app-accent-active);
+      color: #fff;
+    }
+
+    #fc-calendar .fc .btn-outline-secondary {
+      color: var(--app-accent);
+      border-color: var(--app-accent);
+    }
+
+    #fc-calendar .fc .btn-outline-secondary:hover,
+    #fc-calendar .fc .btn-outline-secondary:focus {
+      background-color: var(--app-accent);
+      border-color: var(--app-accent);
+      color: #fff;
+      box-shadow: none;
+    }
+
+    #fc-calendar .fc .fc-scrollgrid-section-header {
+      position: sticky;
+      top: 52px;
+      z-index: 25;
+      background: #fff;
+    }
+
+    #fc-calendar .fc .fc-event-main .fc-test-event {
+      font-size: 0.86rem;
+      font-weight: 600;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+  <div id="fc-page">
+    <div id="fc-calendar"></div>
+  </div>
+
+  <script>window.TEST_MODE_SHOW_AVAILABILITY = false;</script>
+  <script src="{% static 'vendor/fullcalendar-6.1.20/dist/index.global.min.js' %}"></script>
+  <script src="{% static 'vendor/fullcalendar-6.1.20/packages/core/locales/pt.global.min.js' %}"></script>
+  <script src="{% static 'vendor/fullcalendar-6.1.20/packages/bootstrap4/index.global.min.js' %}"></script>
+  <script src="{% static 'core/js/test_fullcalendar.js' %}"></script>
+</body>
+</html>

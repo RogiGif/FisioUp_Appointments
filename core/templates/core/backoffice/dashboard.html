@@ -26,6 +26,7 @@
     </div>
 
     <div class="row g-3 mt-3">
+        {% if can_view_financial %}
         <div class="col-12 col-md-6 col-xl-3">
             <div class="card stretch stretch-full kpi-card">
                 <div class="card-body">
@@ -41,6 +42,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         <div class="col-12 col-md-6 col-xl-3">
             <div class="card stretch stretch-full kpi-card">
                 <div class="card-body">
@@ -71,6 +73,7 @@
                 </div>
             </div>
         </div>
+        {% if can_view_financial %}
         <div class="col-12 col-md-6 col-xl-3">
             <div class="card stretch stretch-full kpi-card">
                 <div class="card-body">
@@ -81,6 +84,73 @@
                         </div>
                         <div class="avatar-text avatar-lg bg-gray-200">
                             <i class="feather-bar-chart-2"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="row g-3 mt-1">
+        {% if can_view_financial %}
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card stretch stretch-full kpi-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted fs-11 text-uppercase">Dívida do dia</div>
+                            <div class="fs-4 fw-bold">€{{ debt_today_amount|default:"0.00"|floatformat:2 }}</div>
+                            <div class="text-muted small">{{ debt_today_count|default:"0" }} marcações</div>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-warning text-warning border-soft-warning rounded">
+                            <i class="feather-alert-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card stretch stretch-full kpi-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted fs-11 text-uppercase">Desmarcações do dia</div>
+                            <div class="fs-4 fw-bold">{{ cancelled_today_count|default:"0" }}</div>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-danger text-danger border-soft-danger rounded">
+                            <i class="feather-x-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card stretch stretch-full kpi-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted fs-11 text-uppercase">Concluídas do dia</div>
+                            <div class="fs-4 fw-bold">{{ completed_today_count|default:"0" }}</div>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-success text-success border-soft-success rounded">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card stretch stretch-full kpi-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted fs-11 text-uppercase">Em confirmação hoje</div>
+                            <div class="fs-4 fw-bold">{{ pending_today_count|default:"0" }}</div>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-info text-info border-soft-info rounded">
+                            <i class="feather-clock"></i>
                         </div>
                     </div>
                 </div>

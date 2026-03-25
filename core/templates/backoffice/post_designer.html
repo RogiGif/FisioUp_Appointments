@@ -1,0 +1,438 @@
+{% extends "core/base_duralux.html" %}
+{% load static %}
+
+{% block extra_head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  .post-designer-shell {
+    display: grid;
+    grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
+    gap: 1.5rem;
+    position: relative;
+  }
+  .post-designer-controls .form-label {
+    font-weight: 600;
+  }
+  .post-designer-preview-column {
+    position: relative;
+    min-height: 1px;
+  }
+  .post-designer-preview-card {
+    position: relative;
+    align-self: start;
+  }
+  .post-designer-preview-card.is-fixed {
+    position: fixed;
+    top: calc(80px + 1.5rem);
+    z-index: 1000;
+  }
+  .post-designer-preview-card.is-bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+  .post-designer-canvas-wrap {
+    background: linear-gradient(135deg, #d8dde8 0%, #eef2f7 100%);
+    border-radius: 1rem;
+    padding: 1rem;
+    border: 1px solid rgba(71, 94, 119, 0.12);
+    display: flex;
+    justify-content: center;
+  }
+  .post-designer-canvas {
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: calc(100vh - 270px);
+    display: block;
+    margin: 0 auto;
+    border-radius: 0.75rem;
+    background: #f4f6fb;
+    box-shadow: 0 24px 60px rgba(31, 41, 55, 0.14);
+  }
+  .post-designer-dropzone {
+    border: 2px dashed rgba(84, 133, 228, 0.25);
+    border-radius: 0.875rem;
+    padding: 1rem;
+    background: rgba(84, 133, 228, 0.04);
+  }
+  .post-designer-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .post-designer-preview-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .post-designer-preview-tools .form-select {
+    min-width: 124px;
+  }
+  .post-designer-page-header {
+    position: static;
+    top: auto;
+    z-index: auto;
+  }
+  .post-designer-template-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.75rem;
+    align-items: end;
+  }
+  .post-designer-position-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.25rem;
+  }
+  .post-designer-position-group {
+    padding: 0.9rem 1rem;
+    border: 1px solid rgba(71, 94, 119, 0.12);
+    border-radius: 0.875rem;
+    background: #f8fafc;
+  }
+  .post-designer-position-group h6 {
+    font-size: 0.95rem;
+    margin-bottom: 0.9rem;
+  }
+  .post-designer-range-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: #64748b;
+    margin-top: 0.15rem;
+  }
+  .post-designer-align-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+  }
+  .post-designer-section-divider {
+    margin: 1.25rem 0;
+    border-top: 1px solid rgba(71, 94, 119, 0.12);
+  }
+  @media (max-width: 1199.98px) {
+    .post-designer-shell {
+      grid-template-columns: 1fr;
+    }
+    .post-designer-preview-column {
+      height: auto !important;
+    }
+    .post-designer-preview-card,
+    .post-designer-preview-card.is-fixed,
+    .post-designer-preview-card.is-bottom {
+      position: static;
+      top: auto;
+      left: auto;
+      right: auto;
+      bottom: auto;
+      width: auto !important;
+    }
+    .post-designer-canvas {
+      width: 100%;
+      max-height: none;
+    }
+  }
+  @media (max-width: 767.98px) {
+    .post-designer-preview-tools {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .post-designer-position-grid,
+    .post-designer-template-actions {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="page-header post-designer-page-header">
+    <div class="page-header-left d-flex align-items-center">
+      <div class="page-header-title">
+        <h5 class="m-b-10">Criador de posts</h5>
+      </div>
+      <ul class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'backoffice_dashboard' %}">Home</a></li>
+        <li class="breadcrumb-item">Definições</li>
+        <li class="breadcrumb-item">Criador de posts</li>
+      </ul>
+    </div>
+    <div class="page-header-right ms-auto">
+      <div class="page-header-right-items">
+        <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+          <button type="button" class="btn btn-outline-secondary" id="post-designer-reset-btn">
+            <i class="feather-rotate-ccw me-2"></i>
+            Repor
+          </button>
+          <button type="button" class="btn btn-outline-primary" id="post-designer-highlight-btn">
+            <i class="feather-layout me-2"></i>
+            Criar destaque rascunho
+          </button>
+          <button type="button" class="btn btn-primary" id="post-designer-download-btn">
+            <i class="feather-download me-2"></i>
+            Exportar PNG
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-content">
+      {% include "backoffice/partials/alerts.html" %}
+        <div class="post-designer-shell">
+          <div class="post-designer-controls">
+            <div class="card mb-4">
+              <div class="card-body">
+                <h6 class="fw-bold mb-3">Imagem base</h6>
+                <div class="post-designer-dropzone mb-3">
+                  <label class="form-label" for="post-designer-image">Selecionar imagem</label>
+                  <input type="file" class="form-control" id="post-designer-image" accept="image/png,image/jpeg,image/webp">
+                  <div class="form-text">Formatos suportados: PNG, JPG e WEBP. A imagem é tratada no browser.</div>
+                </div>
+                <div class="post-designer-section-divider"></div>
+                <h6 class="fw-bold mb-3">Formato e composição</h6>
+                <div class="row g-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-format">Formato</label>
+                    <select class="form-select" id="post-designer-format">
+                      {% for format in post_designer_formats %}
+                      <option value="{{ format.id }}">{{ format.label }} · {{ format.width }}x{{ format.height }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-preset">Layout</label>
+                    <select class="form-select" id="post-designer-preset">
+                      {% for preset in post_designer_presets %}
+                      <option value="{{ preset.id }}">{{ preset.label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="row g-3 mt-1">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-logo-variant">Logo</label>
+                    <select class="form-select" id="post-designer-logo-variant">
+                      <option value="default">Original</option>
+                      <option value="white">Branco</option>
+                      <option value="custom">Cor personalizada</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-logo-color">Cor do logotipo</label>
+                    <input type="color" class="form-control form-control-color w-100" id="post-designer-logo-color" value="#14b8e6">
+                  </div>
+                </div>
+                <div class="row g-3 mt-1">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-accent">Cor do bloco</label>
+                    <input type="color" class="form-control form-control-color w-100" id="post-designer-accent" value="#14b8e6">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-text-color">Cor do texto</label>
+                    <input type="color" class="form-control form-control-color w-100" id="post-designer-text-color" value="#ffffff">
+                  </div>
+                </div>
+                <div class="row g-3 mt-1">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-overlay">Overlay lateral</label>
+                    <input type="range" class="form-range" id="post-designer-overlay" min="0" max="85" step="1" value="28">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-overlay-direction">Direção do overlay</label>
+                    <select class="form-select" id="post-designer-overlay-direction">
+                      <option value="left">Esquerda</option>
+                      <option value="right">Direita</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mb-4">
+              <div class="card-body">
+                <h6 class="fw-bold mb-3">Texto</h6>
+                <div class="mb-3">
+                  <label class="form-label" for="post-designer-title">Título</label>
+                  <textarea class="form-control" id="post-designer-title" rows="2">Fisioterapia pélvica</textarea>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label" for="post-designer-subtitle">Subtítulo</label>
+                  <textarea class="form-control" id="post-designer-subtitle" rows="2">Preparação para o parto</textarea>
+                </div>
+                <div class="row g-3">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-title-size">Tamanho título</label>
+                    <input type="range" class="form-range" id="post-designer-title-size" min="42" max="92" step="1" value="62">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label" for="post-designer-subtitle-size">Tamanho subtítulo</label>
+                    <input type="range" class="form-range" id="post-designer-subtitle-size" min="24" max="60" step="1" value="38">
+                  </div>
+                </div>
+                <div class="form-text mt-2">Podes arrastar o logo, o título e o subtítulo diretamente no preview.</div>
+              </div>
+            </div>
+
+            <div class="card mb-4">
+              <div class="card-body">
+                <h6 class="fw-bold mb-3">Posição</h6>
+                <div class="post-designer-position-grid">
+                  <div class="post-designer-position-group">
+                    <h6>Logo</h6>
+                    <label class="form-label" for="post-designer-logo-x">Posição horizontal</label>
+                    <input type="range" class="form-range" id="post-designer-logo-x" min="2" max="98" step="1" value="6">
+                    <div class="post-designer-range-meta">
+                      <span>Esquerda</span>
+                      <span id="post-designer-logo-x-value">6%</span>
+                      <span>Direita</span>
+                    </div>
+                    <label class="form-label mt-3" for="post-designer-logo-y">Posição vertical</label>
+                    <input type="range" class="form-range" id="post-designer-logo-y" min="2" max="95" step="1" value="8">
+                    <div class="post-designer-range-meta">
+                      <span>Topo</span>
+                      <span id="post-designer-logo-y-value">8%</span>
+                      <span>Base</span>
+                    </div>
+                    <div class="post-designer-align-row">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-align-target="logo" data-align-mode="left">Esquerda</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-align-target="logo" data-align-mode="center">Centro</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-align-target="logo" data-align-mode="right">Direita</button>
+                    </div>
+                  </div>
+                  <div class="post-designer-position-group">
+                    <h6>Título</h6>
+                    <label class="form-label" for="post-designer-title-x">Posição horizontal</label>
+                    <input type="range" class="form-range" id="post-designer-title-x" min="2" max="98" step="1" value="6">
+                    <div class="post-designer-range-meta">
+                      <span>Esquerda</span>
+                      <span id="post-designer-title-x-value">6%</span>
+                      <span>Direita</span>
+                    </div>
+                    <label class="form-label mt-3" for="post-designer-title-y">Posição vertical</label>
+                    <input type="range" class="form-range" id="post-designer-title-y" min="2" max="95" step="1" value="56">
+                    <div class="post-designer-range-meta">
+                      <span>Topo</span>
+                      <span id="post-designer-title-y-value">56%</span>
+                      <span>Base</span>
+                    </div>
+                    <div class="post-designer-align-row">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-align-target="title" data-align-mode="left">Esquerda</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-align-target="title" data-align-mode="center">Centro</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-align-target="title" data-align-mode="right">Direita</button>
+                    </div>
+                  </div>
+                  <div class="post-designer-position-group">
+                    <h6>Subtítulo</h6>
+                    <label class="form-label" for="post-designer-subtitle-x">Posição horizontal</label>
+                    <input type="range" class="form-range" id="post-designer-subtitle-x" min="2" max="98" step="1" value="6">
+                    <div class="post-designer-range-meta">
+                      <span>Esquerda</span>
+                      <span id="post-designer-subtitle-x-value">6%</span>
+                      <span>Direita</span>
+                    </div>
+                    <label class="form-label mt-3" for="post-designer-subtitle-y">Posição vertical</label>
+                    <input type="range" class="form-range" id="post-designer-subtitle-y" min="2" max="95" step="1" value="64">
+                    <div class="post-designer-range-meta">
+                      <span>Topo</span>
+                      <span id="post-designer-subtitle-y-value">64%</span>
+                      <span>Base</span>
+                    </div>
+                    <div class="post-designer-align-row">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-align-target="subtitle" data-align-mode="left">Esquerda</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-align-target="subtitle" data-align-mode="center">Centro</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-align-target="subtitle" data-align-mode="right">Direita</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mb-4">
+              <div class="card-body">
+                <h6 class="fw-bold mb-3">Rascunho do destaque</h6>
+                <div class="mb-3">
+                  <label class="form-label" for="post-designer-kind">Tipo</label>
+                  <select class="form-select" id="post-designer-kind">
+                    {% for value, label in post_designer_post_kinds %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="mb-0">
+                  <label class="form-label" for="post-designer-body">Descrição completa</label>
+                  <textarea class="form-control" id="post-designer-body" rows="5" placeholder="Texto do destaque no website"></textarea>
+                  <div class="form-text">Se deixares vazio, o sistema usa o subtítulo como base do texto.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mb-4">
+              <div class="card-body">
+                <h6 class="fw-bold mb-3">Presets guardados</h6>
+                <div class="mb-3">
+                  <label class="form-label" for="post-designer-template-name">Nome do preset</label>
+                  <input type="text" class="form-control" id="post-designer-template-name" placeholder="Ex.: Clínica azul esquerda">
+                </div>
+                <div class="post-designer-template-actions mb-3">
+                  <button type="button" class="btn btn-outline-primary" id="post-designer-save-template-btn">Guardar preset</button>
+                  <button type="button" class="btn btn-outline-secondary" id="post-designer-apply-template-btn">Aplicar</button>
+                  <button type="button" class="btn btn-outline-danger" id="post-designer-delete-template-btn">Apagar</button>
+                </div>
+                <div>
+                  <label class="form-label" for="post-designer-saved-presets">Presets disponíveis</label>
+                  <select class="form-select" id="post-designer-saved-presets">
+                    <option value="">Escolher preset guardado</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mb-0">
+              <div class="card-body">
+                <h6 class="fw-bold mb-2">Estado</h6>
+                <div id="post-designer-status" class="text-muted">Pronto para editar.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="post-designer-preview-column" id="post-designer-preview-column">
+            <div class="post-designer-preview-card" id="post-designer-preview-card">
+            <div class="card mb-0">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <div>
+                    <h6 class="fw-bold mb-1">Preview</h6>
+                    <span class="text-muted">O exporte e o rascunho usam exatamente esta composição. As guias mostram a zona segura de conteúdo.</span>
+                  </div>
+                  <div class="post-designer-preview-tools">
+                    <select class="form-select form-select-sm" id="post-designer-preview-zoom" aria-label="Zoom do preview">
+                      <option value="fit">Ajustar</option>
+                      <option value="50">50%</option>
+                      <option value="75">75%</option>
+                      <option value="100">100%</option>
+                    </select>
+                    <span class="badge bg-soft-primary text-primary">Editor</span>
+                  </div>
+                </div>
+                <div class="post-designer-canvas-wrap">
+                  <canvas id="post-designer-canvas" class="post-designer-canvas" width="1200" height="846"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </div>
+  </div>
+
+  {{ post_designer_config|json_script:"post-designer-config" }}
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'core/js/post_designer.js' %}?v=20260317-2"></script>
+{% endblock %}

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8">
+    <title>Resumo de Caixa {{ selected_session.session_date|date:"d/m/Y" }}</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        color: #24344d;
+        margin: 24px;
+      }
+      h1, h2 {
+        margin: 0 0 12px;
+      }
+      .meta, .summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .card {
+        border: 1px solid #d8dfeb;
+        border-radius: 10px;
+        padding: 12px 14px;
+      }
+      .label {
+        color: #6f7f99;
+        font-size: 12px;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .value {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+      th, td {
+        border-bottom: 1px solid #e4eaf3;
+        padding: 10px 8px;
+        text-align: left;
+        vertical-align: top;
+        font-size: 13px;
+      }
+      th.text-end, td.text-end {
+        text-align: right;
+      }
+      .muted {
+        color: #6f7f99;
+      }
+      .voided {
+        color: #9b2c2c;
+      }
+      @media print {
+        body {
+          margin: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Resumo de Caixa</h1>
+    <div class="muted" style="margin-bottom: 20px;">
+      Sessão {{ selected_session.id }} · {{ selected_session.session_date|date:"d/m/Y" }} · Gerado em {{ generated_at|date:"d/m/Y H:i" }}
+    </div>
+
+    <div class="meta">
+      <div class="card">
+        <div class="label">Estado</div>
+        <div class="value">{{ selected_session.get_status_display }}</div>
+      </div>
+      <div class="card">
+        <div class="label">Aberta por</div>
+        <div class="value">{{ selected_session.opened_by.get_full_name|default:selected_session.opened_by.username|default:"-" }}</div>
+      </div>
+      <div class="card">
+        <div class="label">Fechada por</div>
+        <div class="value">{{ selected_session.closed_by.get_full_name|default:selected_session.closed_by.username|default:"-" }}</div>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div class="card">
+        <div class="label">Abertura</div>
+        <div class="value">{{ selected_session.opening_amount|floatformat:2 }} €</div>
+      </div>
+      <div class="card">
+        <div class="label">Entradas</div>
+        <div class="value">{{ selected_totals.total_in|floatformat:2 }} €</div>
+      </div>
+      <div class="card">
+        <div class="label">Saídas</div>
+        <div class="value">{{ selected_totals.total_out|floatformat:2 }} €</div>
+      </div>
+      <div class="card">
+        <div class="label">Saldo teórico</div>
+        <div class="value">{{ selected_totals.balance|floatformat:2 }} €</div>
+      </div>
+      <div class="card">
+        <div class="label">Numerário esperado</div>
+        <div class="value">{{ selected_totals.expected_cash|floatformat:2 }} €</div>
+      </div>
+      <div class="card">
+        <div class="label">Diferença</div>
+        <div class="value">{{ selected_session.difference_amount|floatformat:2 }} €</div>
+      </div>
+    </div>
+
+    <h2>Totais por método</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Método</th>
+          <th class="text-end">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in selected_totals.payment_breakdown %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td class="text-end">{{ row.net|floatformat:2 }} €</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="2" class="muted">Sem movimentos na sessão.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2 style="margin-top: 28px;">Totais por origem</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Origem</th>
+          <th class="text-end">Total</th>
+          <th class="text-end">Movimentos</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in selected_totals.source_breakdown %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td class="text-end">{{ row.total|floatformat:2 }} €</td>
+            <td class="text-end">{{ row.count }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="muted">Sem movimentos na sessão.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2 style="margin-top: 28px;">Movimentos</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Quando</th>
+          <th>Origem</th>
+          <th>Descrição</th>
+          <th>Método</th>
+          <th>Estado</th>
+          <th class="text-end">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for movement in movements %}
+          <tr>
+            <td>{{ movement.happened_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ movement.get_source_type_display }}</td>
+            <td>
+              <div>{{ movement.description }}</div>
+              {% if movement.client_profile_id %}
+                <div class="muted">Utente: {{ movement.client_profile.full_name }}</div>
+              {% endif %}
+              <div class="muted">
+                {% if movement.appointment_id %}
+                  Marcação #{{ movement.appointment_id }}
+                {% endif %}
+                {% if movement.group_monthly_charge_id %}
+                  {% if movement.appointment_id %} · {% endif %}Mensalidade #{{ movement.group_monthly_charge_id }}
+                {% endif %}
+                {% if movement.stock_movement_id %}
+                  {% if movement.appointment_id or movement.group_monthly_charge_id %} · {% endif %}Stock #{{ movement.stock_movement_id }}
+                {% endif %}
+              </div>
+              {% if movement.notes %}
+                <div class="muted">{{ movement.notes }}</div>
+              {% endif %}
+              {% if movement.is_void and movement.void_reason %}
+                <div class="voided">Motivo: {{ movement.void_reason }}</div>
+              {% endif %}
+            </td>
+            <td>{{ movement.get_payment_method_display }}</td>
+            <td>{% if movement.is_void %}Anulado{% else %}Ativo{% endif %}</td>
+            <td class="text-end">{% if movement.movement_type == "out" %}-{% else %}+{% endif %}{{ movement.amount|floatformat:2 }} €</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="muted">Sem movimentos nesta sessão.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <script>
+      window.addEventListener("load", function () {
+        window.print();
+      });
+    </script>
+  </body>
+</html>

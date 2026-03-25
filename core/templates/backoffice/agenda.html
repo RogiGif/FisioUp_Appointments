@@ -1,42 +1,72 @@
-{% extends "backoffice/base.html" %}
+{% extends "backoffice/base_duralux.html" %}
 {% load backoffice_extras %}
 
 {% block backoffice_content %}
-  {% include "backoffice/partials/page_header.html" with title="Agenda" subtitle="Visão diária/semanal das marcações." actions="" %}
+  {% if is_technician_agenda %}
+    {% include "backoffice/partials/page_header.html" with title="Marcações" subtitle="As tuas marcações, confirmações e revisões." actions="" %}
+  {% else %}
+    {% include "backoffice/partials/page_header.html" with title="Agenda" subtitle="Visão diária, semanal ou total das marcações." actions="" %}
+  {% endif %}
+
+  <ul class="nav nav-tabs flex-wrap w-100 text-center customers-nav-tabs mb-3" role="tablist">
+    <li class="nav-item flex-fill border-top" role="presentation">
+      <a class="nav-link{% if tab == 'all' %} active{% endif %}" href="?{% querystring_with request tab='all' %}">
+        Todas <span class="text-muted">({{ tab_counts.all|default:0 }})</span>
+      </a>
+    </li>
+    <li class="nav-item flex-fill border-top" role="presentation">
+      <a class="nav-link{% if tab == 'pending' %} active{% endif %}" href="?{% querystring_with request tab='pending' %}">
+        A confirmar <span class="text-muted">({{ tab_counts.pending|default:0 }})</span>
+      </a>
+    </li>
+    <li class="nav-item flex-fill border-top" role="presentation">
+      <a class="nav-link{% if tab == 'review' %} active{% endif %}" href="?{% querystring_with request tab='review' %}">
+        A rever <span class="text-muted">({{ tab_counts.review|default:0 }})</span>
+      </a>
+    </li>
+  </ul>
 
   <div class="card mb-3">
     <div class="card-body">
       <form method="get" class="row g-2 align-items-end" data-auto-submit="1">
         <div class="col-12 col-md-3">
           <label class="form-label">Data</label>
-          <input class="form-control" type="date" name="date" value="{{ date|date:'Y-m-d' }}" data-auto-submit>
+          <input class="form-control" type="date" name="date" value="{{ date|date:'Y-m-d' }}" data-auto-submit {% if view_mode == 'all' %}disabled{% endif %}>
+          {% if view_mode == 'all' %}
+            <div class="form-text">No período "Tudo", o filtro por data fica indisponível.</div>
+          {% endif %}
         </div>
         <div class="col-6 col-md-2">
-          <label class="form-label">Vista</label>
+          <label class="form-label">Período</label>
           <select class="form-select" name="view_mode" data-auto-submit>
             <option value="day" {% if view_mode == 'day' %}selected{% endif %}>Dia</option>
             <option value="week" {% if view_mode == 'week' %}selected{% endif %}>Semana</option>
+            <option value="all" {% if view_mode == 'all' %}selected{% endif %}>Tudo</option>
           </select>
         </div>
-        <div class="col-6 col-md-2">
-          <label class="form-label">Tipo</label>
-          <select class="form-select" name="type" data-auto-submit>
-            <option value="all" {% if type == 'all' %}selected{% endif %}>Todos</option>
-            <option value="appointment" {% if type == 'appointment' %}selected{% endif %}>Consultas</option>
-            <option value="group" {% if type == 'group' %}selected{% endif %}>Turmas</option>
-          </select>
-        </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Profissional</label>
-          <select class="form-select" name="professional_id" data-auto-submit>
-            <option value="">Todos</option>
-            {% for prof in professionals %}
-              <option value="{{ prof.id }}" {% if professional_id|stringformat:'s' == prof.id|stringformat:'s' %}selected{% endif %}>
-                {{ prof.user.get_full_name|default:prof.user.username }}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
+        {% if show_type_filter %}
+          <div class="col-6 col-md-2">
+            <label class="form-label">Tipo</label>
+            <select class="form-select" name="type" data-auto-submit {% if tab != 'all' %}disabled{% endif %}>
+              <option value="all" {% if type == 'all' %}selected{% endif %}>Todos</option>
+              <option value="appointment" {% if type == 'appointment' %}selected{% endif %}>Consultas</option>
+              <option value="group" {% if type == 'group' %}selected{% endif %}>Turmas</option>
+            </select>
+          </div>
+        {% endif %}
+        {% if show_professional_filter %}
+          <div class="col-12 col-md-3">
+            <label class="form-label">Profissional</label>
+            <select class="form-select" name="professional_id" data-auto-submit>
+              <option value="">Todos</option>
+              {% for prof in professionals %}
+                <option value="{{ prof.id }}" {% if professional_id|stringformat:'s' == prof.id|stringformat:'s' %}selected{% endif %}>
+                  {{ prof.user.get_full_name|default:prof.user.username }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
         <div class="col-12 col-md-3">
           <label class="form-label">Serviço</label>
           <select class="form-select" name="service_id" data-auto-submit>
@@ -50,16 +80,20 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label">Estado</label>
-          <select class="form-select" name="status" data-auto-submit>
+          <select class="form-select" name="status" data-auto-submit {% if tab != 'all' %}disabled{% endif %}>
             <option value="">Todos</option>
             <option value="scheduled" {% if status == 'scheduled' %}selected{% endif %}>Agendada</option>
+            <option value="pending_confirmation" {% if status == 'pending_confirmation' %}selected{% endif %}>Em confirmação</option>
+            <option value="awaiting_validation" {% if status == 'awaiting_validation' %}selected{% endif %}>A aguardar validação</option>
+            <option value="no_show" {% if status == 'no_show' %}selected{% endif %}>Falta</option>
             <option value="completed" {% if status == 'completed' %}selected{% endif %}>Concluída</option>
+            <option value="in_debt" {% if status == 'in_debt' %}selected{% endif %}>Em dívida</option>
             <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Cancelada</option>
           </select>
         </div>
         <div class="col-12 col-md-4">
           <label class="form-label">Pesquisar</label>
-          <input class="form-control" type="text" name="q" value="{{ q|default:'' }}" placeholder="Nome, telefone, NIF">
+          <input class="form-control" type="text" name="q" value="{{ q|default:'' }}" placeholder="Nome, telefone, NIF ou ref. MC-000123">
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label">Por página</label>
@@ -88,29 +122,66 @@
 
   {% if items %}
     <div class="card">
-      {% include "backoffice/partials/table_open.html" with header_cols="Data,Hora,Serviço,Profissional,Cliente/Inscritos,Estado,Preço,Ações"|split_csv %}
+      <form id="agendaBulkForm" method="post" class="d-flex flex-wrap align-items-center justify-content-between gap-2 p-3 border-bottom">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="bulk_update">
+        <input type="hidden" name="return_to" value="{{ return_to }}">
+        <div class="d-flex align-items-center gap-2">
+          <input class="form-check-input" type="checkbox" id="agendaSelectAll" {% if not has_bulk_candidates %}disabled{% endif %}>
+          <label class="form-check-label" for="agendaSelectAll">Selecionar tudo</label>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <select class="form-select form-select-sm" name="bulk_action" style="min-width: 220px;" {% if not has_bulk_candidates %}disabled{% endif %}>
+            <option value="confirm_selected">Confirmar selecionadas</option>
+            <option value="confirm_and_paid_selected">Confirmar e marcar como pago</option>
+            <option value="mark_no_show_selected">Marcar como falta</option>
+            <option value="mark_in_debt_selected">Marcar em dívida</option>
+            <option value="mark_completed_selected">Marcar como concluída</option>
+            <option value="export_selected">Exportar selecionadas (Excel)</option>
+          </select>
+          <button type="submit" class="btn btn-sm btn-primary" {% if not has_bulk_candidates %}disabled{% endif %}>
+            Aplicar
+          </button>
+        </div>
+        <div id="agendaSelectedAppointmentIds"></div>
+      </form>
+      {% include "backoffice/partials/table_open.html" with header_cols=",Data,Hora,Serviço,Profissional,Cliente/Inscritos,Consumíveis,Estado,Preço,Ações"|split_csv %}
       {% for item in items %}
         <tr>
+          <td class="text-center">
+            {% if item.kind == "appointment" and item.appointment_id %}
+              <input class="form-check-input agenda-row-check" type="checkbox" value="{{ item.appointment_id }}">
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
           <td>{{ item.date|date:"M j, Y" }}</td>
           <td>{{ item.time|time:"H:i" }}</td>
           <td>{{ item.service_name }}</td>
           <td>{{ item.professional_name }}</td>
           <td>{{ item.client_label }}</td>
+          <td class="text-muted small">{{ item.consumptions_label }}</td>
           <td>
             <span class="badge text-bg-light">{{ item.status_label }}</span>
           </td>
           <td>{{ item.price_label }}</td>
           <td class="text-end">
-            <div class="bo-btn-row">
+            <div class="d-flex flex-wrap gap-2">
               <a class="btn btn-outline-secondary btn-sm" href="{{ item.open_url }}">Abrir</a>
-              {% if item.cancel_url and item.status_raw == "scheduled" %}
-                <a class="btn btn-outline-danger btn-sm" href="{{ item.cancel_url }}" data-confirm="Cancelar marcação?">Cancelar</a>
+              {% if item.cancel_url %}
+                {% if item.status_raw == "scheduled" or item.status_raw == "pending_confirmation" %}
+                  <a class="btn btn-outline-danger btn-sm" href="{{ item.cancel_url }}" data-confirm="Cancelar marcação?">Cancelar</a>
+                {% endif %}
               {% endif %}
-              {% if item.complete_url and item.status_raw == "scheduled" %}
-                <a class="btn btn-outline-success btn-sm" href="{{ item.complete_url }}" data-confirm="Concluir marcação?">Concluir</a>
+              {% if item.complete_url %}
+                {% if item.status_raw == "scheduled" %}
+                  <a class="btn btn-outline-success btn-sm" href="{{ item.complete_url }}" data-confirm="Concluir marcação?">Concluir</a>
+                {% endif %}
               {% endif %}
-              {% if item.reschedule_url and item.status_raw == "scheduled" %}
-                <a class="btn btn-outline-secondary btn-sm" href="{{ item.reschedule_url }}">Reagendar</a>
+              {% if item.reschedule_url %}
+                {% if item.status_raw == "scheduled" or item.status_raw == "pending_confirmation" %}
+                  <a class="btn btn-outline-secondary btn-sm" href="{{ item.reschedule_url }}">Reagendar</a>
+                {% endif %}
               {% endif %}
             </div>
           </td>
@@ -123,7 +194,7 @@
     {% include "backoffice/partials/empty_state.html" with title="Sem marcações" description="Não existem marcações para os filtros atuais." %}
   {% endif %}
 
-  <div class="modal fade" id="boQuickCreateModal" tabindex="-1" aria-labelledby="boQuickCreateLabel" aria-hidden="true">
+  <div class="modal fade" id="boQuickCreateModal" tabindex="-1" aria-labelledby="boQuickCreateLabel" aria-hidden="true" data-bs-backdrop="false" data-bs-focus="false">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
         <form method="post" novalidate>
@@ -181,8 +252,8 @@
                 </select>
               </div>
               <div class="col-12">
-                <label class="form-label">Notas (opcional)</label>
-                <textarea class="form-control" name="notes" rows="3">{{ quick_form.notes }}</textarea>
+                <label class="form-label">Sintomatologia (opcional)</label>
+                <textarea class="form-control" name="symptomatology" rows="3">{{ quick_form.symptomatology }}</textarea>
               </div>
             </div>
           </div>
@@ -204,4 +275,72 @@
       });
     </script>
   {% endif %}
+
+  <script>
+    (function () {
+      const bulkForm = document.getElementById("agendaBulkForm");
+      const selectAll = document.getElementById("agendaSelectAll");
+      const hiddenContainer = document.getElementById("agendaSelectedAppointmentIds");
+      if (!bulkForm || !selectAll || !hiddenContainer) return;
+      const rowChecks = Array.from(document.querySelectorAll(".agenda-row-check"));
+      if (!rowChecks.length) return;
+
+      selectAll.addEventListener("change", function () {
+        rowChecks.forEach(function (el) {
+          el.checked = selectAll.checked;
+        });
+      });
+
+      rowChecks.forEach(function (el) {
+        el.addEventListener("change", function () {
+          selectAll.checked = rowChecks.every(function (item) { return item.checked; });
+        });
+      });
+
+      bulkForm.addEventListener("submit", function (event) {
+        const checked = rowChecks.filter(function (el) { return el.checked; });
+        hiddenContainer.innerHTML = "";
+        if (!checked.length) {
+          event.preventDefault();
+          alert("Seleciona pelo menos uma marcação.");
+          return;
+        }
+        checked.forEach(function (el) {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = "appointment_ids";
+          input.value = el.value;
+          hiddenContainer.appendChild(input);
+        });
+
+        const actionSelect = bulkForm.querySelector("select[name='bulk_action']");
+        const action = actionSelect ? actionSelect.value : "";
+        const confirmMessages = {
+          mark_no_show_selected: "Marcar as marcações selecionadas como falta?",
+          mark_in_debt_selected: "Marcar as marcações selecionadas como em dívida?",
+          mark_completed_selected: "Marcar as marcações selecionadas como concluídas? (apenas pagas serão concluídas)",
+        };
+        const confirmText = confirmMessages[action];
+        if (confirmText && !window.confirm(confirmText)) {
+          event.preventDefault();
+        }
+      });
+    })();
+  </script>
+
+  <style>
+    .modal-backdrop {
+      display: none !important;
+    }
+    body.modal-open .nxl-header,
+    body.modal-open .nxl-navigation,
+    body.modal-open .page-header,
+    body.modal-open .nxl-container {
+      filter: none !important;
+    }
+    body.modal-open {
+      overflow: auto;
+      padding-right: 0 !important;
+    }
+  </style>
 {% endblock %}

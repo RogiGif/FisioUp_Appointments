@@ -26,9 +26,10 @@ def sync_customers(full: bool = False, since: str | None = None) -> Dict[str, in
     skipped = 0
     errors = 0
 
-    page = 1
+    qty = 50
+    offset = 0
     while True:
-        data = moloni_service.customers_get_all(page=page)
+        data = moloni_service.customers_get_all(qty=qty, offset=offset)
         customers = data.get("customers") if isinstance(data, dict) else data
         if not customers:
             break
@@ -92,10 +93,9 @@ def sync_customers(full: bool = False, since: str | None = None) -> Dict[str, in
             except Exception:
                 errors += 1
 
-        page += 1
-        if isinstance(data, dict) and data.get("total_pages"):
-            if page > int(data.get("total_pages")):
-                break
+        if len(customers) < qty:
+            break
+        offset += qty
 
     integ = MoloniIntegration.get_solo()
     integ.last_sync_at = timezone.now()

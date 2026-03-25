@@ -8,7 +8,7 @@ A tua marcação foi confirmada:
 - Profissional: {{ professional_name }}
 - Data: {{ date }}
 - Hora: {{ time }}
-{% if notes %}- Notas: {{ notes }}{% endif %}
+{% if symptomatology %}- Sintomatologia: {{ symptomatology }}{% endif %}
 
 Gerir marcações: {{ manage_url }}
 {% endblock %}

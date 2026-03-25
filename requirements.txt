@@ -1,8 +1,9 @@
 asgiref==3.11.0
 Django==5.2.9
 django-jazzmin==3.0.1
-mysqlclient==2.2.7
 python-dotenv==1.2.1
 sqlparse==0.5.5
 whitenoise==6.7.0
 PyMySQL==1.1.1
+Pillow==10.3.0
+openpyxl==3.1.5

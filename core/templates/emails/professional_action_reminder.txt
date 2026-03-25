@@ -1,0 +1,11 @@
+{% extends "emails/base.txt" %}
+
+{% block content %}
+Olá {{ professional_name }},
+
+Tens ações pendentes na tua agenda:
+- {{ confirm_count }} marcações para confirmar
+- {{ review_count }} marcações para rever
+
+Abre a agenda: {{ calendar_url }}
+{% endblock %}

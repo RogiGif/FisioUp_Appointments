@@ -1,11 +1,30 @@
 import re
 from decimal import Decimal
 from django import forms
+from django.forms import inlineformset_factory, BaseInlineFormSet
+from django.db import models
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.forms import PasswordResetForm, SetPasswordForm
 from django.core.exceptions import ValidationError
-from .models import ClientProfile, Professional, Service, Partner, PartnerServicePrice, Availability
+from django.utils import timezone
+from .models import (
+    ClientProfile,
+    Professional,
+    Service,
+    Partner,
+    ContentPost,
+    PartnerServicePrice,
+    ClinicSettings,
+    WeeklySchedule,
+    WeeklyWorkingBlock,
+    WeeklyBreakBlock,
+    CashSession,
+    CashMovement,
+    Appointment,
+    GroupMonthlyCharge,
+)
+from .models import Product, ProductCategory
 from .models import TreatmentRecord
 
 class TreatmentRecordForm(forms.ModelForm):
@@ -61,6 +80,13 @@ class ClientProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Mesmas validações de registo para campos críticos
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
         for name in ("full_name", "phone", "nif"):
             if name in self.fields:
                 self.fields[name].required = True
@@ -157,6 +183,12 @@ User = get_user_model()
 class BackofficeServiceForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if "price" in self.fields:
+            self.fields["price"].required = False
+        if "price_first" in self.fields:
+            self.fields["price_first"].required = False
+        if "price_followup" in self.fields:
+            self.fields["price_followup"].required = False
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-check-input")
@@ -172,6 +204,7 @@ class BackofficeServiceForm(forms.ModelForm):
             "duration_minutes",
             "service_type",
             "capacity",
+            "allow_waitlist",
             "pricing_mode",
             "price",
             "price_first",
@@ -192,6 +225,10 @@ class BackofficeServiceForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        service_type = cleaned.get("service_type")
+        if service_type != "group":
+            cleaned["capacity"] = None
+            cleaned["allow_waitlist"] = False
         pricing_mode = cleaned.get("pricing_mode")
         price = cleaned.get("price")
         price_first = cleaned.get("price_first")
@@ -210,7 +247,118 @@ class BackofficeServiceForm(forms.ModelForm):
         return cleaned
 
 
-class BackofficeAvailabilityForm(forms.ModelForm):
+class BackofficeProfessionalForm(forms.ModelForm):
+    new_user_first_name = forms.CharField(max_length=150, required=False, label="Primeiro nome")
+    new_user_last_name = forms.CharField(max_length=150, required=False, label="Último nome")
+    new_user_email = forms.EmailField(required=False, label="Email")
+    new_user_username = forms.CharField(max_length=150, required=False, label="Username")
+    new_user_password1 = forms.CharField(
+        required=False,
+        label="Password",
+        widget=forms.PasswordInput,
+    )
+    new_user_password2 = forms.CharField(
+        required=False,
+        label="Confirmar password",
+        widget=forms.PasswordInput,
+    )
+
+    class Meta:
+        model = Professional
+        fields = [
+            "user",
+            "profile_photo",
+            "speciality",
+            "gender",
+            "phone",
+            "services",
+            "is_independent",
+            "subcontract_percentage",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        user_qs = User.objects.all().order_by("username")
+        if self.instance and self.instance.pk:
+            user_qs = user_qs.filter(models.Q(professional__isnull=True) | models.Q(id=self.instance.user_id))
+        else:
+            user_qs = user_qs.filter(professional__isnull=True)
+        self.fields["user"].queryset = user_qs
+        self.fields["user"].required = bool(self.instance and self.instance.pk)
+        if "services" in self.fields:
+            self.fields["services"].queryset = Service.objects.order_by("name")
+        if "profile_photo" in self.fields:
+            self.fields["profile_photo"].widget.attrs.setdefault("accept", "image/*")
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(field.widget, forms.SelectMultiple):
+                field.widget.attrs.setdefault("class", "form-select")
+                field.widget.attrs.setdefault("multiple", "multiple")
+                field.widget.attrs.setdefault("size", "6")
+            elif isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+    def clean_user(self):
+        user = self.cleaned_data.get("user")
+        if user and (not self.instance or user.id != self.instance.user_id):
+            if Professional.objects.filter(user=user).exists():
+                raise ValidationError("Este utilizador já está associado a um profissional.")
+        return user
+
+    def clean(self):
+        cleaned = super().clean()
+        user = cleaned.get("user")
+        new_username = (cleaned.get("new_user_username") or "").strip()
+        new_password1 = cleaned.get("new_user_password1") or ""
+        new_password2 = cleaned.get("new_user_password2") or ""
+        if not user:
+            if not new_username:
+                self.add_error("new_user_username", "Indica um username.")
+            elif User.objects.filter(username__iexact=new_username).exists():
+                self.add_error("new_user_username", "Já existe um utilizador com este username.")
+            if not new_password1:
+                self.add_error("new_user_password1", "Indica uma password.")
+            if not new_password2:
+                self.add_error("new_user_password2", "Confirma a password.")
+            if new_password1 and new_password2 and new_password1 != new_password2:
+                self.add_error("new_user_password2", "As passwords não coincidem.")
+        is_independent = cleaned.get("is_independent")
+        subcontract_percentage = cleaned.get("subcontract_percentage")
+        if is_independent:
+            if subcontract_percentage is None:
+                self.add_error("subcontract_percentage", "Indica a percentagem de comissionamento.")
+            elif subcontract_percentage < 0 or subcontract_percentage > 100:
+                self.add_error("subcontract_percentage", "Percentagem inválida (0-100).")
+        else:
+            cleaned["subcontract_percentage"] = None
+        return cleaned
+
+    def _create_new_user(self):
+        username = (self.cleaned_data.get("new_user_username") or "").strip()
+        email = (self.cleaned_data.get("new_user_email") or "").strip()
+        password = self.cleaned_data.get("new_user_password1") or ""
+        user = User.objects.create_user(username=username, email=email or "", password=password)
+        user.first_name = (self.cleaned_data.get("new_user_first_name") or "").strip()
+        user.last_name = (self.cleaned_data.get("new_user_last_name") or "").strip()
+        user.save()
+        return user
+
+    def save(self, commit=True):
+        user = self.cleaned_data.get("user")
+        if not user:
+            user = self._create_new_user()
+        instance = super().save(commit=False)
+        instance.user = user
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
+class WeeklyScheduleForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
@@ -222,16 +370,113 @@ class BackofficeAvailabilityForm(forms.ModelForm):
                 field.widget.attrs.setdefault("class", "form-control")
 
     class Meta:
-        model = Availability
-        fields = ["professional", "weekday", "start_time", "end_time"]
+        model = WeeklySchedule
+        fields = ["is_active"]
+
+
+SCHEDULE_START_MINUTES = 9 * 60
+SCHEDULE_END_MINUTES = 21 * 60
+
+
+def _time_choices(
+    step_minutes=30,
+    start_minutes=SCHEDULE_START_MINUTES,
+    end_minutes=SCHEDULE_END_MINUTES,
+):
+    choices = []
+    for total_minutes in range(start_minutes, end_minutes + 1, step_minutes):
+        hour = total_minutes // 60
+        minute = total_minutes % 60
+        label = f"{hour:02d}:{minute:02d}"
+        value = f"{label}:00"
+        choices.append((value, label))
+    return choices
+
+
+class WeeklyWorkingBlockForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        start_time_choices = _time_choices(end_minutes=SCHEDULE_END_MINUTES - 30)
+        end_time_choices = _time_choices(start_minutes=SCHEDULE_START_MINUTES + 30)
+        for name, field in self.fields.items():
+            if name == "weekday":
+                field.widget = forms.HiddenInput()
+                continue
+            if name == "start_time":
+                field.widget = forms.Select(choices=start_time_choices)
+            if name == "end_time":
+                field.widget = forms.Select(choices=end_time_choices)
+            field.widget.attrs.setdefault("class", "form-control")
+
+    class Meta:
+        model = WeeklyWorkingBlock
+        fields = ["weekday", "start_time", "end_time"]
+
+
+class WeeklyBreakBlockForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        start_time_choices = _time_choices(end_minutes=SCHEDULE_END_MINUTES - 30)
+        end_time_choices = _time_choices(start_minutes=SCHEDULE_START_MINUTES + 30)
+        for name, field in self.fields.items():
+            if name == "weekday":
+                field.widget = forms.HiddenInput()
+                continue
+            if name == "start_time":
+                field.widget = forms.Select(choices=start_time_choices)
+            if name == "end_time":
+                field.widget = forms.Select(choices=end_time_choices)
+            field.widget.attrs.setdefault("class", "form-control")
+
+    class Meta:
+        model = WeeklyBreakBlock
+        fields = ["weekday", "start_time", "end_time"]
+
+
+class BaseWeeklyBlockFormSet(BaseInlineFormSet):
+    overlap_message = "Existem blocos sobrepostos no mesmo dia."
 
     def clean(self):
-        cleaned = super().clean()
-        start = cleaned.get("start_time")
-        end = cleaned.get("end_time")
-        if start and end and end <= start:
-            self.add_error("end_time", "A hora de fim deve ser posterior à hora de início.")
-        return cleaned
+        super().clean()
+        blocks_by_day = {}
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data"):
+                continue
+            if form.cleaned_data.get("DELETE"):
+                continue
+            weekday = form.cleaned_data.get("weekday")
+            start = form.cleaned_data.get("start_time")
+            end = form.cleaned_data.get("end_time")
+            if weekday is None or not start or not end:
+                continue
+            day_blocks = blocks_by_day.setdefault(weekday, [])
+            for existing_start, existing_end in day_blocks:
+                if start < existing_end and end > existing_start:
+                    raise ValidationError(self.overlap_message)
+            day_blocks.append((start, end))
+
+
+class BaseWeeklyBreakBlockFormSet(BaseWeeklyBlockFormSet):
+    overlap_message = "Existem pausas sobrepostas no mesmo dia."
+
+
+WeeklyWorkingBlockFormSet = inlineformset_factory(
+    WeeklySchedule,
+    WeeklyWorkingBlock,
+    form=WeeklyWorkingBlockForm,
+    formset=BaseWeeklyBlockFormSet,
+    extra=0,
+    can_delete=True,
+)
+
+WeeklyBreakBlockFormSet = inlineformset_factory(
+    WeeklySchedule,
+    WeeklyBreakBlock,
+    form=WeeklyBreakBlockForm,
+    formset=BaseWeeklyBreakBlockFormSet,
+    extra=0,
+    can_delete=True,
+)
 
 
 class BackofficePartnerForm(forms.ModelForm):
@@ -249,11 +494,8 @@ class BackofficePartnerForm(forms.ModelForm):
         model = Partner
         fields = [
             "name",
+            "logo",
             "active",
-            "discount_type",
-            "discount_percent",
-            "discount_amount",
-            "discount_label",
             "notes",
         ]
 
@@ -262,6 +504,64 @@ class BackofficePartnerForm(forms.ModelForm):
         if len(name) < 2:
             raise ValidationError("O nome deve ter pelo menos 2 caracteres.")
         return name
+
+
+class BackofficeHighlightForm(forms.ModelForm):
+    class Meta:
+        model = ContentPost
+        fields = [
+            "title",
+            "cover_image",
+            "excerpt",
+            "body",
+            "status",
+            "is_featured",
+        ]
+        widgets = {
+            "excerpt": forms.Textarea(attrs={"rows": 3}),
+            "body": forms.Textarea(attrs={"rows": 6}),
+        }
+        labels = {
+            "title": "Título",
+            "cover_image": "Imagem",
+            "excerpt": "Descrição",
+            "body": "Descrição completa",
+            "status": "Estado",
+            "is_featured": "Destaque principal",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["title"].widget.attrs.setdefault("placeholder", "Título do destaque")
+        self.fields["excerpt"].widget.attrs.setdefault("placeholder", "Resumo curto para o cartão")
+        self.fields["body"].widget.attrs.setdefault("placeholder", "Texto completo do destaque")
+
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+    def clean_title(self):
+        title = (self.cleaned_data.get("title") or "").strip()
+        if len(title) < 5:
+            raise ValidationError("O título deve ter pelo menos 5 caracteres.")
+        return title
+
+    def clean(self):
+        cleaned = super().clean()
+        excerpt = (cleaned.get("excerpt") or "").strip()
+        body = (cleaned.get("body") or "").strip()
+
+        if not excerpt and not body:
+            raise ValidationError("Indica pelo menos uma descrição.")
+        if not body and excerpt:
+            cleaned["body"] = excerpt
+        if not excerpt and body:
+            cleaned["excerpt"] = body[:180]
+        return cleaned
 
 
 class BackofficeClientProfileForm(forms.ModelForm):
@@ -338,11 +638,15 @@ class EmailPasswordResetForm(PasswordResetForm):
 
     def send_mail(self, subject_template_name, email_template_name, context, from_email, to_email, html_email_template_name=None):
         from django.urls import reverse
-        from core.emails import send_templated_email, clinic_settings
+        from core.emails import send_templated_email, clinic_settings, log_email_skip
 
         reset_url = f"{context['protocol']}://{context['domain']}{reverse('password_reset_confirm', args=[context['uid'], context['token']])}"
-        clinic_name = clinic_settings().clinic_name
+        settings_obj = clinic_settings()
+        clinic_name = settings_obj.clinic_name
         subject = f"Recuperação de password — {clinic_name}"
+        if not settings_obj.notify_password_reset:
+            log_email_skip("password_reset", subject, "Envio desativado nas definições.", to_email)
+            return
         send_templated_email(
             to_email,
             subject,
@@ -419,15 +723,12 @@ class RegisterForm(forms.Form):
         label="Confirmar password",
         error_messages={"required": "Campo de preenchimento obrigatório"},
     )
-    terms_accepted = forms.BooleanField(
+    accepted_terms = forms.BooleanField(
         required=True,
-        label="Li e aceito os Termos e Condicoes",
-        error_messages={"required": "Campo de preenchimento obrigatório"},
-    )
-    rgpd_accepted = forms.BooleanField(
-        required=True,
-        label="Li e aceito a politica de RGPD",
-        error_messages={"required": "Campo de preenchimento obrigatório"},
+        label="Li e aceito os Termos, a Política de Privacidade e a Política de Cookies.",
+        error_messages={
+            "required": "Tens de aceitar os Termos, a Política de Privacidade e a Política de Cookies para criares conta."
+        },
     )
 
     def __init__(self, *args, **kwargs):
@@ -447,7 +748,7 @@ class RegisterForm(forms.Form):
             "password2",
         ):
             self.fields[name].widget.attrs["class"] = "field-input"
-        for name in ("terms_accepted", "rgpd_accepted"):
+        for name in ("accepted_terms",):
             self.fields[name].widget.attrs["class"] = "field-check"
 
         self.fields["postal_code_1"].widget.attrs["inputmode"] = "numeric"
@@ -528,6 +829,7 @@ class StaffClientCreateForm(forms.Form):
     nif = forms.CharField(
         max_length=20,
         label="NIF",
+        required=False,
         error_messages={"required": "Campo de preenchimento obrigatório"},
     )
     username = forms.CharField(max_length=150, required=False, label="Username")
@@ -550,20 +852,20 @@ class StaffClientCreateForm(forms.Form):
     )
     address_line1 = forms.CharField(
         max_length=255,
-        required=True,
+        required=False,
         label="Morada",
         error_messages={"required": "Campo de preenchimento obrigatório"},
     )
     address_line2 = forms.CharField(max_length=255, required=False, label="Morada (linha 2)")
     postal_code = forms.CharField(
         max_length=20,
-        required=True,
+        required=False,
         label="Código postal",
         error_messages={"required": "Campo de preenchimento obrigatório"},
     )
     city = forms.CharField(
         max_length=120,
-        required=True,
+        required=False,
         label="Cidade",
         error_messages={"required": "Campo de preenchimento obrigatório"},
     )
@@ -602,11 +904,19 @@ class StaffClientCreateForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         self.existing_user = kwargs.pop("existing_user", None)
+        self.existing_profile = kwargs.pop("existing_profile", None)
         super().__init__(*args, **kwargs)
         self.fields["partner"].queryset = Partner.objects.all().order_by("name")
+        if self.existing_profile:
+            for name in ("full_name", "nif", "phone", "address_line1", "postal_code", "city"):
+                if name in self.fields:
+                    self.fields[name].required = False
+                    self.fields[name].error_messages.pop("required", None)
 
     def clean_full_name(self):
         name = (self.cleaned_data.get("full_name") or "").strip()
+        if self.existing_profile and not name:
+            return ""
         if len(name) < 3:
             raise ValidationError("Indica um nome completo válido.")
         if re.search(r"\d", name):
@@ -627,10 +937,16 @@ class StaffClientCreateForm(forms.Form):
         return username
 
     def clean_nif(self):
-        return _validate_nif_value(self.cleaned_data.get("nif"))
+        nif = (self.cleaned_data.get("nif") or "").strip()
+        if not nif:
+            return ""
+        exclude_id = self.existing_profile.pk if self.existing_profile else None
+        return _validate_nif_value(nif, exclude_profile_id=exclude_id)
 
     def clean_phone(self):
         phone = (self.cleaned_data.get("phone") or "").strip()
+        if self.existing_profile and not phone:
+            return ""
         normalized = re.sub(r"[^\d]", "", phone)
         if normalized and len(normalized) < 9:
             raise ValidationError("Indica um número de telefone válido.")
@@ -638,6 +954,8 @@ class StaffClientCreateForm(forms.Form):
 
     def clean_postal_code(self):
         postal_code = (self.cleaned_data.get("postal_code") or "").strip()
+        if not postal_code:
+            return ""
         if not re.match(r"^\d{4}-\d{3}$", postal_code):
             raise ValidationError("Indica um código-postal válido (ex: 1234-567).")
         return postal_code
@@ -694,3 +1012,287 @@ class StaffClientCreateForm(forms.Form):
             cleaned["discount_percent"] = None
             cleaned["discount_amount"] = None
         return cleaned
+
+
+class ProductForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = [
+            "name",
+            "sku",
+            "category",
+            "is_active",
+            "unit_base",
+            "min_stock_alert",
+            "unit_per_pack",
+            "notes",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class ProductCategoryForm(forms.ModelForm):
+    class Meta:
+        model = ProductCategory
+        fields = ["name"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class ClinicEmailSettingsForm(forms.ModelForm):
+    class Meta:
+        model = ClinicSettings
+        fields = [
+            "notify_admin_on_pending_registration",
+            "notify_clinic_on_new_booking",
+            "notify_clinic_on_client_reschedule",
+            "notify_clinic_on_client_cancel",
+            "notify_professional_on_new_booking",
+            "notify_client_on_new_booking",
+            "notify_client_on_clinic_changes",
+            "notify_password_reset",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class StockEntryForm(forms.Form):
+    UNIT_BASE = "base"
+    UNIT_PACK = "pack"
+
+    UNIT_MODE_CHOICES = (
+        (UNIT_BASE, "Unidade base"),
+        (UNIT_PACK, "Embalagens"),
+    )
+
+    product = forms.ModelChoiceField(queryset=Product.objects.filter(is_active=True), label="Produto")
+    quantity = forms.DecimalField(max_digits=12, decimal_places=2, label="Quantidade")
+    unit_mode = forms.ChoiceField(choices=UNIT_MODE_CHOICES, label="Modo de quantidade")
+    unit_cost = forms.DecimalField(max_digits=12, decimal_places=2, required=False, label="Custo unitário")
+    note = forms.CharField(widget=forms.Textarea, required=False, label="Notas")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+                field.widget.attrs.setdefault("rows", 2)
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class StockAdjustmentForm(forms.Form):
+    DIRECTION_INCREASE = "increase"
+    DIRECTION_DECREASE = "decrease"
+
+    DIRECTION_CHOICES = (
+        (DIRECTION_INCREASE, "Entrada"),
+        (DIRECTION_DECREASE, "Saída"),
+    )
+
+    product = forms.ModelChoiceField(queryset=Product.objects.filter(is_active=True), label="Produto")
+    quantity = forms.DecimalField(max_digits=12, decimal_places=2, label="Quantidade")
+    direction = forms.ChoiceField(choices=DIRECTION_CHOICES, label="Tipo de ajuste")
+    note = forms.CharField(widget=forms.Textarea, required=False, label="Notas")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+                field.widget.attrs.setdefault("rows", 2)
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class CashSessionOpenForm(forms.Form):
+    session_date = forms.DateField(
+        label="Data",
+        input_formats=["%Y-%m-%d"],
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    opening_amount = forms.DecimalField(max_digits=10, decimal_places=2, label="Fundo inicial")
+    opening_notes = forms.CharField(widget=forms.Textarea, required=False, label="Observações")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["session_date"].initial = self.initial.get("session_date")
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+                field.widget.attrs.setdefault("rows", 2)
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class CashSessionCloseForm(forms.Form):
+    counted_cash_amount = forms.DecimalField(max_digits=10, decimal_places=2, label="Numerário contado")
+    closing_notes = forms.CharField(widget=forms.Textarea, required=False, label="Observações de fecho")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+                field.widget.attrs.setdefault("rows", 2)
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class CashManualMovementForm(forms.Form):
+    movement_type = forms.ChoiceField(choices=CashMovement.TYPE_CHOICES, label="Tipo")
+    payment_method = forms.ChoiceField(choices=CashMovement.PAYMENT_METHOD_CHOICES, label="Método")
+    amount = forms.DecimalField(max_digits=10, decimal_places=2, label="Valor")
+    description = forms.CharField(max_length=255, label="Descrição")
+    happened_at = forms.DateTimeField(
+        label="Quando",
+        input_formats=["%Y-%m-%dT%H:%M"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+    )
+    notes = forms.CharField(widget=forms.Textarea, required=False, label="Notas")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.initial.get("happened_at"):
+            self.fields["happened_at"].initial = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+                field.widget.attrs.setdefault("rows", 2)
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class CashAppointmentMovementForm(forms.Form):
+    appointment = forms.ModelChoiceField(queryset=Appointment.objects.none(), label="Marcação paga")
+    payment_method = forms.ChoiceField(choices=CashMovement.PAYMENT_METHOD_CHOICES, label="Método")
+    notes = forms.CharField(widget=forms.Textarea, required=False, label="Notas")
+
+    def __init__(self, *args, appointment_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["appointment"].queryset = appointment_queryset or Appointment.objects.none()
+        self.fields["appointment"].label_from_instance = self._appointment_label
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+                field.widget.attrs.setdefault("rows", 2)
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+    @staticmethod
+    def _appointment_label(appointment):
+        client_name = (
+            getattr(getattr(appointment.client, "client_profile", None), "full_name", "")
+            or appointment.client.get_full_name()
+            or appointment.client.username
+        )
+        service_name = getattr(appointment.service, "name", "") or "Serviço"
+        amount = getattr(appointment, "final_price", None)
+        amount_display = f"{amount:.2f} €" if amount is not None else "—"
+        return f"{appointment.date:%d/%m/%Y} {appointment.time:%H:%M} · {client_name} · {service_name} · {amount_display}"
+
+
+class CashGroupMonthlyMovementForm(forms.Form):
+    group_monthly_charge = forms.ModelChoiceField(queryset=GroupMonthlyCharge.objects.none(), label="Mensalidade paga")
+    payment_method = forms.ChoiceField(choices=CashMovement.PAYMENT_METHOD_CHOICES, label="Método")
+    notes = forms.CharField(widget=forms.Textarea, required=False, label="Notas")
+
+    def __init__(self, *args, monthly_charge_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["group_monthly_charge"].queryset = monthly_charge_queryset or GroupMonthlyCharge.objects.none()
+        self.fields["group_monthly_charge"].label_from_instance = self._monthly_label
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+                field.widget.attrs.setdefault("rows", 2)
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+    @staticmethod
+    def _monthly_label(charge):
+        client_name = (
+            getattr(getattr(charge.client, "client_profile", None), "full_name", "")
+            or charge.client.get_full_name()
+            or charge.client.username
+        )
+        class_name = charge.class_name or getattr(charge.service, "name", "") or "Turma"
+        return f"{charge.month:%m/%Y} · {client_name} · {class_name} · {charge.final_price:.2f} €"
+
+
+class CashStockSaleForm(forms.Form):
+    product = forms.ModelChoiceField(queryset=Product.objects.none(), label="Produto")
+    client_profile = forms.ModelChoiceField(queryset=ClientProfile.objects.none(), required=False, label="Utente")
+    quantity_base = forms.DecimalField(max_digits=12, decimal_places=2, label="Quantidade")
+    amount = forms.DecimalField(max_digits=10, decimal_places=2, label="Valor")
+    payment_method = forms.ChoiceField(choices=CashMovement.PAYMENT_METHOD_CHOICES, label="Método")
+    happened_at = forms.DateTimeField(
+        label="Quando",
+        input_formats=["%Y-%m-%dT%H:%M"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+    )
+    notes = forms.CharField(widget=forms.Textarea, required=False, label="Notas")
+
+    def __init__(self, *args, product_queryset=None, client_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["product"].queryset = product_queryset or Product.objects.none()
+        self.fields["client_profile"].queryset = client_queryset or ClientProfile.objects.none()
+        self.fields["client_profile"].label_from_instance = lambda obj: obj.full_name
+        if not self.initial.get("happened_at"):
+            self.fields["happened_at"].initial = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+                field.widget.attrs.setdefault("rows", 2)
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+
+class CashVoidMovementForm(forms.Form):
+    void_reason = forms.CharField(
+        max_length=255,
+        label="Motivo da anulação",
+        widget=forms.Textarea,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["void_reason"].widget.attrs.setdefault("class", "form-control")
+        self.fields["void_reason"].widget.attrs.setdefault("rows", 2)

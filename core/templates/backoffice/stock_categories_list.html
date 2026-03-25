@@ -1,0 +1,72 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Categorias de produto" subtitle="Gestão das categorias de stock." %}
+
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_dashboard' %}">Resumo</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_products' %}">Produtos</a>
+    <a class="btn btn-primary btn-sm" href="{% url 'backoffice_stock_categories' %}">Categorias</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_entries' %}">Entradas</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_adjustments' %}">Ajustes</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_movements' %}">Movimentos</a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body py-2">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-0">Pesquisar</label>
+          <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Nome da categoria">
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label small mb-0">Por página</label>
+          <select name="per_page" class="form-select">
+            <option value="5" {% if per_page|stringformat:"s" == "5" %}selected{% endif %}>5</option>
+            <option value="10" {% if per_page|stringformat:"s" == "10" %}selected{% endif %}>10</option>
+            <option value="15" {% if per_page|stringformat:"s" == "15" %}selected{% endif %}>15</option>
+            <option value="25" {% if per_page|stringformat:"s" == "25" %}selected{% endif %}>25</option>
+            <option value="50" {% if per_page|stringformat:"s" == "50" %}selected{% endif %}>50</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-6 d-flex gap-2">
+          <button class="btn btn-primary">Filtrar</button>
+          <a class="btn btn-outline-secondary" href="{% url 'backoffice_stock_categories' %}">Limpar</a>
+          <a class="btn btn-success ms-auto" href="{% url 'backoffice_stock_category_new' %}?return_to={{ return_to|urlencode }}">Nova categoria</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      {% if categories %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th class="text-end">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for category in categories %}
+                <tr>
+                  <td>{{ category.name }}</td>
+                  <td class="text-end">
+                    <a class="btn btn-outline-secondary btn-sm" href="{% url 'backoffice_stock_category_edit' category.id %}?return_to={{ return_to|urlencode }}">Editar</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if page_obj %}
+          {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+        {% endif %}
+      {% else %}
+        <div class="text-muted">Sem categorias.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

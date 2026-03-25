@@ -1,0 +1,237 @@
+{% extends "website/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="site-blocks-cover overlay" style="background-image: url({% static 'website/dente/images/replacements/fisioup_hero_background.png' %});" data-aos="fade" data-stellar-background-ratio="0.5">
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-md-7">
+        <span class="sub-text">Saude e bem-estar em Canas de Senhorim</span>
+        <h1>{{ clinic.clinic_name }}<br><strong>Cuidamos do seu movimento</strong></h1>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="site-block-1">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-4">
+        <div class="site-block-feature d-flex p-4 rounded mb-4">
+          <div class="mr-3">
+            <span
+              class="service-icon-img service-icon-mask home-service-icon"
+              style="--service-icon: url('{% static 'website/dente/images/service-icons/fisioterapia.svg' %}');"
+              role="img"
+              aria-label="Icone Fisioterapia"
+            ></span>
+          </div>
+          <div class="text">
+            <h3>Fisioterapia</h3>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="site-block-feature d-flex p-4 rounded mb-4">
+          <div class="mr-3">
+            <span
+              class="service-icon-img service-icon-mask home-service-icon"
+              style="--service-icon: url('{% static 'website/dente/images/service-icons/acupuntura.svg' %}');"
+              role="img"
+              aria-label="Icone Acupuntura"
+            ></span>
+          </div>
+          <div class="text">
+            <h3>Acupuntura</h3>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="site-block-feature d-flex p-4 rounded mb-4">
+          <div class="mr-3">
+            <span
+              class="service-icon-img service-icon-mask home-service-icon"
+              style="--service-icon: url('{% static 'website/dente/images/service-icons/terapia_fala.svg' %}');"
+              role="img"
+              aria-label="Icone Terapia da Fala"
+            ></span>
+          </div>
+          <div class="text">
+            <h3>Terapia da Fala</h3>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="site-section site-block-3">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-6 mb-5 mb-lg-0">
+        <img
+          id="service-preview-image"
+          src="{% if services %}{{ services.0.preview_image_url }}{% else %}{% static 'website/dente/images/img_1.jpg' %}{% endif %}"
+          alt="Servico {{ services.0.name|default:clinic.clinic_name }}"
+          class="img-fluid service-preview-image"
+        >
+      </div>
+      <div class="col-lg-6">
+        <div class="row row-items">
+          {% for service in services|slice:':4' %}
+            <div class="col-md-6">
+              <button
+                type="button"
+                class="d-flex text-center feature service-selector js-service-selector p-4 mb-4{% if forloop.first %} active{% endif %}"
+                data-service-image="{{ service.preview_image_url }}"
+                data-service-name="{{ service.name }}"
+                aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}"
+              >
+                <span class="align-self-center w-100">
+                  <span class="d-block mb-3">
+                    <span
+                      class="service-box-icon-img service-icon-mask"
+                      style="--service-icon: url('{% static 'website/dente/images/service-icons/'|add:service.icon_filename %}');"
+                      role="img"
+                      aria-label="Icone {{ service.name }}"
+                    ></span>
+                  </span>
+                  <h3>{{ service.name }}</h3>
+                </span>
+              </button>
+            </div>
+          {% empty %}
+            <div class="col-12"><p>Atualizaremos brevemente os nossos servicos.</p></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="site-section">
+  <div class="container">
+    <div class="row mb-5 justify-content-center">
+      <div class="col-md-6 text-center">
+        <h2 class="site-heading text-black mb-5">A nossa <strong>Equipa</strong></h2>
+      </div>
+    </div>
+    <div class="row">
+      {% for professional in team|slice:":4" %}
+      <div class="col-md-6 col-lg-3 text-center mb-5">
+        {% if professional.photo_url %}
+          <img src="{{ professional.photo_url }}" alt="{{ professional.name }}" class="img-fluid w-50 rounded-circle mb-4">
+        {% else %}
+          <img src="{% static 'website/dente/images/person_1.jpg' %}" alt="{{ professional.name }}" class="img-fluid w-50 rounded-circle mb-4">
+        {% endif %}
+        <h2 class="h5 text-black">{{ professional.name }}</h2>
+        <p>{{ professional.speciality }}</p>
+      </div>
+      {% empty %}
+      <div class="col-12 text-center"><p>Sem profissionais para apresentar.</p></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="site-section bg-light">
+  <div class="container">
+    <div class="row mb-5 justify-content-center">
+      <div class="col-md-6 text-center">
+        <h2 class="site-heading text-black mb-5">As nossas <strong>Parcerias</strong></h2>
+      </div>
+    </div>
+    <div class="row">
+      {% for partner in partners|slice:':6' %}
+        <div class="col-md-4 col-lg-2 mb-4 text-center">
+          {% if partner.logo_url %}
+            <img src="{{ partner.logo_url }}" alt="{{ partner.name }}" class="img-fluid partner-home-logo mb-2">
+          {% else %}
+            <div class="partner-tile-logo mx-auto mb-2">{{ partner.initials }}</div>
+          {% endif %}
+          <p class="small mb-0">{{ partner.name }}</p>
+        </div>
+      {% empty %}
+        <div class="col-12 text-center"><p>Sem parcerias ativas de momento.</p></div>
+      {% endfor %}
+    </div>
+    <div class="text-center mt-3">
+      <a href="{% url 'website:partners' %}" class="btn btn-primary">Ver parcerias</a>
+    </div>
+  </div>
+</div>
+
+<div class="promo py-5 bg-primary">
+  <div class="container text-center">
+    <span class="d-block h4 mb-3 font-weight-light text-white">Precisa de acompanhamento especializado?</span>
+    <a href="{% url 'website:book_now' %}" class="btn btn-light">Marque ja</a>
+  </div>
+</div>
+
+<div class="site-section">
+  <div class="container">
+    <div class="row mb-5 justify-content-center">
+      <div class="col-md-6 text-center">
+        <h2 class="site-heading text-black">Ultimos <strong>Destaques</strong></h2>
+      </div>
+    </div>
+    <div class="row mb-5">
+      {% for post in posts %}
+      <div class="col-md-6 col-lg-4 mb-4">
+        <div class="post-entry bg-white">
+          <div class="image">
+            <img src="{% if post.cover_url %}{{ post.cover_url }}{% else %}{% static 'website/dente/images/img_2.jpg' %}{% endif %}" alt="{{ post.title }}" class="img-fluid">
+          </div>
+          <div class="text p-4">
+            <h2 class="h5 text-black"><a href="{% url 'website:highlight_detail' post.slug %}">{{ post.title }}</a></h2>
+            <span class="text-uppercase date d-block mb-3"><small>{{ post.published|date:'d/m/Y' }}</small></span>
+            <p class="mb-0">{{ post.excerpt }}</p>
+          </div>
+        </div>
+      </div>
+      {% empty %}
+      <div class="col-12 text-center"><p>Ainda sem destaques publicados.</p></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block footer_class %} border-top{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const previewImage = document.getElementById("service-preview-image");
+    const selectors = document.querySelectorAll(".js-service-selector");
+    if (!previewImage || !selectors.length) {
+      return;
+    }
+
+    function activate(selector) {
+      selectors.forEach((item) => {
+        const isActive = item === selector;
+        item.classList.toggle("active", isActive);
+        item.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+
+      const imageUrl = selector.getAttribute("data-service-image");
+      const serviceName = selector.getAttribute("data-service-name") || "servico";
+      if (!imageUrl || previewImage.getAttribute("src") === imageUrl) {
+        return;
+      }
+
+      previewImage.classList.add("is-updating");
+      window.setTimeout(() => {
+        previewImage.setAttribute("src", imageUrl);
+        previewImage.setAttribute("alt", `Servico ${serviceName}`);
+        previewImage.classList.remove("is-updating");
+      }, 120);
+    }
+
+    selectors.forEach((selector) => {
+      selector.addEventListener("click", () => activate(selector));
+    });
+  })();
+</script>
+{% endblock %}

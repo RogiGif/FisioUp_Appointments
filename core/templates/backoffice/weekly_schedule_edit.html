@@ -1,0 +1,273 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  <form method="post">
+    {% csrf_token %}
+
+    {% include "backoffice/partials/page_header.html" with title="Horário semanal" subtitle=professional.user.get_full_name|default:professional.user.username %}
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12 col-lg-8">
+            <label class="form-label">Profissional</label>
+            <select class="form-select" id="schedule-professional-select">
+              {% for prof in professionals %}
+                <option value="{{ prof.id }}" {% if prof.id == professional.id %}selected{% endif %}>
+                  {{ prof.user.get_full_name|default:prof.user.username }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-lg-4 d-flex align-items-end">
+            <div class="form-check">
+              {{ schedule_form.is_active }}
+              <label class="form-check-label" for="{{ schedule_form.is_active.id_for_label }}">Horário ativo</label>
+            </div>
+          </div>
+        </div>
+        {% if schedule_form.non_field_errors %}
+          <div class="alert alert-danger mt-3 mb-0">{{ schedule_form.non_field_errors|striptags }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {{ work_formset.management_form }}
+    {{ break_formset.management_form }}
+
+    {% if work_formset.non_form_errors %}
+      <div class="alert alert-danger">{{ work_formset.non_form_errors|striptags }}</div>
+    {% endif %}
+    {% if break_formset.non_form_errors %}
+      <div class="alert alert-danger">{{ break_formset.non_form_errors|striptags }}</div>
+    {% endif %}
+
+    <div class="d-flex justify-content-end mb-3">
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="toggle-sunday">Mostrar domingo</button>
+    </div>
+
+    {% for row in day_rows %}
+      <div class="card mb-3 weekly-day-card {% if row.day == 6 %}d-none{% endif %}" data-weekday="{{ row.day }}">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <div class="fw-semibold">{{ row.label }}</div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-primary" data-add-work="{{ row.day }}">Adicionar bloco</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-add-break="{{ row.day }}">Adicionar pausa</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <div class="fw-semibold mb-2">Blocos de trabalho</div>
+            <div data-work-day="{{ row.day }}">
+              {% for form in row.work_forms %}
+                <div class="row g-3 align-items-end mb-2 work-row">
+                  {{ form.id }}{{ form.weekday }}
+                  <div class="col-12 col-md-4">
+                    <label class="form-label">Início</label>
+                    {{ form.start_time }}
+                    {% if form.start_time.errors %}
+                      <div class="invalid-feedback d-block">{{ form.start_time.errors|striptags }}</div>
+                    {% endif %}
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <label class="form-label">Fim</label>
+                    {{ form.end_time }}
+                    {% if form.end_time.errors %}
+                      <div class="invalid-feedback d-block">{{ form.end_time.errors|striptags }}</div>
+                    {% endif %}
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <div class="mt-4 d-flex justify-content-end">
+                      <button type="button" class="btn btn-outline-danger btn-sm remove-row">Remover</button>
+                    </div>
+                    <div class="d-none">
+                      {{ form.DELETE }}
+                    </div>
+                  </div>
+                </div>
+              {% empty %}
+                <div class="text-muted">Sem blocos configurados.</div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div>
+            <div class="fw-semibold mb-2">Pausas</div>
+            <div data-break-day="{{ row.day }}">
+              {% for form in row.break_forms %}
+                <div class="row g-3 align-items-end mb-2 break-row">
+                  {{ form.id }}{{ form.weekday }}
+                  <div class="col-12 col-md-4">
+                    <label class="form-label">Início</label>
+                    {{ form.start_time }}
+                    {% if form.start_time.errors %}
+                      <div class="invalid-feedback d-block">{{ form.start_time.errors|striptags }}</div>
+                    {% endif %}
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <label class="form-label">Fim</label>
+                    {{ form.end_time }}
+                    {% if form.end_time.errors %}
+                      <div class="invalid-feedback d-block">{{ form.end_time.errors|striptags }}</div>
+                    {% endif %}
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <div class="mt-4 d-flex justify-content-end">
+                      <button type="button" class="btn btn-outline-danger btn-sm remove-row">Remover</button>
+                    </div>
+                    <div class="d-none">
+                      {{ form.DELETE }}
+                    </div>
+                  </div>
+                </div>
+              {% empty %}
+                <div class="text-muted">Sem pausas configuradas.</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="d-flex justify-content-end">
+      <button class="btn btn-primary" type="submit">Guardar</button>
+    </div>
+  </form>
+
+  <template id="work-empty-form">
+    <div class="row g-3 align-items-end mb-2 work-row">
+      {{ work_formset.empty_form.id }}{{ work_formset.empty_form.weekday }}
+      <div class="col-12 col-md-4">
+        <label class="form-label">Início</label>
+        {{ work_formset.empty_form.start_time }}
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label">Fim</label>
+        {{ work_formset.empty_form.end_time }}
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="mt-4 d-flex justify-content-end">
+          <button type="button" class="btn btn-outline-danger btn-sm remove-row">Remover</button>
+        </div>
+        <div class="d-none">
+          {{ work_formset.empty_form.DELETE }}
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="break-empty-form">
+    <div class="row g-3 align-items-end mb-2 break-row">
+      {{ break_formset.empty_form.id }}{{ break_formset.empty_form.weekday }}
+      <div class="col-12 col-md-4">
+        <label class="form-label">Início</label>
+        {{ break_formset.empty_form.start_time }}
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label">Fim</label>
+        {{ break_formset.empty_form.end_time }}
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="mt-4 d-flex justify-content-end">
+          <button type="button" class="btn btn-outline-danger btn-sm remove-row">Remover</button>
+        </div>
+        <div class="d-none">
+          {{ break_formset.empty_form.DELETE }}
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    (function () {
+      const formEl = document.querySelector("form");
+      let isDirty = false;
+
+      const toggleSunday = document.getElementById("toggle-sunday");
+      if (toggleSunday) {
+        toggleSunday.addEventListener("click", () => {
+          const sunday = document.querySelector('.weekly-day-card[data-weekday="6"]');
+          if (!sunday) return;
+          sunday.classList.toggle("d-none");
+          toggleSunday.textContent = sunday.classList.contains("d-none") ? "Mostrar domingo" : "Ocultar domingo";
+        });
+      }
+
+      function addForm(prefix, day) {
+        const totalInput = document.getElementById(`id_${prefix}-TOTAL_FORMS`);
+        if (!totalInput) return;
+        const idx = parseInt(totalInput.value, 10);
+        const template = document.getElementById(`${prefix}-empty-form`);
+        if (!template) return;
+        let html = template.innerHTML.replace(/__prefix__/g, idx);
+        const container = document.querySelector(`[data-${prefix}-day="${day}"]`);
+        if (!container) return;
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = html;
+        const node = wrapper.firstElementChild;
+        if (!node) return;
+        container.appendChild(node);
+        totalInput.value = idx + 1;
+        const weekdayInput = node.querySelector(`input[name="${prefix}-${idx}-weekday"]`);
+        if (weekdayInput) {
+          weekdayInput.value = day;
+        }
+        const deleteInput = node.querySelector(`input[name="${prefix}-${idx}-DELETE"]`);
+        if (deleteInput) {
+          deleteInput.checked = false;
+        }
+        isDirty = true;
+      }
+
+      function handleRemoveClick(event) {
+        const btn = event.target.closest(".remove-row");
+        if (!btn) return;
+        const row = btn.closest(".work-row, .break-row");
+        if (!row) return;
+        const deleteInput = row.querySelector('input[name$="-DELETE"]');
+        if (deleteInput) {
+          deleteInput.checked = true;
+        }
+        row.classList.add("d-none");
+        isDirty = true;
+      }
+
+      document.querySelectorAll("[data-add-work]").forEach((btn) => {
+        btn.addEventListener("click", () => addForm("work", btn.getAttribute("data-add-work")));
+      });
+      document.querySelectorAll("[data-add-break]").forEach((btn) => {
+        btn.addEventListener("click", () => addForm("break", btn.getAttribute("data-add-break")));
+      });
+      document.addEventListener("click", handleRemoveClick);
+
+      if (formEl) {
+        formEl.addEventListener("change", () => {
+          isDirty = true;
+        });
+        formEl.addEventListener("submit", () => {
+          isDirty = false;
+        });
+      }
+
+      const professionalSelect = document.getElementById("schedule-professional-select");
+      if (professionalSelect) {
+        const currentValue = professionalSelect.value;
+        professionalSelect.addEventListener("change", () => {
+          if (isDirty && !window.confirm("Tens alterações por guardar. Queres sair sem guardar?")) {
+            professionalSelect.value = currentValue;
+            return;
+          }
+          const targetId = professionalSelect.value;
+          if (!targetId) return;
+          window.location.href = "{% url 'backoffice_weekly_schedule_edit' 0 %}".replace("0", targetId);
+        });
+      }
+
+      window.addEventListener("beforeunload", (event) => {
+        if (!isDirty) return;
+        event.preventDefault();
+        event.returnValue = "";
+      });
+    })();
+  </script>
+{% endblock %}

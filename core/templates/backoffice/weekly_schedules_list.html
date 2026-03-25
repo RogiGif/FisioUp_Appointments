@@ -1,0 +1,35 @@
+{% extends "backoffice/base_duralux.html" %}
+{% load backoffice_extras %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Horários" subtitle="Gestão dos horários semanais por profissional." %}
+
+  {% if rows %}
+    <div class="card">
+      {% include "backoffice/partials/table_open.html" with header_cols="Profissional,Horário semanal,Blocos,Ação"|split_csv %}
+      {% for row in rows %}
+        <tr>
+          <td>{{ row.professional.user.get_full_name|default:row.professional.user.username }}</td>
+          <td>
+            {% if row.has_schedule %}
+              {% if row.is_active %}
+                <span class="badge bg-soft-success text-success">Ativo</span>
+              {% else %}
+                <span class="badge bg-soft-warning text-warning">Inativo</span>
+              {% endif %}
+            {% else %}
+              <span class="badge bg-soft-secondary text-muted">Não configurado</span>
+            {% endif %}
+          </td>
+          <td>{{ row.block_count }}</td>
+          <td class="text-end">
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'backoffice_weekly_schedule_edit' row.professional.id %}">Editar</a>
+          </td>
+        </tr>
+      {% endfor %}
+      {% include "backoffice/partials/table_close.html" %}
+    </div>
+  {% else %}
+    {% include "backoffice/partials/empty_state.html" with title="Sem profissionais" description="Não existem profissionais disponíveis." %}
+  {% endif %}
+{% endblock %}

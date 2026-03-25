@@ -1,0 +1,113 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Stock" subtitle="Resumo de consumos e alertas." actions="" %}
+
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <a class="btn btn-primary btn-sm" href="{% url 'backoffice_stock_dashboard' %}">Resumo</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_products' %}">Produtos</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_categories' %}">Categorias</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_entries' %}">Entradas</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_adjustments' %}">Ajustes</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_movements' %}">Movimentos</a>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-6 col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Produtos em alerta</div>
+          <div class="fs-4 fw-semibold">{{ low_stock_count }}</div>
+          <div class="text-muted small">
+            <a href="{% url 'backoffice_stock_products' %}" class="text-decoration-none">Ver produtos</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6 col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Consumo da semana</div>
+          <div class="fs-4 fw-semibold">{{ consumption_week|floatformat:2 }}</div>
+          <div class="text-muted small">{{ today|date:"d/m/Y" }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6 col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Consumo do mês</div>
+          <div class="fs-4 fw-semibold">{{ consumption_month|floatformat:2 }}</div>
+          <div class="text-muted small">{{ today|date:"F Y" }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-semibold mb-3">Stock em alerta</div>
+          {% if low_stock %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>Produto</th>
+                    <th class="text-end">Stock</th>
+                    <th class="text-end">Mínimo</th>
+                    <th class="text-end">Unidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for product in low_stock %}
+                    <tr>
+                      <td>{{ product.name }}</td>
+                      <td class="text-end">{{ product.stock|floatformat:2 }}</td>
+                      <td class="text-end">{{ product.min_stock_alert|floatformat:2 }}</td>
+                      <td class="text-end">{{ product.get_unit_base_display }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="text-muted">Sem produtos em alerta.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-semibold mb-3">Top consumidos (mês)</div>
+          {% if top_consumed %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>Produto</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-end">Unidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in top_consumed %}
+                    <tr>
+                      <td>{{ row.product__name }}</td>
+                      <td class="text-end">{{ row.total_abs|floatformat:2 }}</td>
+                      <td class="text-end">{{ row.product__unit_base }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="text-muted">Sem consumos registados.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

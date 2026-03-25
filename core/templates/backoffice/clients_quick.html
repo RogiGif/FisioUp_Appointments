@@ -1,4 +1,4 @@
-{% extends "backoffice/base.html" %}
+{% extends "backoffice/base_duralux.html" %}
 {% load backoffice_extras %}
 
 {% block backoffice_content %}
@@ -20,7 +20,7 @@
           <td>{{ c.nif|default:"-" }}</td>
           <td>{% if c.user_id %}Sim{% else %}Não{% endif %}</td>
           <td class="text-end">
-            <div class="bo-btn-row">
+            <div class="d-flex flex-wrap gap-2">
               {% if c.user_id %}
                 <a class="btn btn-outline-secondary btn-sm" href="/admin/auth/user/{{ c.user_id }}/change/" target="_blank">Abrir no admin</a>
               {% endif %}

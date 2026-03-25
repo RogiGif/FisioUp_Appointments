@@ -1,0 +1,201 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <title>{{ page_title|default:'Fisio UP' }}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="{{ meta_description|default:'Website oficial da Fisio UP.' }}">
+
+    <link rel="icon" href="{% static 'core/images/favicon.png' %}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nunito+Sans:200,300,400,700,900">
+    <link rel="stylesheet" href="{% static 'website/dente/fonts/icomoon/style.css' %}">
+
+    <link rel="stylesheet" href="{% static 'website/dente/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'website/dente/css/magnific-popup.css' %}">
+    <link rel="stylesheet" href="{% static 'website/dente/css/jquery-ui.css' %}">
+    <link rel="stylesheet" href="{% static 'website/dente/css/owl.carousel.min.css' %}">
+    <link rel="stylesheet" href="{% static 'website/dente/css/owl.theme.default.min.css' %}">
+    <link rel="stylesheet" href="{% static 'website/dente/css/bootstrap-datepicker.css' %}">
+    <link rel="stylesheet" href="{% static 'website/dente/fonts/flaticon/font/flaticon.css' %}">
+    <link rel="stylesheet" href="{% static 'website/dente/css/aos.css' %}">
+    <link rel="stylesheet" href="{% static 'website/dente/css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'website/dente/custom.css' %}">
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body>
+
+  <div class="site-wrap">
+
+    <div class="site-mobile-menu">
+      <div class="site-mobile-menu-header">
+        <div class="site-mobile-menu-close mt-3">
+          <span class="icon-close2 js-menu-toggle"></span>
+        </div>
+      </div>
+      <div class="site-mobile-menu-body"></div>
+    </div>
+
+    <div class="site-navbar-wrap">
+      <div class="site-navbar-top">
+        <div class="container py-2">
+          <div class="row align-items-center">
+            <div class="col-6">
+              <a href="https://www.facebook.com/fisioup13/" class="p-2 pl-0" target="_blank" rel="noopener noreferrer" aria-label="Facebook Fisio UP"><span class="icon-facebook"></span></a>
+            </div>
+            <div class="col-6">
+              <div class="d-flex ml-auto align-items-center top-contact-links">
+                <a href="mailto:{{ clinic.clinic_email }}" class="d-flex align-items-center ml-auto mr-4">
+                  <span class="icon-envelope mr-2"></span>
+                  <span class="d-none d-md-inline-block">{{ clinic.clinic_email }}</span>
+                </a>
+                <a href="tel:{{ clinic.phone|cut:' ' }}" class="d-flex align-items-center mr-3">
+                  <span class="icon-phone mr-2"></span>
+                  <span class="d-none d-md-inline-block">{{ clinic.phone }}</span>
+                </a>
+                <a href="{% url 'website:book_now' %}" class="btn btn-primary btn-sm top-booking-btn d-none d-lg-inline-block">Marque ja</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="site-navbar">
+        <div class="container py-1">
+          <div class="row align-items-center">
+            <div class="col-2">
+              <h2 class="mb-0 site-logo">
+                <a href="{% url 'website:home' %}">
+                  <img src="{% static 'core/images/logo_fifioUP_white.svg' %}" alt="{{ clinic.clinic_name }}" class="fisio-logo">
+                </a>
+              </h2>
+            </div>
+            <div class="col-10">
+              <nav class="site-navigation text-right" role="navigation">
+                <div class="d-inline-block d-lg-none ml-md-0 mr-auto py-3">
+                  <a href="#" class="site-menu-toggle js-menu-toggle text-white"><span class="icon-menu h3"></span></a>
+                </div>
+
+                <ul class="site-menu js-clone-nav d-none d-lg-flex align-items-center justify-content-end flex-nowrap">
+                  <li{% if active_page == 'home' %} class="active"{% endif %}><a href="{% url 'website:home' %}">Home</a></li>
+                  <li{% if active_page == 'about' %} class="active"{% endif %}><a href="{% url 'website:about' %}">Sobre nos</a></li>
+                  <li{% if active_page == 'team' %} class="active"{% endif %}><a href="{% url 'website:team' %}">A equipa</a></li>
+                  <li{% if active_page == 'services' %} class="active"{% endif %}><a href="{% url 'website:services' %}">Servicos</a></li>
+                  <li{% if active_page == 'partners' %} class="active"{% endif %}><a href="{% url 'website:partners' %}">Parcerias</a></li>
+                  <li{% if active_page == 'highlights' %} class="active"{% endif %}><a href="{% url 'website:highlights' %}">Destaques</a></li>
+                  <li{% if active_page == 'contacts' %} class="active"{% endif %}><a href="{% url 'website:contacts' %}">Contactos</a></li>
+                </ul>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if messages %}
+      <div class="container mt-3">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+
+    <footer class="site-footer{% block footer_class %}{% endblock %}">
+      <div class="container">
+        <div class="row">
+          <div class="col-lg-4 mb-5 mb-lg-0">
+            <div class="row mb-5">
+              <div class="col-md-12">
+                <h3 class="footer-heading mb-4">Navegacao</h3>
+              </div>
+              <div class="col-md-6 col-lg-6">
+                <ul class="list-unstyled">
+                  <li><a href="{% url 'website:home' %}">Home</a></li>
+                  <li><a href="{% url 'website:services' %}">Servicos</a></li>
+                  <li><a href="{% url 'website:highlights' %}">Destaques</a></li>
+                  <li><a href="{% url 'website:team' %}">A equipa</a></li>
+                </ul>
+              </div>
+              <div class="col-md-6 col-lg-6">
+                <ul class="list-unstyled">
+                  <li><a href="{% url 'website:about' %}">Sobre nos</a></li>
+                  <li><a href="{% url 'website:partners' %}">Parcerias</a></li>
+                  <li><a href="{% url 'website:contacts' %}">Contactos</a></li>
+                  <li><a href="{% url 'website:book_now' %}">Marque ja</a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-4">
+            <div class="mb-5">
+              <h3 class="footer-heading mb-4">Destaques Recentes</h3>
+              <div class="block-25">
+                <ul class="list-unstyled">
+                  {% for post in recent_posts %}
+                    <li class="mb-3">
+                      <a href="{% url 'website:highlight_detail' post.slug %}" class="d-flex">
+                        <figure class="image mr-4">
+                          <img src="{% if post.cover_url %}{{ post.cover_url }}{% else %}{% static 'website/dente/images/replacements/fisioup_hero_background.png' %}{% endif %}" alt="{{ post.title }}" class="img-fluid">
+                        </figure>
+                        <div class="text">
+                          <span class="small text-uppercase date">{{ post.published|date:'d M, Y' }}</span>
+                          <h3 class="heading font-weight-light">{{ post.title }}</h3>
+                        </div>
+                      </a>
+                    </li>
+                  {% empty %}
+                    <li class="text-white-50">Sem destaques publicados.</li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-4 mb-5 mb-lg-0">
+            <div class="mb-5">
+              <h3 class="footer-heading mb-2">{{ clinic.clinic_name }}</h3>
+              <p>{{ clinic.address }}</p>
+              <p class="mb-1"><a href="mailto:{{ clinic.clinic_email }}">{{ clinic.clinic_email }}</a></p>
+              <p><a href="tel:{{ clinic.phone|cut:' ' }}">{{ clinic.phone }}</a></p>
+            </div>
+
+            <div class="row">
+              <div class="col-md-12">
+                <h3 class="footer-heading mb-4">Siga-nos</h3>
+                <div>
+                  <a href="https://www.facebook.com/fisioup13/" class="pl-0 pr-3" target="_blank" rel="noopener noreferrer" aria-label="Facebook Fisio UP"><span class="icon-facebook"></span></a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row pt-5 mt-5 text-center">
+          <div class="col-md-12">
+            <p>
+              Copyright &copy; {{ current_year }} {{ clinic.clinic_name }}. Todos os direitos reservados.
+            </p>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="{% static 'website/dente/js/jquery-3.3.1.min.js' %}"></script>
+  <script src="{% static 'website/dente/js/jquery-migrate-3.0.1.min.js' %}"></script>
+  <script src="{% static 'website/dente/js/jquery-ui.js' %}"></script>
+  <script src="{% static 'website/dente/js/popper.min.js' %}"></script>
+  <script src="{% static 'website/dente/js/bootstrap.min.js' %}"></script>
+  <script src="{% static 'website/dente/js/owl.carousel.min.js' %}"></script>
+  <script src="{% static 'website/dente/js/jquery.stellar.min.js' %}"></script>
+  <script src="{% static 'website/dente/js/jquery.countdown.min.js' %}"></script>
+  <script src="{% static 'website/dente/js/jquery.magnific-popup.min.js' %}"></script>
+  <script src="{% static 'website/dente/js/bootstrap-datepicker.min.js' %}"></script>
+  <script src="{% static 'website/dente/js/aos.js' %}"></script>
+  <script src="{% static 'website/dente/js/main.js' %}"></script>
+  {% block extra_js %}{% endblock %}
+
+  </body>
+</html>

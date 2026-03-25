@@ -1,11 +1,11 @@
-{% extends "backoffice/base.html" %}
+{% extends "backoffice/base_duralux.html" %}
 
 {% block backoffice_content %}
   {% include "backoffice/partials/page_header.html" with title=title %}
 
   <div class="card backoffice-form-card">
     <div class="card-body">
-      <form method="post" novalidate>
+      <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
         {% if return_to %}
           <input type="hidden" name="return_to" value="{{ return_to }}">
@@ -18,31 +18,20 @@
           {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors }}</div>{% endif %}
         </div>
 
+        <div class="mb-3">
+          <label class="form-label">Imagem / logo</label>
+          {{ form.logo }}
+          {% if form.instance.logo %}
+            <div class="mt-2">
+              <img src="{{ form.instance.logo.url }}" alt="Logo da parceria" style="max-height:72px;width:auto;" />
+            </div>
+          {% endif %}
+          {% if form.logo.errors %}<div class="text-danger small">{{ form.logo.errors }}</div>{% endif %}
+        </div>
+
         <div class="mb-3 form-check">
           {{ form.active }}
           <label class="form-check-label" for="{{ form.active.id_for_label }}">Ativo</label>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Tipo de desconto</label>
-          {{ form.discount_type }}
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Percentagem</label>
-          {{ form.discount_percent }}
-          {% if form.discount_percent.errors %}<div class="text-danger small">{{ form.discount_percent.errors }}</div>{% endif %}
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Valor fixo</label>
-          {{ form.discount_amount }}
-          {% if form.discount_amount.errors %}<div class="text-danger small">{{ form.discount_amount.errors }}</div>{% endif %}
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Etiqueta</label>
-          {{ form.discount_label }}
         </div>
 
         <div class="mb-3">

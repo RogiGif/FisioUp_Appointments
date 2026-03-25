@@ -1,0 +1,12 @@
+Olá {{ client_name }},
+
+Informamos que foi criada uma conta de acesso ao portal de marcações da Fisio-UP.
+
+Portal: {{ portal_url }}
+Utilizador: {{ username }}
+Password provisória: {{ password }}
+
+Por motivos de segurança, recomendamos que altere a password no primeiro acesso, na área de perfil.
+
+Com os melhores cumprimentos,
+Equipa Fisio-UP

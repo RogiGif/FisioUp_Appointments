@@ -35,88 +35,190 @@
         </div>
     </div>
 
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
     {% if form.non_field_errors %}
         <div class="alert alert-warning">{{ form.non_field_errors }}</div>
     {% endif %}
 
-    <form id="professional-profile-form" method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="main-content">
-            <div class="row">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="wd-80 ht-80 position-relative overflow-hidden border border-gray-2 rounded-circle bg-light">
-                                        {% if professional.profile_photo %}
-                                            <img src="{{ professional.profile_photo.url }}" alt="Foto de perfil" class="img-fluid rounded-circle h-100 w-100">
-                                        {% else %}
-                                            <img src="{% static 'duralux/assets/images/avatar/1.png' %}" alt="Foto de perfil" class="img-fluid rounded-circle h-100 w-100">
-                                        {% endif %}
-                                    </div>
-                                    <div>
-                                        <div class="fw-semibold">{{ request.user.get_full_name|default:request.user.username }}</div>
-                                        <div class="fs-12 text-muted">{{ request.user.email|default:"-" }}</div>
-                                    </div>
+    <div class="main-content">
+        <div class="row">
+            <div class="col-xxl-4 col-xl-5">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="mb-4 text-center">
+                            <div class="wd-150 ht-150 mx-auto mb-3 position-relative">
+                                <div class="avatar-image wd-150 ht-150 border border-5 border-gray-3">
+                                    {% if professional.profile_photo %}
+                                        <img src="{{ professional.profile_photo.url }}" alt="Foto de perfil" class="w-100 h-100" style="object-fit:cover;">
+                                    {% else %}
+                                        <div class="bg-soft-primary text-primary fw-bold d-flex align-items-center justify-content-center" style="width:100%;height:100%;border-radius:50%;font-size:72px;line-height:1;">
+                                            {{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="wd-30 ht-30 bg-success text-white rounded-circle d-flex align-items-center justify-content-center position-absolute translate-middle" style="top: 88%; right: 6px;">
+                                    <i class="bi bi-patch-check-fill" style="font-size:16px;line-height:1;"></i>
                                 </div>
                             </div>
+                            <div class="mb-4">
+                                <a href="javascript:void(0);" class="fs-14 fw-bold d-block">{{ request.user.get_full_name|default:request.user.username }}</a>
+                                <a href="javascript:void(0);" class="fs-12 fw-normal text-muted d-block">{{ request.user.email|default:"-" }}</a>
+                            </div>
+                            <div class="fs-12 fw-normal text-muted text-center d-flex flex-wrap gap-3 mb-4">
+                                <div class="flex-fill py-3 px-4 rounded-1 d-none d-sm-block border border-dashed border-gray-5">
+                                    <h6 class="fs-15 fw-bolder">{{ professional.phone|default:"—" }}</h6>
+                                    <p class="fs-12 text-muted mb-0">Telefone</p>
+                                </div>
+                                <div class="flex-fill py-3 px-4 rounded-1 d-none d-sm-block border border-dashed border-gray-5">
+                                    <h6 class="fs-15 fw-bolder">{{ professional.speciality|default:"—" }}</h6>
+                                    <p class="fs-12 text-muted mb-0">Especialidade</p>
+                                </div>
+                                <div class="flex-fill py-3 px-4 rounded-1 d-none d-sm-block border border-dashed border-gray-5">
+                                    <h6 class="fs-15 fw-bolder">{{ request.user.email|default:"—" }}</h6>
+                                    <p class="fs-12 text-muted mb-0">Email</p>
+                                </div>
+                            </div>
+                        </div>
+                        <ul class="list-unstyled mb-4">
+                            <li class="hstack justify-content-between mb-4">
+                                <span class="text-muted fw-medium hstack gap-3"><i class="feather-phone"></i>Telefone</span>
+                                <span class="float-end">{{ professional.phone|default:"-" }}</span>
+                            </li>
+                            <li class="hstack justify-content-between mb-4">
+                                <span class="text-muted fw-medium hstack gap-3"><i class="feather-briefcase"></i>Especialidade</span>
+                                <span class="float-end">{{ professional.speciality|default:"-" }}</span>
+                            </li>
+                            <li class="hstack justify-content-between mb-0">
+                                <span class="text-muted fw-medium hstack gap-3"><i class="feather-mail"></i>Email</span>
+                                <span class="float-end">{{ request.user.email|default:"-" }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xxl-8 col-xl-7">
+                <div class="card border-top-0">
+                    <div class="card-header p-0">
+                        <ul class="nav nav-tabs flex-wrap w-100 text-center" role="tablist">
+                            <li class="nav-item flex-fill border-top" role="presentation">
+                                <a href="javascript:void(0);" class="nav-link {% if active_tab != 'password' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#profileTab" role="tab">Perfil</a>
+                            </li>
+                            <li class="nav-item flex-fill border-top" role="presentation">
+                                <a href="javascript:void(0);" class="nav-link {% if active_tab == 'password' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#passwordTab" role="tab">Password</a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="tab-content">
+                        <div class="tab-pane fade {% if active_tab != 'password' %}show active{% endif %}" id="profileTab" role="tabpanel">
+                            <form id="professional-profile-form" method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                <div class="card-body">
+                                    <div class="row g-4">
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Primeiro nome</label>
+                                            {{ form.first_name }}
+                                            {% if form.first_name.errors %}
+                                                <div class="invalid-feedback d-block">{{ form.first_name.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Último nome</label>
+                                            {{ form.last_name }}
+                                            {% if form.last_name.errors %}
+                                                <div class="invalid-feedback d-block">{{ form.last_name.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Especialidade</label>
+                                            {{ form.speciality }}
+                                            {% if form.speciality.errors %}
+                                                <div class="invalid-feedback d-block">{{ form.speciality.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Género</label>
+                                            {{ form.gender }}
+                                            {% if form.gender.errors %}
+                                                <div class="invalid-feedback d-block">{{ form.gender.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Telefone</label>
+                                            {{ form.phone }}
+                                            {% if form.phone.errors %}
+                                                <div class="invalid-feedback d-block">{{ form.phone.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">E-mail</label>
+                                            {{ form.email }}
+                                            {% if form.email.errors %}
+                                                <div class="invalid-feedback d-block">{{ form.email.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label">Foto de perfil</label>
+                                            {{ form.profile_photo }}
+                                            {% if form.profile_photo.errors %}
+                                                <div class="invalid-feedback d-block">{{ form.profile_photo.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="mt-4 d-flex flex-wrap gap-2">
+                                        <button class="btn btn-primary" type="submit">Guardar</button>
+                                        <a class="btn btn-outline-secondary" href="{% url 'professional_calendar' %}">Voltar</a>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
 
-                            <div class="row g-4">
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label">Primeiro nome</label>
-                                    {{ form.first_name }}
-                                    {% if form.first_name.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.first_name.errors|striptags }}</div>
+                        <div class="tab-pane fade {% if active_tab == 'password' %}show active{% endif %}" id="passwordTab" role="tabpanel">
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="change_password">
+                                <div class="card-body">
+                                    {% if password_form.non_field_errors %}
+                                        <div class="alert alert-warning">{{ password_form.non_field_errors }}</div>
                                     {% endif %}
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <label class="form-label">Password atual</label>
+                                            <input type="password" name="old_password" class="form-control{% if password_form.old_password.errors %} is-invalid{% endif %}" autocomplete="current-password">
+                                            {% if password_form.old_password.errors %}
+                                                <div class="invalid-feedback d-block">{{ password_form.old_password.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Nova password</label>
+                                            <input type="password" name="new_password1" class="form-control{% if password_form.new_password1.errors %} is-invalid{% endif %}" autocomplete="new-password">
+                                            {% if password_form.new_password1.errors %}
+                                                <div class="invalid-feedback d-block">{{ password_form.new_password1.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Confirmar password</label>
+                                            <input type="password" name="new_password2" class="form-control{% if password_form.new_password2.errors %} is-invalid{% endif %}" autocomplete="new-password">
+                                            {% if password_form.new_password2.errors %}
+                                                <div class="invalid-feedback d-block">{{ password_form.new_password2.errors|striptags }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="mt-4 d-flex flex-wrap gap-2">
+                                        <button class="btn btn-primary" type="submit">Atualizar password</button>
+                                    </div>
                                 </div>
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label">Último nome</label>
-                                    {{ form.last_name }}
-                                    {% if form.last_name.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.last_name.errors|striptags }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label">Especialidade</label>
-                                    {{ form.speciality }}
-                                    {% if form.speciality.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.speciality.errors|striptags }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label">Género</label>
-                                    {{ form.gender }}
-                                    {% if form.gender.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.gender.errors|striptags }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label">Telefone</label>
-                                    {{ form.phone }}
-                                    {% if form.phone.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.phone.errors|striptags }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label">E-mail</label>
-                                    {{ form.email }}
-                                    {% if form.email.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.email.errors|striptags }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-12">
-                                    <label class="form-label">Foto de perfil</label>
-                                    {{ form.profile_photo }}
-                                    {% if form.profile_photo.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.profile_photo.errors|striptags }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
+                            </form>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </form>
+    </div>
 {% endblock %}

@@ -1,51 +1,391 @@
-{% extends "backoffice/base.html" %}
+{% extends "core/base_duralux.html" %}
 
-{% block title %}Turma{% endblock %}
-
-{% block backoffice_content %}
-{% with page_title="Turma · "|add:session.service.name page_subtitle=session.date|date:"M. j, Y"|add:" às "|add:session.time|time:"H:i" %}
-  {% include "backoffice/partials/page_header.html" with title=page_title subtitle=page_subtitle %}
-{% endwith %}
-
-  <div class="card">
-    <div class="card-body">
-      <div class="d-flex flex-wrap gap-2 mb-3">
-        <span class="badge text-bg-light">
-          Profissional: <strong>{% if session.professional %}{{ session.professional.user.get_full_name|default:session.professional.user.username }}{% else %}—{% endif %}</strong>
-        </span>
-        <span class="badge text-bg-light">Vagas: <strong>{{ session.spots_left }}/{{ session.capacity_value }}</strong></span>
-        <span class="badge text-bg-light">Estado: <strong>{{ session.get_status_display }}</strong></span>
-      </div>
-
-      <h3 class="h6 mb-2">Inscritos</h3>
-      {% if enrolments %}
-        <div class="table-responsive">
-          <table class="table table-sm table-hover mb-0">
-            <thead>
-              <tr>
-                <th>Cliente</th>
-                <th>Username</th>
-                <th>Telefone</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for e in enrolments %}
-                <tr>
-                  <td>{{ e.client.client_profile.full_name|default:e.client.username }}</td>
-                  <td>{{ e.client.username }}</td>
-                  <td>{{ e.client.client_profile.phone|default:"—" }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+{% block content %}
+    {% url 'group_sessions_admin_list' as group_sessions_admin_list_url %}
+    {% with back_url=return_to|default:group_sessions_admin_list_url %}
+        <div class="page-header group-sessions-page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Turma · {{ session.name|default:session.service.name }}</h5>
+            </div>
+            <ul class="breadcrumb">
+                {% if is_professional_view %}
+                    <li class="breadcrumb-item"><a href="{% url 'professional_calendar' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'professional_group_sessions' %}">Turmas</a></li>
+                {% else %}
+                    <li class="breadcrumb-item"><a href="{% url 'backoffice_dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'group_sessions_admin_list' %}">Turmas</a></li>
+                {% endif %}
+                <li class="breadcrumb-item">{{ session.date|date:"d/m/Y" }} às {{ session.time|time:"H:i" }}</li>
+            </ul>
         </div>
-      {% else %}
-        <div class="text-muted">Sem inscrições.</div>
-      {% endif %}
+            <div class="page-header-right ms-auto">
+                <div class="page-header-right-items">
+                    <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                        {% if can_manage_session and session.schedule_id %}
+                            <a class="btn btn-outline-primary" href="{% url 'group_schedule_edit' session.schedule_id %}?return_to={{ request.get_full_path|urlencode }}">Editar turma</a>
+                        {% endif %}
+                        <a class="btn btn-outline-secondary" href="{{ back_url }}">Voltar</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endwith %}
+
+    <div class="main-content">
+        <div class="row">
+            <div class="col-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <span class="badge text-bg-light">
+                                Profissional: <strong>{% if session.professional %}{{ session.professional.user.get_full_name|default:session.professional.user.username }}{% else %}—{% endif %}</strong>
+                            </span>
+                            <span class="badge text-bg-light">Vagas: <strong>{{ session.spots_left }}/{{ session.capacity_value }}</strong></span>
+                            <span class="badge text-bg-light">Estado: <strong>{{ session.get_status_display }}</strong></span>
+                        </div>
+
+                        {% if can_manage_session %}
+                            <div class="d-flex flex-wrap gap-2 mb-4">
+                                {% if session.status == "scheduled" %}
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="complete_session">
+                                    <button class="btn btn-sm btn-outline-success" type="submit">Marcar como concluída</button>
+                                </form>
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="cancel_session">
+                                    <button class="btn btn-sm btn-outline-danger" type="submit">Cancelar sessão</button>
+                                </form>
+                                {% if session.schedule and session.schedule.is_active %}
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="cancel_schedule">
+                                    <button class="btn btn-sm btn-outline-danger" type="submit">Cancelar recorrência</button>
+                                </form>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+
+                        {% if can_manage_session %}
+                            <div class="card border-0 mb-4">
+                                <div class="card-body p-0">
+                                    <h6 class="mb-3">Adicionar cliente</h6>
+                                    <form method="post" class="d-flex flex-column flex-lg-row gap-2 align-items-start">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="add_enrolment">
+                                        <input type="hidden" name="client_id" id="group-session-client-id">
+                                        <input type="hidden" name="client_profile_id" id="group-session-client-profile-id">
+                                        <div class="flex-grow-1 w-100">
+                                            <input type="text" class="form-control" id="group-session-client-search" placeholder="Pesquisar cliente...">
+                                            <div class="small text-muted mt-1">Escreve pelo menos 2 letras.</div>
+                                            <div class="list-group mt-2 d-none" id="group-session-client-results"></div>
+                                        </div>
+                                        <button class="btn btn-primary" type="submit">Adicionar</button>
+                                    </form>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <h3 class="h6 mb-2">Inscritos</h3>
+                        {% if booked_enrolments %}
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Cliente</th>
+                                            <th>Username</th>
+                                            <th>Telefone</th>
+                                            <th>Estado</th>
+                                            <th class="text-end">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for e in booked_enrolments %}
+                                            <tr>
+                                                <td>{{ e.client.client_profile.full_name|default:e.client.username }}</td>
+                                                <td>{{ e.client.username }}</td>
+                                                <td>{{ e.client.client_profile.phone|default:"—" }}</td>
+                                                <td>{{ e.get_status_display }}</td>
+                                                <td class="text-end">
+                                                    <div class="d-inline-flex gap-1">
+                                                        <form method="post">
+                                                            {% csrf_token %}
+                                                            <input type="hidden" name="action" value="mark_attended">
+                                                            <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                            <button class="btn btn-sm btn-outline-success" type="submit">Presença</button>
+                                                        </form>
+                                                        <form method="post">
+                                                            {% csrf_token %}
+                                                            <input type="hidden" name="action" value="mark_no_show">
+                                                            <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                            <button class="btn btn-sm btn-outline-warning" type="submit">Falta</button>
+                                                        </form>
+                                                        {% if can_manage_session %}
+                                                        <form method="post">
+                                                            {% csrf_token %}
+                                                            <input type="hidden" name="action" value="cancel_enrolment">
+                                                            <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                            <button class="btn btn-sm btn-outline-danger" type="submit">Remover</button>
+                                                        </form>
+                                                        {% endif %}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-muted">Sem inscrições.</div>
+                        {% endif %}
+
+                        <h3 class="h6 mt-4 mb-2">Lista de espera</h3>
+                        {% if waitlist_enrolments %}
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Cliente</th>
+                                            <th>Username</th>
+                                            <th>Telefone</th>
+                                            <th class="text-end">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for e in waitlist_enrolments %}
+                                            <tr>
+                                                <td>{{ e.client.client_profile.full_name|default:e.client.username }}</td>
+                                                <td>{{ e.client.username }}</td>
+                                                <td>{{ e.client.client_profile.phone|default:"—" }}</td>
+                                                <td class="text-end">
+                                                    <div class="d-inline-flex gap-1">
+                                                        {% if can_manage_session %}
+                                                        <form method="post">
+                                                            {% csrf_token %}
+                                                            <input type="hidden" name="action" value="promote_waitlist">
+                                                            <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                            <button class="btn btn-sm btn-outline-primary" type="submit">Promover</button>
+                                                        </form>
+                                                        <form method="post">
+                                                            {% csrf_token %}
+                                                            <input type="hidden" name="action" value="cancel_enrolment">
+                                                            <input type="hidden" name="enrolment_id" value="{{ e.id }}">
+                                                            <button class="btn btn-sm btn-outline-danger" type="submit">Remover</button>
+                                                        </form>
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-muted">Sem lista de espera.</div>
+                        {% endif %}
+
+                        {% if can_manage_session %}
+                            <h3 class="h6 mt-4 mb-2">Mensalidades da turma</h3>
+                            <form method="get" class="row g-2 align-items-end mb-3">
+                                {% if return_to %}
+                                    <input type="hidden" name="return_to" value="{{ return_to }}">
+                                {% endif %}
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Mês de faturação</label>
+                                    <input class="form-control" type="month" name="billing_month" value="{{ billing_month }}">
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <button class="btn btn-outline-primary" type="submit">Ver mês</button>
+                                </div>
+                            </form>
+
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <span class="badge text-bg-light">Total: <strong>{{ monthly_totals.total|floatformat:2 }} €</strong></span>
+                                <span class="badge text-bg-light">Pagas: <strong>{{ monthly_totals.paid_count }} ({{ monthly_totals.paid|floatformat:2 }} €)</strong></span>
+                                <span class="badge text-bg-light">Em dívida: <strong>{{ monthly_totals.unpaid_count }} ({{ monthly_totals.unpaid|floatformat:2 }} €)</strong></span>
+                            </div>
+
+                            {% if monthly_charges %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Cliente</th>
+                                                <th>Mensalidade base</th>
+                                                <th>Desconto</th>
+                                                <th>Valor final</th>
+                                                <th>Estado</th>
+                                                <th class="text-end">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for charge in monthly_charges %}
+                                                <tr>
+                                                    <td>{{ charge.client.client_profile.full_name|default:charge.client.username }}</td>
+                                                    <td>{{ charge.base_price|floatformat:2 }} €</td>
+                                                    <td>
+                                                        {% if charge.discount_type == "percent" %}
+                                                            {{ charge.discount_value|floatformat:2 }}%
+                                                        {% elif charge.discount_type == "fixed" %}
+                                                            {{ charge.discount_value|floatformat:2 }} €
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="fw-semibold">{{ charge.final_price|floatformat:2 }} €</td>
+                                                    <td>
+                                                        {% if charge.status == "paid" %}
+                                                            <span class="badge text-bg-success">Paga</span>
+                                                        {% elif charge.status == "unpaid" %}
+                                                            <span class="badge text-bg-warning">Em dívida</span>
+                                                        {% else %}
+                                                            <span class="badge text-bg-secondary">{{ charge.get_status_display }}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="text-end">
+                                                        {% if charge.status == "paid" %}
+                                                            <form method="post" class="d-inline">
+                                                                {% csrf_token %}
+                                                                <input type="hidden" name="action" value="mark_monthly_unpaid">
+                                                                <input type="hidden" name="charge_id" value="{{ charge.id }}">
+                                                                <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                                                {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                                                <button class="btn btn-sm btn-outline-warning" type="submit">Marcar em dívida</button>
+                                                            </form>
+                                                        {% else %}
+                                                            <form method="post" class="d-inline">
+                                                                {% csrf_token %}
+                                                                <input type="hidden" name="action" value="mark_monthly_paid">
+                                                                <input type="hidden" name="charge_id" value="{{ charge.id }}">
+                                                                <input type="hidden" name="billing_month" value="{{ billing_month }}">
+                                                                {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                                                                <button class="btn btn-sm btn-outline-success" type="submit">Marcar paga</button>
+                                                            </form>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="text-muted">Sem mensalidades geradas para este mês.</div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="card-body border-top">
-      {% url 'group_sessions_admin_list' as group_sessions_admin_list_url %}
-      <a class="btn btn-outline-secondary" href="{{ return_to|default:group_sessions_admin_list_url }}">Voltar</a>
-    </div>
-  </div>
+
+    <style>
+        .group-sessions-page-header {
+            position: static;
+            top: auto;
+            z-index: auto;
+        }
+    </style>
+
+    {% if can_manage_session %}
+        <script>
+            (function () {
+                const input = document.getElementById("group-session-client-search");
+                const results = document.getElementById("group-session-client-results");
+                const hidden = document.getElementById("group-session-client-id");
+                const hiddenProfile = document.getElementById("group-session-client-profile-id");
+                const url = "{% url 'backoffice_api_clients_search' %}";
+                if (!input || !results || !hidden || !hiddenProfile) return;
+
+                function clearResults() {
+                    results.innerHTML = "";
+                    results.classList.add("d-none");
+                }
+                function renderResults(items) {
+                    results.innerHTML = "";
+                    if (!items.length) {
+                        const empty = document.createElement("div");
+                        empty.className = "list-group-item text-muted";
+                        empty.textContent = "Sem resultados.";
+                        results.appendChild(empty);
+                        results.classList.remove("d-none");
+                        return;
+                    }
+                    items.forEach((item) => {
+                        const btn = document.createElement("button");
+                        btn.type = "button";
+                        btn.className = "list-group-item list-group-item-action";
+                        btn.textContent = item.label;
+                        if (!item.user_id || item.has_user === false) {
+                            btn.textContent += " (sem login)";
+                        }
+                        btn.addEventListener("click", () => {
+                            input.value = item.label;
+                            hidden.value = item.user_id || "";
+                            hiddenProfile.value = item.id || "";
+                            clearResults();
+                        });
+                        results.appendChild(btn);
+                    });
+                    results.classList.remove("d-none");
+                }
+
+                const debounce = (window.AppUtils && typeof window.AppUtils.debounce === "function")
+                    ? window.AppUtils.debounce
+                    : ((fn, wait) => {
+                        let timer = null;
+                        const wrapped = () => {
+                            if (timer) window.clearTimeout(timer);
+                            timer = window.setTimeout(fn, wait);
+                        };
+                        wrapped.cancel = () => {
+                            if (timer) window.clearTimeout(timer);
+                        };
+                        return wrapped;
+                    });
+
+                const debouncedSearch = debounce(() => {
+                    fetch(`${url}?q=${encodeURIComponent((input.value || "").trim())}`)
+                        .then((res) => res.json())
+                        .then((data) => renderResults(data.results || []))
+                        .catch(() => clearResults());
+                }, 250);
+
+                input.addEventListener("input", () => {
+                    hidden.value = "";
+                    hiddenProfile.value = "";
+                    const term = (input.value || "").trim();
+                    if (term.length < 2) {
+                        debouncedSearch.cancel();
+                        clearResults();
+                        return;
+                    }
+                    debouncedSearch();
+                });
+                input.addEventListener("keydown", (event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    debouncedSearch.cancel();
+                    const term = (input.value || "").trim();
+                    if (term.length < 2) {
+                        clearResults();
+                        return;
+                    }
+                    fetch(`${url}?q=${encodeURIComponent(term)}`)
+                        .then((res) => res.json())
+                        .then((data) => renderResults(data.results || []))
+                        .catch(() => clearResults());
+                });
+                document.addEventListener("click", (event) => {
+                    if (!results.contains(event.target) && event.target !== input) {
+                        clearResults();
+                    }
+                });
+            })();
+        </script>
+    {% endif %}
 {% endblock %}

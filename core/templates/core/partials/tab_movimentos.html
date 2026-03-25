@@ -5,41 +5,110 @@
                 <span class="d-block mb-2">Movimentos:</span>
                 <span class="fs-12 fw-normal text-muted text-truncate-1-line">Resumo financeiro do cliente.</span>
             </h5>
-            <a href="javascript:void(0);" class="btn btn-sm btn-light-brand">Resumo</a>
+            <form method="get" class="d-flex gap-2 align-items-center">
+                <input type="hidden" name="tab" value="movements">
+                <label class="mb-0 fs-12 text-muted" for="movementsStatusFilter">Estado</label>
+                <select id="movementsStatusFilter" name="movement_status" class="form-select form-select-sm" onchange="this.form.submit();">
+                    {% for status_code, status_label in movement_status_options %}
+                        <option value="{{ status_code }}" {% if movement_status == status_code %}selected{% endif %}>{{ status_label }}</option>
+                    {% endfor %}
+                </select>
+                <label class="mb-0 fs-12 text-muted" for="movementsPerPage">Mostrar</label>
+                <select id="movementsPerPage" name="movement_per_page" class="form-select form-select-sm" onchange="this.form.submit();">
+                    {% for opt in movement_per_page_options %}
+                        <option value="{{ opt }}" {% if movement_per_page == opt %}selected{% endif %}>{{ opt }}/página</option>
+                    {% endfor %}
+                </select>
+            </form>
         </div>
         <div class="row g-3">
             <div class="col-md-3">
                 <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
                     <div class="fs-12 text-muted">Total gasto</div>
-                    <div class="fs-16 fw-bold">—</div>
+                    <div class="fs-16 fw-bold">{{ total_spent|default:0|floatformat:2 }} €</div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
                     <div class="fs-12 text-muted">Mês atual</div>
-                    <div class="fs-16 fw-bold">—</div>
+                    <div class="fs-16 fw-bold">{{ current_month_total|default:0|floatformat:2 }} €</div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
                     <div class="fs-12 text-muted">Saldo</div>
-                    <div class="fs-16 fw-bold">—</div>
+                    <div class="fs-16 fw-bold">{{ balance|default:0|floatformat:2 }} €</div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
-                    <div class="fs-12 text-muted">Estado</div>
-                    <div class="fs-16 fw-bold">—</div>
+                    <div class="fs-12 text-muted">Em dívida</div>
+                    <div class="fs-16 fw-bold">{{ debt_total|default:0|floatformat:2 }} €</div>
+                </div>
+            </div>
+        </div>
+        <div class="row g-3 mt-2">
+            <div class="col-md-3">
+                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                    <div class="fs-12 text-muted">Criado por</div>
+                    <div class="fs-14 fw-semibold">
+                        {% if client_profile and client_profile.created_by %}
+                            {{ client_profile.created_by.get_full_name|default:client_profile.created_by.username }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                    <div class="fs-12 text-muted">Criado em</div>
+                    <div class="fs-14 fw-semibold">{{ client_profile.created_at|date:"d/m/Y H:i"|default:"—" }}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                    <div class="fs-12 text-muted">Atualizado por</div>
+                    <div class="fs-14 fw-semibold">
+                        {% if client_profile and client_profile.updated_by %}
+                            {{ client_profile.updated_by.get_full_name|default:client_profile.updated_by.username }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                    <div class="fs-12 text-muted">Atualizado em</div>
+                    <div class="fs-14 fw-semibold">{{ client_profile.updated_at|date:"d/m/Y H:i"|default:"—" }}</div>
                 </div>
             </div>
         </div>
     </div>
     <hr class="my-0">
     <div class="card-body">
+        <form id="movementsBulkForm" method="post">
+            {% csrf_token %}
+            <input type="hidden" name="tab" value="movements">
+            <input type="hidden" name="movement_status" value="{{ movement_status }}">
+            <input type="hidden" name="movement_per_page" value="{{ movement_per_page }}">
+            <input type="hidden" name="movement_page" value="{{ movements_page_obj.number }}">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="movementsSelectAll">
+                    <label class="form-check-label" for="movementsSelectAll">Selecionar tudo</label>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" name="movements_bulk_action" value="mark_paid_selected" class="btn btn-sm btn-success">Marcar como paga</button>
+                    <button type="submit" name="movements_bulk_action" value="mark_in_debt_selected" class="btn btn-sm btn-outline-warning">Marcar em dívida</button>
+                </div>
+            </div>
         <div class="table-responsive">
             <table class="table mb-0">
                 <thead>
                     <tr>
+                        <th style="width: 42px;"></th>
                         <th>Data</th>
                         <th>Descrição</th>
                         <th>Valor</th>
@@ -50,19 +119,108 @@
                     {% if movements %}
                         {% for movement in movements %}
                             <tr>
-                                <td>{{ movement.date }}</td>
-                                <td>{{ movement.description }}</td>
-                                <td>{{ movement.amount }}</td>
-                                <td>{{ movement.status }}</td>
+                                <td>
+                                    <input class="form-check-input movement-row-check" type="checkbox" name="appointment_ids" value="{{ movement.id }}">
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">{{ movement.date|date:"d/m/Y" }}</div>
+                                    <small class="text-muted">{{ movement.time|time:"H:i" }}</small>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">{{ movement.description }}</div>
+                                    <small class="text-muted">{{ movement.professional }}</small>
+                                </td>
+                                <td>{{ movement.amount|default:0|floatformat:2 }} €</td>
+                                <td>
+                                    {% if movement.can_settle_debt %}
+                                        <span class="badge bg-soft-warning text-warning">{{ movement.status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-soft-secondary text-muted">{{ movement.status }}</span>
+                                    {% endif %}
+                                </td>
                             </tr>
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted">Sem dados.</td>
+                            <td colspan="5" class="text-center text-muted">Sem dados.</td>
                         </tr>
                     {% endif %}
                 </tbody>
             </table>
         </div>
+        </form>
+    </div>
+    <div class="card-footer d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="text-muted fs-12">
+            Mostrando {{ movements_page_obj.start_index }}–{{ movements_page_obj.end_index }} de {{ movements_paginator.count }}
+        </div>
+        <nav aria-label="Paginação dos movimentos">
+            <ul class="pagination mb-0">
+                {% if movements_page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link" href="?{{ movements_prev_qs }}">Anterior</a></li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                {% endif %}
+
+                {% for p in movement_page_links %}
+                    {% if p.is_ellipsis %}
+                        <li class="page-item disabled"><span class="page-link">…</span></li>
+                    {% elif p.is_current %}
+                        <li class="page-item active"><span class="page-link">{{ p.number }}</span></li>
+                    {% else %}
+                        <li class="page-item"><a class="page-link" href="?{{ p.qs }}">{{ p.number }}</a></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if movements_page_obj.has_next %}
+                    <li class="page-item"><a class="page-link" href="?{{ movements_next_qs }}">Seguinte</a></li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Seguinte</span></li>
+                {% endif %}
+            </ul>
+        </nav>
     </div>
 </div>
+<script>
+  (function () {
+    const form = document.getElementById("movementsBulkForm");
+    const selectAll = document.getElementById("movementsSelectAll");
+    if (!form || !selectAll) return;
+    const rowChecks = Array.from(form.querySelectorAll(".movement-row-check"));
+
+    selectAll.addEventListener("change", function () {
+      rowChecks.forEach(function (el) {
+        el.checked = selectAll.checked;
+      });
+    });
+
+    rowChecks.forEach(function (el) {
+      el.addEventListener("change", function () {
+        if (!rowChecks.length) {
+          selectAll.checked = false;
+          return;
+        }
+        selectAll.checked = rowChecks.every(function (input) { return input.checked; });
+      });
+    });
+
+    form.addEventListener("submit", function (event) {
+      const checked = rowChecks.filter(function (input) { return input.checked; });
+      if (!checked.length) {
+        event.preventDefault();
+        alert("Seleciona pelo menos uma marcação.");
+        return;
+      }
+
+      const action = event.submitter ? event.submitter.value : "";
+      const confirmMessages = {
+        mark_paid_selected: "Marcar as marcações selecionadas como pagas?",
+        mark_in_debt_selected: "Marcar as marcações selecionadas como em dívida?",
+      };
+      const confirmText = confirmMessages[action];
+      if (confirmText && !window.confirm(confirmText)) {
+        event.preventDefault();
+      }
+    });
+  })();
+</script>

@@ -1,0 +1,100 @@
+.apps-calendar .content-area.calendar-content-area {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    height: calc(100dvh - 88px) !important;
+}
+
+.apps-calendar .content-area .content-area-header {
+    flex: 0 0 auto;
+    z-index: 30;
+}
+
+.apps-calendar .calendar-content-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    height: var(--calendar-panel-height, auto);
+    position: relative;
+}
+
+.apps-calendar #tui-calendar-init {
+    height: 100%;
+    min-height: 0;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-layout,
+.apps-calendar #tui-calendar-init .tui-full-calendar-layout-body,
+.apps-calendar #tui-calendar-init .tui-full-calendar-week-container {
+    height: 100% !important;
+    min-height: 0 !important;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-right {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    overflow-y: hidden !important;
+    min-height: 0 !important;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-dayname-container {
+    flex: 0 0 auto !important;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-timegrid-container {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #8ea2b6 #e7edf4;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-timegrid-container::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-timegrid-container::-webkit-scrollbar-thumb {
+    background-color: #8ea2b6;
+    border-radius: 8px;
+    border: 3px solid #e7edf4;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-timegrid-container::-webkit-scrollbar-track {
+    background: #e7edf4;
+    border-radius: 8px;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-dayname-container,
+.apps-calendar #tui-calendar-init .tui-full-calendar-month-dayname {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #fff;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-dayname-container {
+    overflow-y: hidden !important;
+}
+
+.apps-calendar #tui-calendar-init .tui-full-calendar-timegrid-sticky-container {
+    z-index: 16;
+}
+
+.nxl-container.apps-calendar .footer {
+    display: none;
+}
+
+@media (min-width: 1200px) {
+    .apps-calendar .content-sidebar.content-sidebar-xl {
+        width: 320px;
+        min-width: 320px;
+        flex: 0 0 320px;
+    }
+}

@@ -1,0 +1,24 @@
+{% extends "emails/base.html" %}
+
+{% block title %}
+{% if is_reschedule %}Pedido de reagendamento recebido{% else %}Pedido de marcação recebido{% endif %}
+{% endblock %}
+
+{% block content %}
+Olá {{ client_name }},
+<br><br>
+{% if is_reschedule %}
+Recebemos o teu pedido de reagendamento.
+{% else %}
+Recebemos o teu pedido de marcação.
+{% endif %}
+A marcação está em confirmação com os seguintes detalhes:
+<br><br>
+<strong>Serviço:</strong> {{ service_name }}<br>
+<strong>Profissional:</strong> {{ professional_name }}<br>
+<strong>Data:</strong> {{ date }}<br>
+<strong>Hora:</strong> {{ time }}<br>
+{% if symptomatology %}<strong>Sintomatologia:</strong> {{ symptomatology }}<br>{% endif %}
+<br>
+Podes acompanhar as tuas marcações aqui: <a href="{{ manage_url }}" style="color:#29abe2;">{{ manage_url }}</a>
+{% endblock %}

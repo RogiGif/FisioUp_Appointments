@@ -1,0 +1,76 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Ajustes de stock" subtitle="Correções manuais de stock." %}
+
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_dashboard' %}">Resumo</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_products' %}">Produtos</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_categories' %}">Categorias</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_entries' %}">Entradas</a>
+    <a class="btn btn-primary btn-sm" href="{% url 'backoffice_stock_adjustments' %}">Ajustes</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_movements' %}">Movimentos</a>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card">
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label">Produto</label>
+              {{ form.product }}
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Quantidade</label>
+              {{ form.quantity }}
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Tipo de ajuste</label>
+              {{ form.direction }}
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Notas</label>
+              {{ form.note }}
+            </div>
+            <button type="submit" class="btn btn-primary">Registar ajuste</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-7">
+      <div class="card">
+        <div class="card-body">
+          <div class="fw-semibold mb-3">Ajustes recentes</div>
+          {% if recent_adjustments %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Produto</th>
+                    <th class="text-end">Quantidade</th>
+                    <th>Notas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for adj in recent_adjustments %}
+                    <tr>
+                      <td>{{ adj.created_at|date:"d/m/Y H:i" }}</td>
+                      <td>{{ adj.product.name }}</td>
+                      <td class="text-end">{{ adj.quantity_base|floatformat:2 }}</td>
+                      <td class="text-muted">{{ adj.note|default:"—" }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="text-muted">Sem ajustes registados.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

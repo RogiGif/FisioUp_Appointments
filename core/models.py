@@ -1,7 +1,10 @@
 from decimal import Decimal, ROUND_HALF_UP
+from datetime import datetime, timedelta
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
@@ -33,6 +36,7 @@ class Service(models.Model):
         default="one_to_one",
     )
     capacity = models.PositiveIntegerField(null=True, blank=True)
+    allow_waitlist = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -50,6 +54,7 @@ class Service(models.Model):
 
 class Partner(models.Model):
     name = models.CharField(max_length=120, unique=True)
+    logo = models.ImageField(upload_to="partners/", blank=True, null=True, verbose_name="Logo")
     active = models.BooleanField(default=True)
     notes = models.TextField(blank=True, default="")
     DISCOUNT_CHOICES = [
@@ -89,6 +94,12 @@ class Partner(models.Model):
 
 
 class PartnerServicePrice(models.Model):
+    DISCOUNT_CHOICES = [
+        ("none", "Sem desconto"),
+        ("percent", "Percentagem"),
+        ("fixed", "Valor fixo"),
+    ]
+
     partner = models.ForeignKey(
         "Partner",
         on_delete=models.CASCADE,
@@ -107,6 +118,17 @@ class PartnerServicePrice(models.Model):
     )
     price_first = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     price_followup = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    discount_type = models.CharField(
+        max_length=20,
+        choices=DISCOUNT_CHOICES,
+        default="none",
+    )
+    is_enabled = models.BooleanField(
+        default=True,
+        help_text="Quando desativado, esta parceria não tem efeito neste serviço.",
+    )
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     class Meta:
         unique_together = ("partner", "service")
@@ -116,7 +138,25 @@ class PartnerServicePrice(models.Model):
 
     def clean(self):
         super().clean()
-        if self.pricing_mode == "first_followup":
+        if not self.is_enabled:
+            self.discount_type = "none"
+            self.discount_percent = None
+            self.discount_amount = None
+            return
+
+        if self.discount_type == "percent":
+            if self.discount_percent is None:
+                raise ValidationError({"discount_percent": "Indica a percentagem de desconto."})
+            self.discount_amount = None
+        elif self.discount_type == "fixed":
+            if self.discount_amount is None:
+                raise ValidationError({"discount_amount": "Indica o valor fixo de desconto."})
+            self.discount_percent = None
+        else:
+            self.discount_percent = None
+            self.discount_amount = None
+
+        if self.pricing_mode == "first_followup" and self.discount_type == "none":
             if self.price_first is None:
                 raise ValidationError({"price_first": "Indica o preço da 1ª consulta."})
             if self.price_followup is None:
@@ -137,6 +177,24 @@ class Professional(models.Model):
     ]
     gender = models.CharField(max_length=20, blank=True, choices=GENDER_CHOICES)
     phone = models.CharField(max_length=30, blank=True)
+    is_independent = models.BooleanField(
+        default=False,
+        verbose_name="Subcontratado",
+    )
+    subcontract_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Percentagem subcontrato",
+    )
+    hourly_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Valor por marcação",
+    )
 
     # ✅ NOVO: serviços que este profissional realiza
     services = models.ManyToManyField(
@@ -148,8 +206,32 @@ class Professional(models.Model):
     def __str__(self):
         return self.user.get_full_name() or self.user.username
 
+    def clean(self):
+        super().clean()
+        if self.is_independent:
+            if self.subcontract_percentage is None:
+                raise ValidationError({"subcontract_percentage": "Indica a percentagem de comissionamento."})
+            if self.subcontract_percentage < 0 or self.subcontract_percentage > 100:
+                raise ValidationError({"subcontract_percentage": "Percentagem inválida (0-100)."})
 
-class Availability(models.Model):
+
+class WeeklySchedule(models.Model):
+    professional = models.OneToOneField(
+        Professional,
+        on_delete=models.CASCADE,
+        related_name="weekly_schedule",
+    )
+    timezone = models.CharField(max_length=50, default="Europe/Lisbon")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        name = self.professional.user.get_full_name() or self.professional.user.username
+        return f"Horário semanal · {name}"
+
+
+class WeeklyWorkingBlock(models.Model):
     WEEKDAYS = [
         (0, "Monday"),
         (1, "Tuesday"),
@@ -160,30 +242,86 @@ class Availability(models.Model):
         (6, "Sunday"),
     ]
 
-    professional = models.ForeignKey(
-        Professional,
+    weekly_schedule = models.ForeignKey(
+        WeeklySchedule,
         on_delete=models.CASCADE,
-        related_name="availabilities",   # ✅ adiciona isto
+        related_name="blocks",
+    )
+    weekday = models.IntegerField(choices=WEEKDAYS)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    location = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        ordering = ["weekly_schedule", "weekday", "start_time"]
+
+    def __str__(self):
+        return f"{self.weekly_schedule.professional} · {self.get_weekday_display()} ({self.start_time}-{self.end_time})"
+
+    def clean(self):
+        super().clean()
+        if self.start_time and self.end_time and self.end_time <= self.start_time:
+            raise ValidationError({"end_time": "A hora de fim deve ser posterior à hora de início."})
+        if not self.weekly_schedule_id or self.weekday is None or not self.start_time or not self.end_time:
+            return
+        overlaps = WeeklyWorkingBlock.objects.filter(
+            weekly_schedule_id=self.weekly_schedule_id,
+            weekday=self.weekday,
+        ).exclude(id=self.id)
+        for block in overlaps:
+            if self.start_time < block.end_time and self.end_time > block.start_time:
+                raise ValidationError("Este bloco de trabalho sobrepõe-se a outro bloco no mesmo dia.")
+
+
+class WeeklyBreakBlock(models.Model):
+    WEEKDAYS = WeeklyWorkingBlock.WEEKDAYS
+
+    weekly_schedule = models.ForeignKey(
+        WeeklySchedule,
+        on_delete=models.CASCADE,
+        related_name="breaks",
     )
     weekday = models.IntegerField(choices=WEEKDAYS)
     start_time = models.TimeField()
     end_time = models.TimeField()
 
     class Meta:
-        ordering = ["professional", "weekday", "start_time"]
+        ordering = ["weekly_schedule", "weekday", "start_time"]
 
     def __str__(self):
-        return f"{self.professional} - {self.get_weekday_display()} ({self.start_time}-{self.end_time})"
+        return f"Pausa · {self.weekly_schedule.professional} · {self.get_weekday_display()} ({self.start_time}-{self.end_time})"
+
+    def clean(self):
+        super().clean()
+        if self.start_time and self.end_time and self.end_time <= self.start_time:
+            raise ValidationError({"end_time": "A hora de fim deve ser posterior à hora de início."})
+        if not self.weekly_schedule_id or self.weekday is None or not self.start_time or not self.end_time:
+            return
+        overlaps = WeeklyBreakBlock.objects.filter(
+            weekly_schedule_id=self.weekly_schedule_id,
+            weekday=self.weekday,
+        ).exclude(id=self.id)
+        for block in overlaps:
+            if self.start_time < block.end_time and self.end_time > block.start_time:
+                raise ValidationError("Esta pausa sobrepõe-se a outra pausa no mesmo dia.")
 
 
 class Appointment(models.Model):
     STATUS_SCHEDULED = "scheduled"
+    STATUS_PENDING = "pending_confirmation"
+    STATUS_AWAITING_VALIDATION = "awaiting_validation"
+    STATUS_NO_SHOW = "no_show"
     STATUS_COMPLETED = "completed"
+    STATUS_IN_DEBT = "in_debt"
     STATUS_CANCELLED = "cancelled"
 
     STATUS_CHOICES = (
         (STATUS_SCHEDULED, "Agendada"),
+        (STATUS_PENDING, "Em confirmação"),
+        (STATUS_AWAITING_VALIDATION, "A aguardar validação"),
+        (STATUS_NO_SHOW, "Falta"),
         (STATUS_COMPLETED, "Concluída"),
+        (STATUS_IN_DEBT, "Em dívida"),
         (STATUS_CANCELLED, "Cancelada"),
     )
 
@@ -205,7 +343,9 @@ class Appointment(models.Model):
 
     date = models.DateField()
     time = models.TimeField()
-    notes = models.TextField(blank=True)
+    symptomatology = models.TextField(blank=True)
+    summary = models.TextField(blank=True, default="")
+    treatment_done = models.TextField(blank=True, default="")
     series_id = models.UUIDField(null=True, blank=True, db_index=True)
 
     status = models.CharField(
@@ -248,6 +388,9 @@ class Appointment(models.Model):
     partner_price_applied = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     discount_applied = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
 
+    is_paid = models.BooleanField(default=False)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
     completed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -270,12 +413,73 @@ class Appointment(models.Model):
     def __str__(self):
         return f"{self.client} – {self.date} {self.time}"
 
+
+class SubcontractorPaymentLine(models.Model):
+    STATUS_UNPAID = "unpaid"
+    STATUS_PAID = "paid"
+    STATUS_VOID = "void"
+
+    STATUS_CHOICES = (
+        (STATUS_UNPAID, "Em aberto"),
+        (STATUS_PAID, "Pago"),
+        (STATUS_VOID, "Anulado"),
+    )
+
+    appointment = models.OneToOneField(
+        Appointment,
+        on_delete=models.CASCADE,
+        related_name="subcontract_payment",
+    )
+    professional = models.ForeignKey(
+        Professional,
+        on_delete=models.CASCADE,
+        related_name="subcontract_payments",
+    )
+    client = models.ForeignKey(
+        "ClientProfile",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="subcontract_payments",
+    )
+    service = models.ForeignKey(
+        "Service",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="subcontract_payments",
+    )
+    appointment_date = models.DateField()
+    appointment_time = models.TimeField()
+    gross_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
+    payable_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_UNPAID)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    paid_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="subcontract_payments_paid",
+    )
+    payment_reference = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-appointment_date", "-appointment_time")
+
+    def __str__(self):
+        return f"{self.professional} · {self.appointment_date} {self.appointment_time} · {self.payable_amount}"
+
 class AppointmentLog(models.Model):
     ACTION_CREATED = "created"
     ACTION_RESCHEDULED = "rescheduled"
     ACTION_CANCELLED = "cancelled"
     ACTION_COMPLETED = "completed"
     ACTION_NOTES_UPDATED = "notes_updated"
+    ACTION_STATUS_UPDATED = "status_updated"
 
     ACTION_CHOICES = [
         (ACTION_CREATED, "Criada"),
@@ -283,6 +487,7 @@ class AppointmentLog(models.Model):
         (ACTION_CANCELLED, "Cancelada"),
         (ACTION_COMPLETED, "Concluída"),
         (ACTION_NOTES_UPDATED, "Notas atualizadas"),
+        (ACTION_STATUS_UPDATED, "Estado atualizado"),
     ]
 
     appointment = models.ForeignKey("Appointment", on_delete=models.CASCADE, related_name="logs")
@@ -314,6 +519,243 @@ class AppointmentLog(models.Model):
     def __str__(self):
         return f"{self.action} · appt #{self.appointment_id} · {self.created_at:%Y-%m-%d %H:%M}"
 
+
+class AuditLog(models.Model):
+    category = models.CharField(max_length=64, db_index=True)
+    action = models.CharField(max_length=64, db_index=True)
+    source = models.CharField(max_length=64, blank=True, default="", db_index=True)
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="audit_logs",
+    )
+    actor_display = models.CharField(max_length=255, blank=True, default="")
+    actor_email = models.EmailField(blank=True, default="")
+    actor_role = models.CharField(max_length=64, blank=True, default="", db_index=True)
+
+    content_type = models.ForeignKey(
+        ContentType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="audit_logs",
+    )
+    object_id = models.PositiveBigIntegerField(null=True, blank=True)
+    content_object = GenericForeignKey("content_type", "object_id")
+    object_repr = models.CharField(max_length=255, blank=True, default="")
+
+    message = models.CharField(max_length=255, blank=True, default="")
+    before = models.JSONField(default=dict, blank=True)
+    after = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default="")
+    request_path = models.CharField(max_length=255, blank=True, default="")
+    request_method = models.CharField(max_length=12, blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Log de auditoria"
+        verbose_name_plural = "Logs de auditoria"
+        indexes = [
+            models.Index(fields=["category", "action", "-created_at"]),
+            models.Index(fields=["source", "-created_at"]),
+            models.Index(fields=["actor_role", "-created_at"]),
+        ]
+
+    def __str__(self):
+        label = self.object_repr or "-"
+        return f"{self.category}:{self.action} · {label} · {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class CashSession(models.Model):
+    STATUS_OPEN = "open"
+    STATUS_CLOSED = "closed"
+    STATUS_CHOICES = (
+        (STATUS_OPEN, "Aberta"),
+        (STATUS_CLOSED, "Fechada"),
+    )
+
+    session_date = models.DateField(default=timezone.localdate, db_index=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_OPEN, db_index=True)
+    opening_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    opening_notes = models.TextField(blank=True, default="")
+    opened_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_sessions_opened",
+    )
+    opened_at = models.DateTimeField(auto_now_add=True)
+    expected_cash_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    counted_cash_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    difference_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    closing_notes = models.TextField(blank=True, default="")
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_sessions_closed",
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-session_date", "-opened_at", "-id")
+        verbose_name = "Sessão de caixa"
+        verbose_name_plural = "Sessões de caixa"
+
+    def __str__(self):
+        return f"Caixa {self.session_date:%d/%m/%Y} · {self.get_status_display()}"
+
+
+class CashMovement(models.Model):
+    TYPE_IN = "in"
+    TYPE_OUT = "out"
+    TYPE_CHOICES = (
+        (TYPE_IN, "Entrada"),
+        (TYPE_OUT, "Saída"),
+    )
+
+    SOURCE_MANUAL = "manual"
+    SOURCE_APPOINTMENT = "appointment"
+    SOURCE_GROUP_MONTHLY = "group_monthly"
+    SOURCE_STOCK_SALE = "stock_sale"
+    SOURCE_CHOICES = (
+        (SOURCE_MANUAL, "Manual"),
+        (SOURCE_APPOINTMENT, "Marcação"),
+        (SOURCE_GROUP_MONTHLY, "Turma"),
+        (SOURCE_STOCK_SALE, "Stock"),
+    )
+
+    METHOD_CASH = "cash"
+    METHOD_CARD = "card"
+    METHOD_MBWAY = "mbway"
+    METHOD_TRANSFER = "transfer"
+    METHOD_OTHER = "other"
+    PAYMENT_METHOD_CHOICES = (
+        (METHOD_CASH, "Numerário"),
+        (METHOD_CARD, "Multibanco"),
+        (METHOD_MBWAY, "MB Way"),
+        (METHOD_TRANSFER, "Transferência"),
+        (METHOD_OTHER, "Outro"),
+    )
+
+    session = models.ForeignKey(
+        CashSession,
+        on_delete=models.CASCADE,
+        related_name="movements",
+    )
+    movement_type = models.CharField(max_length=8, choices=TYPE_CHOICES, db_index=True)
+    source_type = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_MANUAL, db_index=True)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default=METHOD_CASH, db_index=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.CharField(max_length=255)
+    notes = models.TextField(blank=True, default="")
+    client_profile = models.ForeignKey(
+        "ClientProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_movements",
+    )
+    appointment = models.OneToOneField(
+        "Appointment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_movement",
+    )
+    group_monthly_charge = models.OneToOneField(
+        "GroupMonthlyCharge",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_movement",
+    )
+    stock_movement = models.OneToOneField(
+        "StockMovement",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_movement",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_movements_created",
+    )
+    is_void = models.BooleanField(default=False, db_index=True)
+    void_reason = models.CharField(max_length=255, blank=True, default="")
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_movements_voided",
+    )
+    voided_at = models.DateTimeField(null=True, blank=True)
+    happened_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-happened_at", "-id")
+        verbose_name = "Movimento de caixa"
+        verbose_name_plural = "Movimentos de caixa"
+
+    def __str__(self):
+        return f"{self.get_movement_type_display()} · {self.amount} · {self.session}"
+
+    def clean(self):
+        super().clean()
+        if self.amount is None or self.amount <= 0:
+            raise ValidationError({"amount": "Indica um valor positivo."})
+        if self.source_type == self.SOURCE_APPOINTMENT:
+            if not self.appointment_id:
+                raise ValidationError({"appointment": "Seleciona a marcação associada."})
+            if self.movement_type != self.TYPE_IN:
+                raise ValidationError({"movement_type": "Movimentos de marcação só podem ser entradas."})
+            if self.group_monthly_charge_id:
+                raise ValidationError({"group_monthly_charge": "Não combines marcação e mensalidade no mesmo movimento."})
+            if self.client_profile_id:
+                raise ValidationError({"client_profile": "O utente é definido pela marcação associada."})
+        elif self.source_type == self.SOURCE_GROUP_MONTHLY:
+            if not self.group_monthly_charge_id:
+                raise ValidationError({"group_monthly_charge": "Seleciona a mensalidade associada."})
+            if self.movement_type != self.TYPE_IN:
+                raise ValidationError({"movement_type": "Movimentos de turma só podem ser entradas."})
+            if self.appointment_id:
+                raise ValidationError({"appointment": "Não combines marcação e mensalidade no mesmo movimento."})
+            if self.stock_movement_id:
+                raise ValidationError({"stock_movement": "Não combines turma e stock no mesmo movimento."})
+            if self.client_profile_id:
+                raise ValidationError({"client_profile": "O utente é definido pela mensalidade associada."})
+        elif self.source_type == self.SOURCE_STOCK_SALE:
+            if not self.stock_movement_id:
+                raise ValidationError({"stock_movement": "Seleciona o movimento de stock associado."})
+            if self.movement_type != self.TYPE_IN:
+                raise ValidationError({"movement_type": "Vendas de stock só podem ser entradas."})
+            if self.appointment_id or self.group_monthly_charge_id:
+                raise ValidationError({"stock_movement": "Não combines stock com outras origens no mesmo movimento."})
+        else:
+            if self.appointment_id:
+                raise ValidationError({"appointment": "A marcação só pode ser associada a movimentos de marcação."})
+            if self.group_monthly_charge_id:
+                raise ValidationError({"group_monthly_charge": "A mensalidade só pode ser associada a movimentos de turma."})
+            if self.stock_movement_id:
+                raise ValidationError({"stock_movement": "O movimento de stock só pode ser associado a vendas de stock."})
+        if self.is_void and not self.voided_at:
+            raise ValidationError({"voided_at": "Indica quando o movimento foi anulado."})
+
 class ClientProfile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -332,6 +774,9 @@ class ClientProfile(models.Model):
     gender = models.CharField(max_length=20, blank=True, choices=GENDER_CHOICES)
     terms_accepted = models.BooleanField(default=False)
     rgpd_accepted = models.BooleanField(default=False)
+    accepted_terms_at = models.DateTimeField(null=True, blank=True)
+    accepted_terms_ip = models.GenericIPAddressField(null=True, blank=True)
+    accepted_terms_user_agent = models.TextField(null=True, blank=True)
     REG_STATUS_CHOICES = [
         ("approved", "Aprovado"),
         ("pending", "Pendente"),
@@ -419,6 +864,8 @@ class ClientProfile(models.Model):
 class MoloniIntegration(models.Model):
     access_token = models.TextField(blank=True)
     refresh_token = models.TextField(blank=True)
+    company_id = models.CharField(max_length=50, blank=True)
+    company_name = models.CharField(max_length=255, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     last_sync_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -558,6 +1005,7 @@ class GroupSession(models.Model):
         on_delete=models.CASCADE,
         related_name="group_sessions",
     )
+    name = models.CharField(max_length=150, blank=True, default="")
     professional = models.ForeignKey(
         "Professional",
         on_delete=models.SET_NULL,
@@ -568,6 +1016,15 @@ class GroupSession(models.Model):
     date = models.DateField()
     time = models.TimeField()
     capacity = models.PositiveIntegerField(null=True, blank=True)
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    schedule = models.ForeignKey(
+        "GroupSchedule",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sessions",
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_SCHEDULED)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -575,27 +1032,105 @@ class GroupSession(models.Model):
     class Meta:
         unique_together = ("service", "professional", "date", "time")
         ordering = ("date", "time")
+        verbose_name = "Sessão de turma"
+        verbose_name_plural = "Sessões de turma"
 
     @property
     def capacity_value(self):
         return self.capacity or self.service.capacity or 0
 
     @property
+    def duration_value(self):
+        return self.duration_minutes or getattr(self.service, "duration_minutes", None) or 60
+
+    @property
+    def start_datetime(self):
+        return datetime.combine(self.date, self.time or datetime.min.time())
+
+    @property
+    def end_datetime(self):
+        return self.start_datetime + timedelta(minutes=self.duration_value)
+
+    @property
     def spots_left(self):
-        taken = self.enrolments.filter(status="active").count()
+        taken = self.enrolments.filter(
+            status__in=[
+                GroupEnrollment.STATUS_BOOKED,
+                GroupEnrollment.STATUS_ATTENDED,
+                GroupEnrollment.STATUS_NO_SHOW,
+            ]
+        ).count()
         return max(self.capacity_value - taken, 0)
 
     def __str__(self):
-        return f"{self.service.name} · {self.date} {self.time}"
+        label = self.name or self.service.name
+        return f"{label} · {self.date} {self.time}"
+
+
+class GroupSchedule(models.Model):
+    WEEKDAY_CHOICES = [
+        (0, "Segunda-feira"),
+        (1, "Terça-feira"),
+        (2, "Quarta-feira"),
+        (3, "Quinta-feira"),
+        (4, "Sexta-feira"),
+        (5, "Sábado"),
+        (6, "Domingo"),
+    ]
+
+    service = models.ForeignKey(
+        "Service",
+        on_delete=models.CASCADE,
+        related_name="group_schedules",
+    )
+    name = models.CharField(max_length=150, blank=True, default="")
+    professional = models.ForeignKey(
+        "Professional",
+        on_delete=models.CASCADE,
+        related_name="group_schedules",
+    )
+    weekday = models.PositiveSmallIntegerField(choices=WEEKDAY_CHOICES)
+    time = models.TimeField()
+    start_date = models.DateField()
+    capacity = models.PositiveIntegerField(null=True, blank=True)
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("professional", "weekday", "time")
+        ordering = ("weekday", "time")
+        verbose_name = "Recorrência de turma"
+        verbose_name_plural = "Recorrências de turma"
+
+    @property
+    def capacity_value(self):
+        return self.capacity or self.service.capacity or 0
+
+    @property
+    def duration_value(self):
+        return self.duration_minutes or getattr(self.service, "duration_minutes", None) or 60
+
+    def __str__(self):
+        label = self.name or self.service.name
+        return f"{label} · {self.get_weekday_display()} {self.time}"
 
 
 class GroupEnrollment(models.Model):
-    STATUS_ACTIVE = "active"
+    STATUS_BOOKED = "booked"
+    STATUS_WAITLIST = "waitlist"
     STATUS_CANCELLED = "cancelled"
+    STATUS_ATTENDED = "attended"
+    STATUS_NO_SHOW = "no_show"
 
     STATUS_CHOICES = (
-        (STATUS_ACTIVE, "Ativa"),
+        (STATUS_BOOKED, "Confirmada"),
+        (STATUS_WAITLIST, "Lista de espera"),
         (STATUS_CANCELLED, "Cancelada"),
+        (STATUS_ATTENDED, "Presença"),
+        (STATUS_NO_SHOW, "Falta"),
     )
 
     session = models.ForeignKey(
@@ -608,15 +1143,322 @@ class GroupEnrollment(models.Model):
         on_delete=models.CASCADE,
         related_name="group_enrolments",
     )
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_BOOKED)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ("session", "client")
         ordering = ("-created_at",)
+        verbose_name = "Inscrição de turma"
+        verbose_name_plural = "Inscrições de turma"
 
     def __str__(self):
         return f"{self.client} · {self.session}"
+
+
+class GroupMembership(models.Model):
+    """
+    Plano de inscrição do cliente numa turma recorrente (família).
+    Permite personalizar dias e preço mensal por inscrito.
+    """
+
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="group_memberships",
+    )
+    service = models.ForeignKey(
+        "Service",
+        on_delete=models.CASCADE,
+        related_name="group_memberships",
+    )
+    professional = models.ForeignKey(
+        "Professional",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="group_memberships",
+    )
+    schedule = models.ForeignKey(
+        "GroupSchedule",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="memberships",
+    )
+    family_key = models.CharField(max_length=255, db_index=True)
+    class_name = models.CharField(max_length=150, blank=True, default="")
+    weekdays = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text="Dias da semana permitidos (0-6), separados por vírgula.",
+    )
+    monthly_price_override = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Se definido, substitui o preço mensal base do serviço para este inscrito.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("client", "family_key")
+        ordering = ("-updated_at", "-id")
+        verbose_name = "Plano de inscrito em turma"
+        verbose_name_plural = "Planos de inscritos em turma"
+
+    def weekday_values(self):
+        values = []
+        for item in (self.weekdays or "").split(","):
+            item = item.strip()
+            if not item.isdigit():
+                continue
+            number = int(item)
+            if 0 <= number <= 6 and number not in values:
+                values.append(number)
+        return values
+
+    def __str__(self):
+        label = self.class_name or self.service.name
+        return f"{label} · {self.client}"
+
+
+class GroupMonthlyCharge(models.Model):
+    STATUS_UNPAID = "unpaid"
+    STATUS_PAID = "paid"
+    STATUS_VOID = "void"
+
+    STATUS_CHOICES = (
+        (STATUS_UNPAID, "Em dívida"),
+        (STATUS_PAID, "Paga"),
+        (STATUS_VOID, "Anulada"),
+    )
+
+    DISCOUNT_CHOICES = (
+        ("none", "Sem desconto"),
+        ("percent", "Percentagem"),
+        ("fixed", "Valor fixo"),
+    )
+
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="group_monthly_charges",
+    )
+    service = models.ForeignKey(
+        "Service",
+        on_delete=models.CASCADE,
+        related_name="group_monthly_charges",
+    )
+    professional = models.ForeignKey(
+        "Professional",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="group_monthly_charges",
+    )
+    schedule = models.ForeignKey(
+        "GroupSchedule",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="monthly_charges",
+    )
+    family_key = models.CharField(max_length=255, db_index=True)
+    class_name = models.CharField(max_length=150, blank=True, default="")
+    month = models.DateField(help_text="Primeiro dia do mês de referência.")
+
+    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    partner = models.ForeignKey(
+        "Partner",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="group_monthly_charges",
+    )
+    partner_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    discount_type = models.CharField(max_length=20, choices=DISCOUNT_CHOICES, default="none")
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    discount_applied = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    final_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_UNPAID)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("client", "family_key", "month")
+        ordering = ("-month", "-id")
+        verbose_name = "Mensalidade de turma"
+        verbose_name_plural = "Mensalidades de turma"
+
+    def __str__(self):
+        label = self.class_name or self.service.name
+        return f"{label} · {self.client} · {self.month:%Y-%m}"
+
+
+class ProductCategory(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+
+    class Meta:
+        verbose_name = "Categoria de produto"
+        verbose_name_plural = "Categorias de produto"
+        ordering = ("name",)
+
+    def __str__(self):
+        return self.name
+
+
+class Product(models.Model):
+    UNIT_UNIT = "unit"
+    UNIT_ML = "ml"
+    UNIT_G = "g"
+
+    UNIT_CHOICES = (
+        (UNIT_UNIT, "Unidades"),
+        (UNIT_ML, "ml"),
+        (UNIT_G, "g"),
+    )
+
+    name = models.CharField(max_length=200)
+    sku = models.CharField(max_length=64, blank=True)
+    category = models.ForeignKey(
+        ProductCategory,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="products",
+    )
+    is_active = models.BooleanField(default=True)
+    unit_base = models.CharField(max_length=10, choices=UNIT_CHOICES, default=UNIT_UNIT)
+    min_stock_alert = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    unit_per_pack = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Quantidade na unidade base que existe numa embalagem.",
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Produto"
+        verbose_name_plural = "Produtos"
+
+    def __str__(self):
+        return self.name
+
+
+class StockLocation(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Local de stock"
+        verbose_name_plural = "Locais de stock"
+
+    def __str__(self):
+        return self.name
+
+
+class StockMovement(models.Model):
+    TYPE_PURCHASE = "purchase"
+    TYPE_CONSUMPTION = "consumption"
+    TYPE_ADJUSTMENT = "adjustment"
+    TYPE_TRANSFER = "transfer"
+
+    TYPE_CHOICES = (
+        (TYPE_PURCHASE, "Entrada"),
+        (TYPE_CONSUMPTION, "Consumo"),
+        (TYPE_ADJUSTMENT, "Ajuste"),
+        (TYPE_TRANSFER, "Transferência"),
+    )
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="movements",
+    )
+    location = models.ForeignKey(
+        StockLocation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movements",
+    )
+    movement_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    quantity_base = models.DecimalField(max_digits=12, decimal_places=2)
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    total_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    appointment = models.ForeignKey(
+        "Appointment",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stock_movements",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stock_movements",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True)
+    is_void = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        verbose_name = "Movimento de stock"
+        verbose_name_plural = "Movimentos de stock"
+
+    def save(self, *args, **kwargs):
+        if self.unit_cost is not None and self.total_cost is None:
+            self.total_cost = (self.unit_cost or Decimal("0.00")) * (self.quantity_base or Decimal("0.00"))
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.product} · {self.movement_type} · {self.quantity_base}"
+
+
+class AppointmentConsumption(models.Model):
+    appointment = models.ForeignKey(
+        "Appointment",
+        on_delete=models.CASCADE,
+        related_name="consumptions",
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="consumptions",
+    )
+    quantity_base = models.DecimalField(max_digits=12, decimal_places=2)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="appointment_consumptions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Consumo em marcação"
+        verbose_name_plural = "Consumos em marcações"
+
+    def __str__(self):
+        return f"{self.appointment_id} · {self.product} · {self.quantity_base}"
 
 
 class ClinicSettings(models.Model):
@@ -640,6 +1482,9 @@ class ClinicSettings(models.Model):
     notify_clinic_on_client_cancel = models.BooleanField(default=True, verbose_name="Notificar cancelamento pelo utente")
     notify_client_on_clinic_changes = models.BooleanField(default=True, verbose_name="Notificar utente quando a clínica altera")
     notify_professional_on_new_booking = models.BooleanField(default=True, verbose_name="Notificar profissional em nova marcação")
+    notify_client_on_new_booking = models.BooleanField(default=True, verbose_name="Notificar utente quando a clínica cria marcação")
+    notify_password_reset = models.BooleanField(default=True, verbose_name="Enviar emails de recuperação de password")
+    group_cancel_hours = models.PositiveIntegerField(default=2, verbose_name="Horas mínimas para cancelamento de turma")
 
     class Meta:
         verbose_name = "Configuração da clínica"

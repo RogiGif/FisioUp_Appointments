@@ -14,10 +14,10 @@ def clinic_settings() -> ClinicSettings:
 
 
 def clinic_email() -> str:
-    settings_obj = clinic_settings()
-    if settings_obj.clinic_email:
-        return settings_obj.clinic_email
-    return getattr(settings, "DEFAULT_FROM_EMAIL", "")
+    target = (getattr(settings, "INTERNAL_NOTIFICATION_EMAIL", "") or "").strip()
+    if target:
+        return target
+    return "admin@fisio-up.pt"
 
 
 def send_templated_email(

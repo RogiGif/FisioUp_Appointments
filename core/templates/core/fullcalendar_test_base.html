@@ -1,0 +1,37 @@
+{% extends "core/calendar_shell.html" %}
+{% load static %}
+
+{% block extra_head %}
+    <link type="text/css" rel="stylesheet" href="{% static 'core/css/fullcalendar_test.css' %}?v=20260302-1">
+    <style>
+        #dropdownMenu-calendarType + .dropdown-menu [data-action="toggle-weeks2"],
+        #dropdownMenu-calendarType + .dropdown-menu [data-action="toggle-weeks3"],
+        #dropdownMenu-calendarType + .dropdown-menu [data-action="toggle-workweek"],
+        #dropdownMenu-calendarType + .dropdown-menu [data-action="toggle-start-day-1"],
+        #dropdownMenu-calendarType + .dropdown-menu [data-action="toggle-narrow-weekend"],
+        #dropdownMenu-calendarType + .dropdown-menu .dropdown-divider {
+            display: none !important;
+        }
+
+        body.modal-open .nxl-container,
+        body.modal-open .nxl-content {
+            filter: none !important;
+        }
+
+        .modal-backdrop,
+        .modal-backdrop.show {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            opacity: 0.2 !important;
+        }
+    </style>
+{% endblock %}
+
+{% block extra_scripts %}
+    <script src="{% static 'duralux/assets/vendors/js/moment.min.js' %}"></script>
+    <script src="{% static 'vendor/fullcalendar-6.1.20/dist/index.global.min.js' %}"></script>
+    <script src="{% static 'vendor/fullcalendar-6.1.20/packages/core/locales/pt.global.min.js' %}"></script>
+    <script src="{% static 'vendor/fullcalendar-6.1.20/packages/bootstrap4/index.global.min.js' %}"></script>
+    {{ calendar_data|json_script:"calendar-data" }}
+    <script src="{% static 'core/js/fullcalendar_test_init.js' %}?v=20260311-1"></script>
+{% endblock %}

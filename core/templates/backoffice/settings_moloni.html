@@ -1,0 +1,227 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  <div class="d-flex flex-column flex-xl-row gap-4">
+    <div class="content-sidebar content-sidebar-md">
+      <div class="content-sidebar-header bg-white sticky-top hstack justify-content-between">
+        <h4 class="fw-bolder mb-0">Settings</h4>
+        <a href="javascript:void(0);" class="app-sidebar-close-trigger d-flex">
+          <i class="feather-x"></i>
+        </a>
+      </div>
+      <div class="content-sidebar-body">
+        <ul class="nav flex-column nxl-content-sidebar-item">
+          <li class="nav-item">
+            <a class="nav-link disabled" href="javascript:void(0);" aria-disabled="true">
+              <i class="feather-airplay"></i>
+              <span>Geral</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_settings_email' %}">
+              <i class="feather-mail"></i>
+              <span>Email</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="{% url 'backoffice_settings_moloni' %}">
+              <i class="feather-link"></i>
+              <span>Moloni</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_audit_logs' %}">
+              <i class="feather-shield"></i>
+              <span>Auditoria</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_post_designer' %}">
+              <i class="feather-image"></i>
+              <span>Criador de posts</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_highlights' %}">
+              <i class="feather-image"></i>
+              <span>Destaques</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="content-area flex-grow-1">
+      <div class="content-area-header bg-white sticky-top d-flex flex-wrap align-items-center gap-3">
+        <div class="page-header-left">
+          <h4 class="fw-bold mb-1">Integração Moloni</h4>
+          <span class="text-muted">Ligação OAuth, teste de comunicação e sincronização manual de clientes.</span>
+        </div>
+      </div>
+
+      <div class="content-area-body pt-4">
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="text-muted small text-uppercase mb-2">Configuração</div>
+                <div class="fs-5 fw-bold">
+                  {% if moloni_configured %}Completa{% else %}Em falta{% endif %}
+                </div>
+                <div class="text-muted small">Client ID e Client Secret. A empresa é descoberta automaticamente.</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="text-muted small text-uppercase mb-2">Estado</div>
+                <div class="fs-5 fw-bold">
+                  {% if moloni_connected %}Ligado{% else %}Desligado{% endif %}
+                </div>
+                <div class="text-muted small">
+                  {% if moloni_integration.expires_at %}
+                    Token válido até {{ moloni_integration.expires_at|date:"d/m/Y H:i" }}
+                  {% else %}
+                    Sem token ativo.
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="text-muted small text-uppercase mb-2">Última sincronização</div>
+                <div class="fs-5 fw-bold">
+                  {{ moloni_integration.last_sync_at|date:"d/m/Y H:i"|default:"—" }}
+                </div>
+                <div class="text-muted small">Clientes Moloni importados para a app.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+              <div>
+                <h6 class="fw-bold mb-1">Ligação OAuth</h6>
+                <div class="text-muted small">Usa o fluxo oficial da Moloni com callback para obter os tokens.</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <a href="{% url 'backoffice_moloni_connect' %}" class="btn btn-primary" {% if not moloni_configured %}aria-disabled="true"{% endif %}>
+                  <i class="feather-link me-2"></i>Ligar Moloni
+                </a>
+                <form method="post" action="{% url 'backoffice_moloni_test' %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline-secondary" {% if not moloni_connected or not moloni_company_id %}disabled{% endif %}>
+                    <i class="feather-activity me-2"></i>Testar ligação
+                  </button>
+                </form>
+                <form method="post" action="{% url 'backoffice_moloni_disconnect' %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline-danger" {% if not moloni_connected %}disabled{% endif %}>
+                    <i class="feather-power me-2"></i>Desligar
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {% if not moloni_configured %}
+              <div class="alert alert-warning mb-0">
+                Faltam variáveis de ambiente da Moloni. Define `MOLONI_CLIENT_ID` e `MOLONI_CLIENT_SECRET`.
+              </div>
+            {% endif %}
+
+            <div class="row g-3 mt-1">
+              <div class="col-12 col-lg-6">
+                <label class="form-label">Developer ID / Client ID</label>
+                <input type="text" class="form-control" value="{{ moloni_client_id|default:'—' }}" readonly>
+              </div>
+              <div class="col-12 col-lg-6">
+                <label class="form-label">Company ID</label>
+                <input type="text" class="form-control" value="{{ moloni_company_id|default:'—' }}" readonly>
+                <div class="form-text">
+                  {% if moloni_company_name %}
+                    Empresa ligada: {{ moloni_company_name }}
+                  {% elif moloni_company_id_from_env %}
+                    Valor vindo do `.env`.
+                  {% else %}
+                    Será preenchido automaticamente após a ligação OAuth.
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Callback URL</label>
+                <input type="text" class="form-control" value="{{ moloni_callback_url }}" readonly>
+                <div class="form-text">Configura exatamente este URL no campo “URI de Resposta (Callback)” da Moloni.</div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">API Base URL</label>
+                <input type="text" class="form-control" value="{{ moloni_base_url }}" readonly>
+              </div>
+            </div>
+
+            {% if moloni_connected and not moloni_company_id and moloni_companies %}
+              <hr class="my-4">
+              <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                  <h6 class="fw-bold mb-1">Escolher empresa Moloni</h6>
+                  <div class="text-muted small">A conta devolveu mais do que uma empresa ou não foi possível determinar a correta automaticamente.</div>
+                </div>
+              </div>
+              <form method="post" action="{% url 'backoffice_moloni_select_company' %}" class="row g-3 align-items-end">
+                {% csrf_token %}
+                <div class="col-12 col-lg-8">
+                  <label class="form-label">Empresa</label>
+                  <select name="company_id" class="form-select" required>
+                    <option value="">Seleciona uma empresa</option>
+                    {% for company in moloni_companies %}
+                      <option value="{{ company.company_id }}">{{ company.company_name }} (ID {{ company.company_id }})</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-12 col-lg-4">
+                  <button type="submit" class="btn btn-outline-primary w-100">
+                    <i class="feather-check me-2"></i>Guardar empresa
+                  </button>
+                </div>
+              </form>
+            {% elif moloni_connected and not moloni_company_id and moloni_companies_error %}
+              <div class="alert alert-warning mt-4 mb-0">
+                Não foi possível listar as empresas Moloni: {{ moloni_companies_error }}
+              </div>
+            {% elif moloni_connected and not moloni_company_id %}
+              <div class="alert alert-warning mt-4 mb-0">
+                A ligação Moloni está ativa, mas falta escolher a empresa antes de testar a ligação ou sincronizar clientes.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+              <div>
+                <h6 class="fw-bold mb-1">Sincronização manual</h6>
+                <div class="text-muted small">Importa clientes do Moloni para a app com base no NIF.</div>
+              </div>
+              <form method="post" action="{% url 'backoffice_moloni_sync_customers' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-primary" {% if not moloni_connected or not moloni_company_id %}disabled{% endif %}>
+                  <i class="feather-refresh-cw me-2"></i>Sincronizar clientes
+                </button>
+              </form>
+            </div>
+            <ul class="text-muted small mb-0 ps-3">
+              <li>Atualiza `moloni_customer_id` quando encontra o utente pelo NIF.</li>
+              <li>Preenche dados em falta no utente sem sobrepor dados locais já existentes.</li>
+              <li>Regista `last_sync_at` na integração após sincronização bem sucedida.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{% block title %}Marcações{% endblock %}</title>
 
+  <link rel="shortcut icon" type="image/png" href="{% static 'core/images/favicon.png' %}">
   <link rel="stylesheet" href="{% static 'core/css/app.css' %}?v=3">
 </head>
 <body>
@@ -98,6 +99,11 @@
     </div>
   </div>
 
+  <script src="{% static 'core/js/app-utils.js' %}?v=20260316-1"></script>
+  {% if request.user.is_authenticated and session_timeout_config.enabled %}
+  {{ session_timeout_config|json_script:"session-timeout-config" }}
+  <script src="{% static 'core/js/session-timeout.js' %}?v=20260317-1"></script>
+  {% endif %}
   <script>
     (function () {
       const toggle = document.querySelector("[data-menu-toggle]");

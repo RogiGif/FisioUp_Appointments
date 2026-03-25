@@ -9,12 +9,38 @@
 
 {% block content %}
   <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <h3 style="margin:0;">Sessões</h3>
+      <form method="get" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <label class="muted" style="font-size:12px;">Mês</label>
+        <select name="month" onchange="this.form.submit()">
+          <option value="">Todos</option>
+          {% for m in available_months %}
+            {% with val=m|date:"Y-m" %}
+              <option value="{{ val }}" {% if selected_month == val %}selected{% endif %}>
+                {{ m|date:"F Y" }}
+              </option>
+            {% endwith %}
+          {% endfor %}
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;">
+          <input type="checkbox" name="only_available" value="1" {% if only_available %}checked{% endif %} onchange="this.form.submit()">
+          Só com vagas
+        </label>
+      </form>
+    </div>
+    {% if has_full_sessions and available_sessions_count %}
+      <div class="muted" style="margin:8px 0 12px 0;">
+        Esta turma tem sessões cheias. Vê abaixo as alternativas com vaga.
+      </div>
+    {% endif %}
     {% if sessions %}
       <table class="table-compact">
         <thead>
           <tr>
             <th>Data</th>
             <th>Hora</th>
+            <th>Turma</th>
             <th>Profissional</th>
             <th>Vagas</th>
             <th>Ação</th>
@@ -25,6 +51,7 @@
             <tr>
               <td>{{ s.date|date:"M. j, Y" }}</td>
               <td>{{ s.time|time:"H:i" }}</td>
+              <td>{{ s.name|default:s.service.name }}</td>
               <td>
                 {% if s.professional %}
                   {{ s.professional.user.get_full_name|default:s.professional.user.username }}
@@ -34,13 +61,20 @@
               </td>
               <td>{{ s.spots_left }}/{{ s.capacity_value }}</td>
               <td>
-                {% if s.id in enrolled_ids %}
-                  <span class="pill">Já inscrito</span>
+                {% if s.user_status == "booked" %}
+                  <span class="pill">Confirmado</span>
+                {% elif s.user_status == "waitlist" %}
+                  <span class="pill">Lista de espera</span>
                 {% else %}
                   {% if s.spots_left > 0 %}
                     <form method="post" action="{% url 'enroll_group_session' s.id %}">
                       {% csrf_token %}
                       <button class="btn secondary btn-compact" type="submit">Inscrever</button>
+                    </form>
+                  {% elif s.service.allow_waitlist %}
+                    <form method="post" action="{% url 'enroll_group_session' s.id %}">
+                      {% csrf_token %}
+                      <button class="btn secondary btn-compact" type="submit">Lista de espera</button>
                     </form>
                   {% else %}
                     <span class="pill">Cheia</span>

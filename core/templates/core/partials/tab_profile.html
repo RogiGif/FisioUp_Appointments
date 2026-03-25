@@ -16,9 +16,17 @@
                     <div class="mb-4 mb-md-0 d-flex gap-4 your-brand">
                         <div class="wd-100 ht-100 position-relative overflow-hidden border border-gray-2 rounded">
                             {% if client_profile.profile_photo %}
-                                <img src="{{ client_profile.profile_photo.url }}" class="img-fluid rounded h-100 w-100" alt="">
+                                <img src="{{ client_profile.profile_photo.url }}" class="h-100 w-100" style="object-fit:cover;" alt="">
                             {% else %}
-                                <img src="{% static 'duralux/assets/images/avatar/1.png' %}" class="img-fluid rounded h-100 w-100" alt="">
+                                <div class="bg-soft-primary text-primary fw-bold d-flex align-items-center justify-content-center" style="width:100%;height:100%;border-radius:8px;font-size:48px;line-height:1;">
+                                    {% if client_profile.full_name %}
+                                        {{ client_profile.full_name|slice:":1"|upper }}
+                                    {% elif client_user %}
+                                        {{ client_user.username|slice:":1"|upper }}
+                                    {% else %}
+                                        ?
+                                    {% endif %}
+                                </div>
                             {% endif %}
                         </div>
                     </div>
@@ -37,7 +45,7 @@
                     <label class="fw-semibold">Email:</label>
                 </div>
                 <div class="col-lg-8">
-                    <div class="form-control-plaintext">{{ client_user.email|default:"-" }}</div>
+                    <div class="form-control-plaintext">{% if client_user %}{{ client_user.email|default:"-" }}{% else %}-{% endif %}</div>
                 </div>
             </div>
             <div class="row mb-4 align-items-center">
@@ -45,7 +53,7 @@
                     <label class="fw-semibold">Username:</label>
                 </div>
                 <div class="col-lg-8">
-                    <div class="form-control-plaintext">{{ client_user.username|default:"-" }}</div>
+                    <div class="form-control-plaintext">{% if client_user %}{{ client_user.username|default:"-" }}{% else %}-{% endif %}</div>
                 </div>
             </div>
             <div class="row mb-4 align-items-center">
@@ -146,55 +154,6 @@
                 </div>
             </div>
         </div>
-        <hr class="my-0">
-        <div class="card-body additional-info">
-            <div class="mb-4 d-flex align-items-center justify-content-between">
-                <h5 class="fw-bold mb-0 me-4">
-                    <span class="d-block mb-2">Parcerias e Descontos:</span>
-                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Informação de parceria e desconto.</span>
-                </h5>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label class="fw-semibold">Parceria:</label>
-                </div>
-                <div class="col-lg-8">
-                    <div class="form-control-plaintext">{{ client_profile.partner.name|default:"-" }}</div>
-                </div>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label class="fw-semibold">Tipo de desconto:</label>
-                </div>
-                <div class="col-lg-8">
-                    <div class="form-control-plaintext">{{ client_profile.get_discount_type_display|default:"Sem desconto" }}</div>
-                </div>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label class="fw-semibold">Valor:</label>
-                </div>
-                <div class="col-lg-8">
-                    <div class="form-control-plaintext">
-                        {% if client_profile.discount_type == "percent" and client_profile.discount_percent %}
-                            {{ client_profile.discount_percent }}%
-                        {% elif client_profile.discount_type == "fixed" and client_profile.discount_amount %}
-                            {{ client_profile.discount_amount }}
-                        {% else %}
-                            —
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label class="fw-semibold">Descrição:</label>
-                </div>
-                <div class="col-lg-8">
-                    <div class="form-control-plaintext">{{ client_profile.discount_label|default:"-" }}</div>
-                </div>
-            </div>
-        </div>
     {% else %}
         <div class="card-body personal-info">
             <div class="mb-4 d-flex align-items-center justify-content-between">
@@ -211,7 +170,13 @@
                 <div class="col-lg-8">
                     <div class="mb-4 mb-md-0 d-flex gap-4 your-brand">
                         <div class="wd-100 ht-100 position-relative overflow-hidden border border-gray-2 rounded">
-                            <img src="{% static 'duralux/assets/images/avatar/1.png' %}" class="upload-pic img-fluid rounded h-100 w-100" alt="">
+                            {% if form.instance.profile_photo %}
+                                <img src="{{ form.instance.profile_photo.url }}" class="upload-pic h-100 w-100" style="object-fit:cover;" alt="">
+                            {% else %}
+                                <div class="bg-soft-primary text-primary fw-bold d-flex align-items-center justify-content-center upload-pic" style="width:100%;height:100%;border-radius:8px;font-size:48px;line-height:1;">
+                                    {{ form.instance.full_name|default:form.full_name.value|default:form.username.value|slice:":1"|upper }}
+                                </div>
+                            {% endif %}
                             <div class="position-absolute start-50 top-50 end-0 bottom-0 translate-middle h-100 w-100 hstack align-items-center justify-content-center c-pointer upload-button">
                                 <i class="feather feather-camera" aria-hidden="true"></i>
                             </div>
@@ -254,20 +219,6 @@
                     </div>
                     {% if form.email.errors %}
                         <div class="invalid-feedback d-block">{{ form.email.errors|striptags }}</div>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label for="usernameInput" class="fw-semibold">Username:</label>
-                </div>
-                <div class="col-lg-8">
-                    <div class="input-group">
-                        <div class="input-group-text"><i class="feather-link-2"></i></div>
-                        <input type="text" name="username" class="form-control{% if form.username.errors %} is-invalid{% endif %}" id="usernameInput" value="{{ form.username.value|default_if_none:'' }}" placeholder="Username">
-                    </div>
-                    {% if form.username.errors %}
-                        <div class="invalid-feedback d-block">{{ form.username.errors|striptags }}</div>
                     {% endif %}
                 </div>
             </div>
@@ -431,89 +382,6 @@
                     </div>
                     {% if form.country.errors %}
                         <div class="invalid-feedback d-block">{{ form.country.errors|striptags }}</div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        <hr class="my-0">
-        <div class="card-body additional-info">
-            <div class="mb-4 d-flex align-items-center justify-content-between">
-                <h5 class="fw-bold mb-0 me-4">
-                    <span class="d-block mb-2">Parcerias e Descontos:</span>
-                    <span class="fs-12 fw-normal text-muted text-truncate-1-line">Configurações de parceria e desconto do cliente.</span>
-                </h5>
-                <a href="javascript:void(0);" class="btn btn-sm btn-light-brand">Adicionar</a>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label class="fw-semibold">Parceria:</label>
-                </div>
-                <div class="col-lg-8">
-                    <select name="partner" class="form-control{% if form.partner.errors %} is-invalid{% endif %}">
-                        <option value="">— escolher —</option>
-                        {% for partner in form.partner.field.queryset %}
-                            <option value="{{ partner.id }}" {% if form.partner.value|default_if_none:''|stringformat:'s' == partner.id|stringformat:'s' %}selected{% endif %}>{{ partner.name }}</option>
-                        {% endfor %}
-                    </select>
-                    {% if form.partner.errors %}
-                        <div class="invalid-feedback d-block">{{ form.partner.errors|striptags }}</div>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label class="fw-semibold">Tipo de desconto:</label>
-                </div>
-                <div class="col-lg-8">
-                    <select name="discount_type" class="form-control{% if form.discount_type.errors %} is-invalid{% endif %}">
-                        {% for value, label in form.discount_type.field.choices %}
-                            <option value="{{ value }}" {% if form.discount_type.value == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                    {% if form.discount_type.errors %}
-                        <div class="invalid-feedback d-block">{{ form.discount_type.errors|striptags }}</div>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label for="discountPercentInput" class="fw-semibold">Desconto (%):</label>
-                </div>
-                <div class="col-lg-8">
-                    <div class="input-group">
-                        <div class="input-group-text"><i class="feather-percent"></i></div>
-                        <input type="number" step="0.01" name="discount_percent" class="form-control{% if form.discount_percent.errors %} is-invalid{% endif %}" id="discountPercentInput" value="{{ form.discount_percent.value|default_if_none:'' }}" placeholder="0">
-                    </div>
-                    {% if form.discount_percent.errors %}
-                        <div class="invalid-feedback d-block">{{ form.discount_percent.errors|striptags }}</div>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label for="discountAmountInput" class="fw-semibold">Desconto (valor):</label>
-                </div>
-                <div class="col-lg-8">
-                    <div class="input-group">
-                        <div class="input-group-text"><i class="feather-dollar-sign"></i></div>
-                        <input type="number" step="0.01" name="discount_amount" class="form-control{% if form.discount_amount.errors %} is-invalid{% endif %}" id="discountAmountInput" value="{{ form.discount_amount.value|default_if_none:'' }}" placeholder="0">
-                    </div>
-                    {% if form.discount_amount.errors %}
-                        <div class="invalid-feedback d-block">{{ form.discount_amount.errors|striptags }}</div>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="row mb-4 align-items-center">
-                <div class="col-lg-4">
-                    <label for="discountLabelInput" class="fw-semibold">Descrição do desconto:</label>
-                </div>
-                <div class="col-lg-8">
-                    <div class="input-group">
-                        <div class="input-group-text"><i class="feather-tag"></i></div>
-                        <input type="text" name="discount_label" class="form-control{% if form.discount_label.errors %} is-invalid{% endif %}" id="discountLabelInput" value="{{ form.discount_label.value|default_if_none:'' }}" placeholder="Descrição">
-                    </div>
-                    {% if form.discount_label.errors %}
-                        <div class="invalid-feedback d-block">{{ form.discount_label.errors|striptags }}</div>
                     {% endif %}
                 </div>
             </div>

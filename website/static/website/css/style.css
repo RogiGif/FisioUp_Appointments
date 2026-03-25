@@ -1,0 +1,226 @@
+:root {
+    --brand-primary: #00b6df;
+    --brand-primary-dark: #0098bb;
+    --brand-deep: #283c50;
+    --brand-muted: #6b7a8a;
+    --surface: #ffffff;
+    --surface-soft: #f3f8fb;
+    --border: #d7e6ef;
+}
+
+body {
+    color: #2f4357;
+    background: #f8fcff;
+}
+
+a {
+    color: var(--brand-deep);
+}
+
+a:hover {
+    color: var(--brand-primary-dark);
+    text-decoration: none;
+}
+
+.website-navbar {
+    background: rgba(255, 255, 255, 0.95);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(6px);
+}
+
+.website-logo {
+    height: 48px;
+    width: auto;
+}
+
+.navbar-light .navbar-nav .nav-link {
+    color: #355166;
+    font-weight: 600;
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+}
+
+.navbar-light .navbar-nav .active > .nav-link,
+.navbar-light .navbar-nav .nav-link:hover {
+    color: var(--brand-primary-dark);
+}
+
+.btn-brand {
+    background: linear-gradient(135deg, var(--brand-primary), #1dc4e7);
+    border: 1px solid var(--brand-primary);
+    color: #fff;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.btn-brand:hover,
+.btn-brand:focus {
+    background: linear-gradient(135deg, var(--brand-primary-dark), var(--brand-primary));
+    border-color: var(--brand-primary-dark);
+    color: #fff;
+}
+
+.btn-outline-brand {
+    border: 1px solid var(--brand-primary);
+    color: var(--brand-primary-dark);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.btn-outline-brand:hover,
+.btn-outline-brand:focus {
+    background: var(--brand-primary);
+    color: #fff;
+}
+
+.badge-soft {
+    background: rgba(0, 182, 223, 0.14);
+    color: var(--brand-primary-dark);
+    border-radius: 999px;
+    padding: 0.55rem 1rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.hero-section {
+    background:
+        radial-gradient(circle at 12% 20%, rgba(0, 182, 223, 0.2), transparent 40%),
+        radial-gradient(circle at 82% 10%, rgba(40, 60, 80, 0.16), transparent 36%),
+        #f8fcff;
+}
+
+.hero-card,
+.info-card,
+.post-card,
+.partner-item,
+.post-detail-card,
+.team-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 12px 26px rgba(22, 54, 76, 0.07);
+}
+
+.section-head h2,
+.page-hero h1,
+.hero-section h1,
+.cta-section h2 {
+    color: var(--brand-deep);
+}
+
+.page-hero {
+    background:
+        linear-gradient(140deg, rgba(0, 182, 223, 0.09), rgba(255, 255, 255, 0)),
+        #ffffff;
+    border-bottom: 1px solid var(--border);
+}
+
+.bg-soft {
+    background: var(--surface-soft);
+}
+
+.team-photo,
+.post-cover {
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    object-fit: cover;
+}
+
+.team-photo {
+    height: 220px;
+}
+
+.post-cover {
+    height: 190px;
+}
+
+.team-photo-placeholder {
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--brand-primary-dark);
+    background: linear-gradient(160deg, rgba(0, 182, 223, 0.22), rgba(40, 60, 80, 0.1));
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+}
+
+.partner-item {
+    border-radius: 12px;
+}
+
+.partner-badge {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: 50%;
+    background: rgba(0, 182, 223, 0.18);
+    color: var(--brand-primary-dark);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.78rem;
+    color: #476176;
+    background: #fff;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary);
+}
+
+.pagination .page-link {
+    color: var(--brand-primary-dark);
+}
+
+.post-body {
+    color: #2f4357;
+}
+
+.cta-section {
+    background:
+        linear-gradient(150deg, rgba(0, 182, 223, 0.12), rgba(0, 182, 223, 0.02)),
+        #ffffff;
+    border-top: 1px solid var(--border);
+}
+
+.website-footer {
+    background: #ffffff;
+    border-top: 1px solid var(--border);
+}
+
+.text-primary {
+    color: var(--brand-primary-dark) !important;
+}
+
+.gap-2 {
+    gap: 0.5rem;
+}
+
+@media (min-width: 992px) {
+    .py-lg-6 {
+        padding-top: 5rem;
+        padding-bottom: 5rem;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .website-navbar .navbar-collapse {
+        margin-top: 0.75rem;
+        border-top: 1px solid var(--border);
+        padding-top: 0.75rem;
+    }
+}

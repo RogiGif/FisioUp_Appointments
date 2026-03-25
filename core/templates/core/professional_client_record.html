@@ -15,11 +15,15 @@
     <div class="card">
       <h3 style="margin:0 0 8px 0;">Dados</h3>
 
-      {% if client_profile.profile_photo %}
-        <div style="margin-bottom:10px;">
+      <div style="margin-bottom:10px;">
+        {% if client_profile.profile_photo %}
           <img src="{{ client_profile.profile_photo.url }}" alt="Foto de perfil" style="width:96px;height:96px;border-radius:50%;object-fit:cover;">
-        </div>
-      {% endif %}
+        {% else %}
+          <div style="width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#e9f7fb;color:#00B6DF;font-weight:700;font-size:32px;line-height:1;">
+            {{ client_profile.full_name|default:client_profile.user.username|slice:":1"|upper }}
+          </div>
+        {% endif %}
+      </div>
 
       <div class="muted">Nome</div>
       <div><strong>{{ client_profile.full_name|default:"-" }}</strong></div>

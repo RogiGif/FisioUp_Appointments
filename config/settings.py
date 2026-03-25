@@ -47,14 +47,17 @@ ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localh
 
 LOGIN_URL = "/login/"
 
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
+if not MEDIA_URL.endswith("/"):
+    MEDIA_URL += "/"
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "media")))
 
 # Application definition
 
 INSTALLED_APPS = [
     'jazzmin',
     'core.apps.CoreConfig',   # 👈 ESTA LINHA É A CHAVE
+    'website.apps.WebsiteConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -77,6 +80,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.SessionTimeoutMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -104,6 +108,8 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.role_flags',
+                'core.context_processors.appointment_notifications',
+                'core.context_processors.upcoming_appointments',
             ],
         },
     },
@@ -180,12 +186,30 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "1") == "1"
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@localhost")
+INTERNAL_NOTIFICATION_EMAIL = os.getenv("INTERNAL_NOTIFICATION_EMAIL", "admin@fisio-up.pt")
+MOLONI_CLIENT_ID = os.getenv("MOLONI_CLIENT_ID", "")
+MOLONI_CLIENT_SECRET = os.getenv("MOLONI_CLIENT_SECRET", "")
+MOLONI_COMPANY_ID = os.getenv("MOLONI_COMPANY_ID", "")
+MOLONI_BASE_URL = os.getenv("MOLONI_BASE_URL", "https://api.moloni.pt/v1")
+MOLONI_REDIRECT_URI = os.getenv("MOLONI_REDIRECT_URI", "")
+AUDIT_LOG_RETENTION_DAYS = int(os.getenv("AUDIT_LOG_RETENTION_DAYS", "365"))
+INTERNAL_SESSION_TIMEOUT_SECONDS = int(os.getenv("INTERNAL_SESSION_TIMEOUT_SECONDS", str(4 * 60 * 60)))
+CLIENT_SESSION_TIMEOUT_SECONDS = int(os.getenv("CLIENT_SESSION_TIMEOUT_SECONDS", str(60 * 60)))
+INTERNAL_SESSION_WARNING_SECONDS = int(os.getenv("INTERNAL_SESSION_WARNING_SECONDS", str(10 * 60)))
+CLIENT_SESSION_WARNING_SECONDS = int(os.getenv("CLIENT_SESSION_WARNING_SECONDS", str(5 * 60)))
+SESSION_KEEPALIVE_INTERVAL_SECONDS = int(os.getenv("SESSION_KEEPALIVE_INTERVAL_SECONDS", str(5 * 60)))
+SESSION_COOKIE_AGE = max(INTERNAL_SESSION_TIMEOUT_SECONDS, CLIENT_SESSION_TIMEOUT_SECONDS)
+SESSION_SAVE_EVERY_REQUEST = True
 
 # Notificações da clínica (fallback se DB estiver vazio)
-CLINIC_NOTIFICATION_EMAILS = ["rececao@fisio-up.pt"]
+CLINIC_NOTIFICATION_EMAILS = [INTERNAL_NOTIFICATION_EMAIL]
 
 # Email principal da clínica (fallback)
-CLINIC_EMAIL = "rececao@fisio-up.pt"
+CLINIC_EMAIL = INTERNAL_NOTIFICATION_EMAIL
+
+# Contactos públicos da clínica (fallback)
+CLINIC_PHONE = "+352 232 395 560"
+CLINIC_ADDRESS = "Rua do Rossio, Loteamento das 4 Esquinas, Lote 2 - Loja 1, 3525-064 Canas de Senhorim"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -237,7 +261,10 @@ JAZZMIN_SETTINGS = {
         "core.Professional": "fas fa-user-md",
         "core.Service": "fas fa-stethoscope",
         "core.Appointment": "fas fa-calendar-check",
-        "core.Availability": "fas fa-clock",
+        "core.WeeklySchedule": "fas fa-business-time",
+        "core.GroupSchedule": "fas fa-calendar-alt",
+        "core.GroupSession": "fas fa-users",
+        "core.GroupEnrollment": "fas fa-user-check",
     },
     "topmenu_links": [
         {"name": "Backoffice", "url": "admin:index", "permissions": ["auth.view_user"]},
@@ -250,7 +277,6 @@ JAZZMIN_SETTINGS = {
         "core.ClientProfile",
         "core.Professional",
         "core.Service",
-        "core.Availability",
         "core.Partner",
         "core.ClinicalRecord",
         "core.TreatmentRecord",
@@ -260,7 +286,6 @@ JAZZMIN_SETTINGS = {
         "core.ClientProfile",
         "core.Professional",
         "core.Service",
-        "core.Availability",
     ],
     "custom_links": {
         "core": [
@@ -307,10 +332,10 @@ JAZZMIN_SETTINGS = {
                 "permissions": ["core.view_partner"],
             },
             {
-                "name": "Disponibilidades",
-                "url": "admin:core_availability_changelist",
-                "icon": "fas fa-clock",
-                "permissions": ["core.view_availability"],
+                "name": "Horários",
+                "url": "/backoffice/horarios/",
+                "icon": "fas fa-business-time",
+                "permissions": ["core.can_access_backoffice"],
             },
         ]
     },

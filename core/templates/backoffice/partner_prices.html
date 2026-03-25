@@ -1,7 +1,7 @@
-{% extends "backoffice/base.html" %}
+{% extends "backoffice/base_duralux.html" %}
 
 {% block backoffice_content %}
-  {% include "backoffice/partials/page_header.html" with title="Preços por parceria" subtitle="Seleciona uma parceria e define preços por serviço." %}
+  {% include "backoffice/partials/page_header.html" with title="Preços por parceria" subtitle="Define por serviço: sem efeito, desconto ou preço final." %}
 
   <div class="card mb-3">
     <div class="card-body">
@@ -29,31 +29,50 @@
             <thead>
               <tr>
                 <th>Serviço</th>
-                <th>Modo</th>
-                <th>Preço único</th>
+                <th>Modo de efeito</th>
+                <th>Estrutura preço</th>
+                <th>Tipo desconto</th>
+                <th>Valor desconto</th>
+                <th>Preço final</th>
                 <th>1ª consulta</th>
                 <th>Seguintes</th>
               </tr>
             </thead>
             <tbody>
               {% for row in service_rows %}
-                {% with s=row.service psp=row.psp %}
+                {% with s=row.service psp=row.psp effect_mode=row.effect_mode discount_type=row.discount_type %}
                 <tr>
                   <td>{{ s.name }}</td>
                   <td>
-                    <select class="form-select form-select-sm" name="service_{{ s.id }}_pricing_mode">
+                    <select class="form-select form-select-sm partner-service-effect-mode" name="service_{{ s.id }}_effect_mode">
+                      <option value="none" {% if effect_mode == "none" %}selected{% endif %}>Sem efeito</option>
+                      <option value="discount" {% if effect_mode == "discount" %}selected{% endif %}>Desconto</option>
+                      <option value="final_price" {% if effect_mode == "final_price" %}selected{% endif %}>Preço final</option>
+                    </select>
+                  </td>
+                  <td>
+                    <select class="form-select form-select-sm partner-service-field partner-service-price-mode" name="service_{{ s.id }}_pricing_mode">
                       <option value="single" {% if psp and psp.pricing_mode == "single" %}selected{% endif %}>Único</option>
                       <option value="first_followup" {% if psp and psp.pricing_mode == "first_followup" %}selected{% endif %}>1ª/Seguintes</option>
                     </select>
                   </td>
                   <td>
-                    <input class="form-control form-control-sm" type="text" name="service_{{ s.id }}_price" value="{% if psp %}{{ psp.price }}{% endif %}">
+                    <select class="form-select form-select-sm partner-service-field partner-service-discount-type" name="service_{{ s.id }}_discount_type">
+                      <option value="percent" {% if discount_type == "percent" %}selected{% endif %}>Percentagem (%)</option>
+                      <option value="fixed" {% if discount_type == "fixed" %}selected{% endif %}>Valor fixo (€)</option>
+                    </select>
                   </td>
                   <td>
-                    <input class="form-control form-control-sm" type="text" name="service_{{ s.id }}_price_first" value="{% if psp %}{{ psp.price_first }}{% endif %}">
+                    <input class="form-control form-control-sm partner-service-field partner-service-discount-value" type="text" name="service_{{ s.id }}_discount" value="{% if psp and psp.discount_type != 'none' %}{% if psp.discount_type == 'percent' %}{{ psp.discount_percent }}{% else %}{{ psp.discount_amount }}{% endif %}{% endif %}">
                   </td>
                   <td>
-                    <input class="form-control form-control-sm" type="text" name="service_{{ s.id }}_price_followup" value="{% if psp %}{{ psp.price_followup }}{% endif %}">
+                    <input class="form-control form-control-sm partner-service-field partner-service-price" type="text" name="service_{{ s.id }}_price" value="{% if psp %}{{ psp.price }}{% endif %}">
+                  </td>
+                  <td>
+                    <input class="form-control form-control-sm partner-service-field partner-service-price-first" type="text" name="service_{{ s.id }}_price_first" value="{% if psp %}{{ psp.price_first }}{% endif %}">
+                  </td>
+                  <td>
+                    <input class="form-control form-control-sm partner-service-field partner-service-price-followup" type="text" name="service_{{ s.id }}_price_followup" value="{% if psp %}{{ psp.price_followup }}{% endif %}">
                   </td>
                 </tr>
                 {% endwith %}
@@ -62,13 +81,75 @@
           </table>
         </div>
 
-        <div class="card-body border-top d-flex gap-2">
-          <button class="btn btn-primary" type="submit">Guardar preços</button>
-          <a class="btn btn-outline-secondary" href="{% url 'backoffice_partners' %}">Voltar</a>
+        <div class="card-body border-top">
+          <div class="text-muted small mb-3">
+            Em "Desconto", aplica-se desconto sobre o preço base do serviço.
+            Em "Preço final", usa-se o preço definido nesta grelha.
+            Em "Sem efeito", a parceria não altera o preço desse serviço.
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Guardar preços</button>
+            <a class="btn btn-outline-secondary" href="{% url 'backoffice_partners' %}">Voltar</a>
+          </div>
         </div>
       </form>
     </div>
   {% else %}
     {% include "backoffice/partials/empty_state.html" with title="Sem parceria selecionada" description="Seleciona uma parceria para editar preços." %}
   {% endif %}
+
+  <script>
+    (function () {
+      const rows = document.querySelectorAll("table tbody tr");
+      if (!rows.length) return;
+
+      rows.forEach((row) => {
+        const modeSelect = row.querySelector(".partner-service-effect-mode");
+        if (!modeSelect) return;
+
+        const syncState = () => {
+          const mode = modeSelect.value;
+          const priceMode = row.querySelector(".partner-service-price-mode");
+          const discountType = row.querySelector(".partner-service-discount-type");
+          const discountValue = row.querySelector(".partner-service-discount-value");
+          const price = row.querySelector(".partner-service-price");
+          const priceFirst = row.querySelector(".partner-service-price-first");
+          const priceFollowup = row.querySelector(".partner-service-price-followup");
+
+          const isNone = mode === "none";
+          const isDiscount = mode === "discount";
+          const isFinalPrice = mode === "final_price";
+          const usesSinglePrice = priceMode && priceMode.value === "single";
+          const usesFirstFollowupPrice = priceMode && priceMode.value === "first_followup";
+
+          const setFieldVisibility = (field, visible) => {
+            if (!field) return;
+            field.style.display = visible ? "" : "none";
+          };
+
+          if (priceMode) priceMode.disabled = isNone || !isFinalPrice;
+          if (discountType) discountType.disabled = isNone || !isDiscount;
+          if (discountValue) discountValue.disabled = isNone || !isDiscount;
+
+          const showPrice = isFinalPrice && usesSinglePrice;
+          const showPriceFirst = isFinalPrice && usesFirstFollowupPrice;
+          const showPriceFollowup = isFinalPrice && usesFirstFollowupPrice;
+
+          if (price) price.disabled = !showPrice;
+          if (priceFirst) priceFirst.disabled = !showPriceFirst;
+          if (priceFollowup) priceFollowup.disabled = !showPriceFollowup;
+
+          setFieldVisibility(price, showPrice);
+          setFieldVisibility(priceFirst, showPriceFirst);
+          setFieldVisibility(priceFollowup, showPriceFollowup);
+        };
+        modeSelect.addEventListener("change", syncState);
+        const priceModeSelect = row.querySelector(".partner-service-price-mode");
+        if (priceModeSelect) {
+          priceModeSelect.addEventListener("change", syncState);
+        }
+        syncState();
+      });
+    })();
+  </script>
 {% endblock %}

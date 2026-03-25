@@ -1,0 +1,194 @@
+.apps-calendar .content-area.calendar-content-area {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    height: calc(100dvh - 88px) !important;
+}
+
+.apps-calendar .content-sidebar.content-sidebar-xl {
+    width: 280px;
+    min-width: 280px;
+    flex: 0 0 280px;
+}
+
+.apps-calendar .content-area.calendar-content-area .content-area-header {
+    flex: 0 0 auto;
+    z-index: 30;
+}
+
+.apps-calendar .calendar-content-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.apps-calendar #lnb-calendars h2 {
+    margin-bottom: 12px !important;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.apps-calendar #lnb-calendars .lnb-calendars-d1 {
+    padding: 0 12px 12px;
+}
+
+.apps-calendar #lnb-calendars .lnb-calendars-item {
+    margin-bottom: 8px;
+}
+
+.apps-calendar #lnb-calendars .lnb-calendars-item label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #334155;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.apps-calendar #lnb-calendars .lnb-calendars-item label:hover {
+    border-color: #cfd8e3;
+    background: #f8fafc;
+}
+
+.apps-calendar #lnb-calendars .lnb-calendars-item label.is-checked {
+    border-color: #c6dbff;
+    background: #f3f8ff;
+}
+
+.apps-calendar #lnb-calendars .lnb-calendars-item label input[type="checkbox"] {
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+.apps-calendar #lnb-calendars .lnb-calendars-item label span:nth-child(2) {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    flex: 0 0 10px;
+}
+
+.apps-calendar #lnb-calendars .lnb-calendars-item label span:last-child {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.apps-calendar #tui-calendar-init {
+    height: 100%;
+    min-height: 0;
+}
+
+.apps-calendar #tui-calendar-init .fc {
+    height: 100%;
+}
+
+.apps-calendar #tui-calendar-init .fc-view-harness,
+.apps-calendar #tui-calendar-init .fc-scrollgrid,
+.apps-calendar #tui-calendar-init .fc-scroller-harness,
+.apps-calendar #tui-calendar-init .fc-timegrid {
+    min-height: 0;
+}
+
+.apps-calendar #tui-calendar-init .fc-scroller {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.apps-calendar #tui-calendar-init .fc-scrollgrid-section-header {
+    background: #fff;
+    z-index: 15;
+}
+
+.apps-calendar #tui-calendar-init .fc-timegrid-slot-label-cushion {
+    color: #486584;
+    font-weight: 500;
+}
+
+.apps-calendar #tui-calendar-init .fc-timegrid-event,
+.apps-calendar #tui-calendar-init .fc-timegrid-event .fc-event-main,
+.apps-calendar #tui-calendar-init .fc-timegrid-event .fc-event-main-frame {
+    overflow: hidden;
+}
+
+.apps-calendar #tui-calendar-init .fc .fc-button-primary {
+    background-color: var(--bs-primary, #00B6DF);
+    border-color: var(--bs-primary, #00B6DF);
+    color: #fff;
+}
+
+.apps-calendar #tui-calendar-init .fc .fc-button-primary:hover,
+.apps-calendar #tui-calendar-init .fc .fc-button-primary:focus,
+.apps-calendar #tui-calendar-init .fc .fc-button-primary.fc-button-active {
+    background-color: var(--bs-primary, #00B6DF);
+    border-color: var(--bs-primary, #00B6DF);
+    color: #fff;
+    box-shadow: none;
+    filter: brightness(0.92);
+}
+
+.apps-calendar .fc-event-content-blocked {
+    color: #1f2937;
+    font-weight: 700;
+}
+
+.apps-calendar .fc-event-content-past {
+    color: #adb5bd;
+}
+
+.apps-calendar .fc-event-content-future {
+    color: #6c757d;
+}
+
+.apps-calendar .fc-event-content-main {
+    font-weight: 700;
+    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    overflow: hidden;
+}
+
+.apps-calendar .fc-event-line-time {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.apps-calendar .fc-event-line-title {
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.apps-calendar .fc-event-line-subtitle {
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.9;
+}
+
+@media (max-width: 1680px) {
+    .apps-calendar .fc-event-line-title {
+        font-size: 11px;
+    }
+
+    .apps-calendar .fc-event-line-subtitle {
+        font-size: 10px;
+    }
+}

@@ -1,0 +1,363 @@
+{% extends "core/base_duralux.html" %}
+{% load static %}
+
+{% block extra_head %}{% endblock %}
+
+{% block main_wrapper %}
+<div class="main-content d-flex apps-calendar">
+                <!-- [ Content Sidebar ] start -->
+                <div class="content-sidebar content-sidebar-xl" data-scrollbar-target="#psScrollbarInit">
+                    <div class="content-sidebar-header bg-white sticky-top hstack justify-content-between">
+                        <h4 class="fw-bolder mb-0">Agenda</h4>
+                        <a href="javascript:void(0);" class="app-sidebar-close-trigger d-flex">
+                            <i class="feather-x"></i>
+                        </a>
+                    </div>
+                    <div class="content-sidebar-header">
+                        {% if is_client_calendar %}
+                            <a href="{% url 'book' %}" id="btn-new-schedule" class="btn btn-primary w-100" data-toggle="modal">
+                        {% else %}
+                            <a href="{% url 'professional_clients' %}" id="btn-new-schedule" class="btn btn-primary w-100" data-toggle="modal">
+                        {% endif %}
+                            <i class="feather-calendar me-2"></i>
+                            <span>Nova marcação</span>
+                        </a>
+                    </div>
+                    <div class="content-sidebar-body">
+                        {% if show_calendar_filters %}
+                            <div id="lnb-calendars" class="lnb-calendars">
+                                <h2 class="px-4 fs-10 fw-bold text-uppercase my-4 text-muted text-spacing-1 text-truncate-1-line">Serviços</h2>
+                                <div id="calendarList" class="lnb-calendars-d1">
+                                    {% for s in services %}
+                                    <div class="lnb-calendars-item">
+                                        <label data-service-id="{{ s.id }}">
+                                            <input type="checkbox" class="form-check-input me-2" value="{{ s.id }}" checked="">
+                                            <span style="border-color: {{ s.color }}; background-color: {{ s.color }}"></span>
+                                            <span>{{ s.name }}</span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% if not is_client_calendar %}
+                                <h2 class="px-4 fs-10 fw-bold text-uppercase my-4 text-muted text-spacing-1 text-truncate-1-line">Técnicos</h2>
+                                {% for p in professionals %}
+                                <div class="p-4 border-top c-pointer single-item schedule-item" data-professional-id="{{ p.id }}">
+                                    <div class="d-flex align-items-start">
+                                        <div class="wd-50 ht-50 bg-soft-primary text-primary lh-1 d-flex align-items-center justify-content-center flex-column rounded-2 schedule-date">
+                                            <span class="fs-18 fw-bold mb-1 d-block">{{ p.user.get_full_name|default:p.user.username|slice:":2"|upper }}</span>
+                                            <span class="fs-10 text-semibold text-uppercase d-block">Prof</span>
+                                        </div>
+                                        <div class="ms-3 schedule-body">
+                                            <div class="text-dark">
+                                                <h6 class="fw-bold my-1 text-truncate-1-line mb-0">{{ p.user.get_full_name|default:p.user.username }}</h6>
+                                                <span class="fs-11 fw-normal text-muted">
+                                                    {% if p.speciality %}{{ p.speciality }}{% else %}Técnico{% endif %}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                <!-- [ Content Sidebar  ] end -->
+                <!-- [ Main Area  ] start -->
+                <div class="content-area calendar-content-area">
+                    {% include "backoffice/partials/alerts.html" %}
+                    <div class="content-area-header sticky-top">
+                        <div class="page-header-left d-flex align-items-center gap-2">
+                            <a href="javascript:void(0);" class="app-sidebar-open-trigger me-2">
+                                <i class="feather-align-left fs-20"></i>
+                            </a>
+                            <div id="menu" class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex calendar-action-btn">
+                                    <div class="dropdown me-1">
+                                        <button id="dropdownMenu-calendarType" class="dropdown-toggle calendar-dropdown-btn" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-bs-offset="0,17">
+                                            <i id="calendarTypeIcon" class="feather-grid calendar-icon fs-12 me-1"></i>
+                                        <span id="calendarTypeName">Semanal</span>
+                                        </button>
+                                        <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu-calendarType">
+                                            <li role="presentation">
+                                                <div class="dropdown-item c-pointer" role="menuitem" data-action="toggle-daily">
+                                                    <i class="feather-list calendar-icon me-3"></i>
+                                                    <span>Diário</span>
+                                                </div>
+                                            </li>
+                                            <li role="presentation">
+                                                <div class="dropdown-item c-pointer" role="menuitem" data-action="toggle-weekly">
+                                                    <i class="feather-umbrella calendar-icon me-3"></i>
+                                                    <span>Semanal</span>
+                                                </div>
+                                            </li>
+                                            <li role="presentation">
+                                                <div class="dropdown-item c-pointer" role="menuitem" data-action="toggle-weeks2">
+                                                    <i class="feather-sliders calendar-icon me-3"></i>
+                                                    <span>Weeks (2)</span>
+                                                </div>
+                                            </li>
+                                            <li role="presentation">
+                                                <div class="dropdown-item" role="menuitem" data-action="toggle-weeks3">
+                                                    <i class="feather-framer calendar-icon me-3"></i>
+                                                    <span>Weeks (3)</span>
+                                                </div>
+                                            </li>
+                                            <li role="presentation">
+                                                <div class="dropdown-item c-pointer" role="menuitem" data-action="toggle-monthly">
+                                                    <i class="feather-grid calendar-icon me-3"></i>
+                                                    <span>Mensal</span>
+                                                </div>
+                                            </li>
+                                            <li role="presentation" class="dropdown-divider"></li>
+                                            <li role="presentation">
+                                                <div class="dropdown-item" role="menuitem" data-action="toggle-workweek">
+                                                    <div class="custom-control custom-checkbox">
+                                                        <input type="checkbox" class="custom-control-input chalendar-checkbox" id="viewWeekendsSchedules" value="toggle-workweek" checked="checked">
+                                                        <label class="custom-control-label c-pointer" for="viewWeekendsSchedules">
+                                                            <span class="fs-12 fw-bold">Show Weekends</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li role="presentation">
+                                                <div class="dropdown-item" role="menuitem" data-action="toggle-start-day-1">
+                                                    <div class="custom-control custom-checkbox">
+                                                        <input type="checkbox" class="custom-control-input chalendar-checkbox" id="viewStartSchedules" value="toggle-start-day-1">
+                                                        <label class="custom-control-label c-pointer" for="viewStartSchedules">
+                                                            <span class="fs-12 fw-bold">Start Week on Monday</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li role="presentation">
+                                                <div class="dropdown-item" role="menuitem" data-action="toggle-narrow-weekend">
+                                                    <div class="custom-control custom-checkbox">
+                                                        <input type="checkbox" class="custom-control-input chalendar-checkbox" id="viewNarrowerSchedules" value="toggle-narrow-weekend">
+                                                        <label class="custom-control-label c-pointer" for="viewNarrowerSchedules">
+                                                            <span class="fs-12 fw-bold">Narrower than weekdays</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div class="menu-navi d-none d-sm-flex">
+                                        <button type="button" class="move-today" data-action="move-today">
+                                            <i class="feather-clock calendar-icon me-1 fs-12" data-action="move-today"></i>
+                                            <span>Hoje</span>
+                                        </button>
+                                    </div>
+                                    {% if show_availability_toggle or is_client_calendar or professional and not is_admin %}
+                                    <div class="menu-navi d-none d-sm-flex ms-2">
+                                        <button type="button" class="move-today" id="availability-toggle-btn">
+                                            <i class="feather-eye calendar-icon me-1 fs-12"></i>
+                                            <span>Mostrar disponibilidades</span>
+                                        </button>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="page-header-right ms-auto">
+                            <div class="hstack gap-2">
+                                <div id="renderRange" class="render-range d-none d-sm-flex"></div>
+                                <div class="btn-group gap-1 menu-navi" role="group">
+                                    <button type="button" class="avatar-text avatar-md move-day" data-action="move-prev">
+                                        <i class="feather-chevron-left fs-12" data-action="move-prev"></i>
+                                    </button>
+                                    <button type="button" class="avatar-text avatar-md move-day" data-action="move-next">
+                                        <i class="feather-chevron-right fs-12" data-action="move-next"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="content-area-body p-0 calendar-content-body">
+                        <div id="tui-calendar-init"></div>
+                    </div>
+                </div>
+                <!-- [ Content Area ] end -->
+            </div>
+</div>
+
+<div class="modal fade" id="quickBookingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quick-booking-modal-title">Marcação rápida</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3 text-muted fw-semibold fs-6" id="quick-slot-label">—</div>
+                {% if is_client_calendar %}
+                    <div class="mb-3">
+                        <label class="form-label">Cliente</label>
+                        <div class="form-control-plaintext">{{ request.user.get_full_name|default:request.user.username }}</div>
+                        <input type="hidden" id="quick-client-id" value="{{ client_profile_id }}">
+                        <input type="hidden" id="quick-client-user-id" value="{{ request.user.id }}">
+                    </div>
+                {% else %}
+                    <div class="mb-3 position-relative">
+                        <label class="form-label">Cliente</label>
+                        <input type="text" class="form-control" id="quick-client-search" placeholder="Pesquisar por nome, username, NIF ou telefone">
+                        <input type="hidden" id="quick-client-id" value="">
+                        <input type="hidden" id="quick-client-user-id" value="">
+                        <div class="list-group position-absolute w-100 d-none" id="quick-client-results" style="z-index: 1056;"></div>
+                        <div class="form-text" id="quick-client-help">Escreve pelo menos 2 letras (ou carrega Enter para pesquisar).</div>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="quick-create-client-btn">
+                                <i class="feather-user-plus me-1"></i>
+                                Criar cliente
+                            </button>
+                        </div>
+                    </div>
+                {% endif %}
+                <div class="mb-3">
+                    <label class="form-label">Serviço</label>
+                    <select class="form-select" id="quick-service-select">
+                        <option value="">— escolher —</option>
+                        {% for s in services %}
+                        <option value="{{ s.id }}">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Profissional</label>
+                    <select class="form-select" id="quick-professional-select" {% if not is_admin and not is_client_calendar %}disabled{% endif %}>
+                        <option value="">— escolher —</option>
+                        {% for p in professionals %}
+                        <option value="{{ p.id }}">{{ p.user.get_full_name|default:p.user.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Hora</label>
+                    <select class="form-select" id="quick-time-select">
+                        <option value="">— escolher —</option>
+                    </select>
+                    <div class="form-text">Escolhe um horário disponível para o serviço e profissional selecionados.</div>
+                </div>
+                {% if not is_client_calendar %}
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" value="1" id="quick-send-client-email" checked>
+                        <label class="form-check-label" for="quick-send-client-email">
+                            Enviar email de confirmação ao cliente
+                        </label>
+                    </div>
+                {% endif %}
+                <div class="alert alert-danger d-none" id="quick-error"></div>
+            </div>
+            <div class="modal-footer">
+                {% if not is_client_calendar %}
+                    <button type="button" class="btn btn-outline-primary me-auto" id="quick-series-btn">
+                        <i class="feather-repeat me-2"></i>
+                        Marcação em série
+                    </button>
+                {% endif %}
+                <button type="button" class="btn btn-primary" id="quick-create-btn">Criar marcação</button>
+                {% if not is_client_calendar %}
+                    <button type="button" class="btn btn-danger" id="quick-block-btn">
+                        <i class="feather-lock me-2"></i>
+                        Bloquear horário
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="rescheduleBookingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reagendar marcação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3 text-muted fw-semibold fs-6" id="reschedule-current-label">Marcação atual: —</div>
+                <div class="mb-3">
+                    <label class="form-label">Cliente</label>
+                    <input type="text" class="form-control" id="reschedule-client-input" readonly>
+                </div>
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Serviço</label>
+                        <select class="form-select" id="reschedule-service-select" disabled>
+                            <option value="">— escolher —</option>
+                            {% for s in services %}
+                            <option value="{{ s.id }}">{{ s.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Profissional</label>
+                        <select class="form-select" id="reschedule-professional-select">
+                            <option value="">— escolher —</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-3 mt-0">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Data</label>
+                        <input type="date" class="form-control" id="reschedule-date-input">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Hora</label>
+                        <select class="form-select" id="reschedule-time-select">
+                            <option value="">— escolher —</option>
+                        </select>
+                    </div>
+                </div>
+                {% if not is_client_calendar %}
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" value="1" id="reschedule-send-client-email" checked>
+                        <label class="form-check-label" for="reschedule-send-client-email">
+                            Enviar email de confirmação ao cliente
+                        </label>
+                    </div>
+                {% endif %}
+                <div class="alert alert-danger d-none mt-3" id="reschedule-error"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" id="reschedule-save-btn">Guardar reagendamento</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="eventOptionsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Opções da marcação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2 text-muted small" id="event-option-time">—</div>
+                <div class="fw-semibold" id="event-option-title">—</div>
+                <div class="mt-2 d-none" id="event-option-meta">
+                    <div class="text-muted small mb-1" id="event-option-professional-line">—</div>
+                    <div class="text-muted small mb-0">
+                        <span class="fw-semibold text-dark">Parceria:</span>
+                        <span id="event-option-partner">—</span>
+                    </div>
+                </div>
+                <div class="mt-2 d-none" id="event-option-status">
+                    <span class="badge" id="event-option-status-badge">—</span>
+                </div>
+                <div class="text-muted small d-none" id="event-option-payment">—</div>
+            </div>
+            <div class="modal-footer">
+                <a class="btn btn-primary" id="event-detail-btn" href="#">Ver/editar marcação</a>
+                <button type="button" class="btn btn-success d-none" id="event-confirm-btn">Confirmar</button>
+                <button type="button" class="btn btn-outline-primary" id="event-new-btn">Marcar outra neste horário</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}{% endblock %}

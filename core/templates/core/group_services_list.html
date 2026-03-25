@@ -1,0 +1,42 @@
+{% extends "core/base.html" %}
+
+{% block title %}Turmas{% endblock %}
+
+{% block page_title %}Turmas{% endblock %}
+{% block page_subtitle %}
+  <div class="muted">Escolhe um serviço de turma.</div>
+{% endblock %}
+
+{% block content %}
+  <div class="card">
+    {% if services %}
+      <table class="table-compact">
+        <thead>
+          <tr>
+            <th>Serviço</th>
+            <th>Duração</th>
+            <th>Capacidade</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in services %}
+            <tr>
+              <td>{{ s.name }}</td>
+              <td>{{ s.duration_minutes }} min</td>
+              <td>{{ s.capacity|default:"-" }}</td>
+              <td>
+                <a class="btn secondary btn-compact" href="{% url 'group_sessions_list' s.id %}">Ver sessões</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted">Sem serviços de turma disponíveis.</div>
+    {% endif %}
+    <div class="card-actions" style="margin-top:10px;">
+      <a class="btn secondary" href="{% url 'book' %}">Voltar</a>
+    </div>
+  </div>
+{% endblock %}

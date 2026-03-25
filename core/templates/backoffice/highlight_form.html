@@ -1,0 +1,72 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title=title subtitle="Define imagem, título e descrição do destaque." %}
+
+  <div class="card backoffice-form-card">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {% if return_to %}
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+        {% endif %}
+        {{ form.non_field_errors }}
+
+        <div class="mb-3">
+          <label class="form-label">{{ form.title.label }}</label>
+          {{ form.title }}
+          {% if form.title.errors %}<div class="text-danger small">{{ form.title.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">{{ form.cover_image.label }}</label>
+          {{ form.cover_image }}
+          {% if form.instance.cover_image %}
+            <div class="mt-2">
+              <img src="{{ form.instance.cover_image.url }}" alt="Imagem do destaque" style="max-height:120px; width:auto; border-radius:.5rem;">
+            </div>
+          {% endif %}
+          {% if form.cover_image.errors %}<div class="text-danger small">{{ form.cover_image.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">{{ form.excerpt.label }}</label>
+          {{ form.excerpt }}
+          <div class="text-muted fs-12 mt-1">Texto apresentado no cartão do destaque.</div>
+          {% if form.excerpt.errors %}<div class="text-danger small">{{ form.excerpt.errors }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">{{ form.body.label }}</label>
+          {{ form.body }}
+          <div class="text-muted fs-12 mt-1">Texto completo para a página de detalhe.</div>
+          {% if form.body.errors %}<div class="text-danger small">{{ form.body.errors }}</div>{% endif %}
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-12 col-md-4">
+            <label class="form-label">{{ form.status.label }}</label>
+            {{ form.status }}
+            {% if form.status.errors %}<div class="text-danger small">{{ form.status.errors }}</div>{% endif %}
+          </div>
+          <div class="col-12 col-md-4 d-flex align-items-end">
+            <div class="form-check mb-2">
+              {{ form.is_featured }}
+              <label class="form-check-label" for="{{ form.is_featured.id_for_label }}">{{ form.is_featured.label }}</label>
+            </div>
+          </div>
+          {% if is_edit and post.slug %}
+            <div class="col-12 col-md-4 d-flex align-items-end">
+              <a class="btn btn-outline-primary mb-1" target="_blank" href="/website/destaques/{{ post.slug }}/">Ver no website</a>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Guardar</button>
+          <a class="btn btn-outline-secondary" href="{{ back_url }}">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

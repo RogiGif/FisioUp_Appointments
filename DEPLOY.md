@@ -25,6 +25,24 @@ Email (SMTP):
 - `EMAIL_USE_TLS=1`
 - `DEFAULT_FROM_EMAIL=...`
 
+Media (uploads):
+- `MEDIA_ROOT=/caminho/absoluto/para/media`
+- opcional: `MEDIA_URL=/media/`
+
+Sessão / segurança:
+- `INTERNAL_SESSION_TIMEOUT_SECONDS=14400`
+- `CLIENT_SESSION_TIMEOUT_SECONDS=3600`
+- `INTERNAL_SESSION_WARNING_SECONDS=600`
+- `CLIENT_SESSION_WARNING_SECONDS=300`
+- `SESSION_KEEPALIVE_INTERVAL_SECONDS=300`
+
+Moloni API:
+- `MOLONI_CLIENT_ID=...`
+- `MOLONI_CLIENT_SECRET=...`
+- opcional: `MOLONI_COMPANY_ID=...` (só se houver várias empresas e quiseres forçar uma)
+- `MOLONI_BASE_URL=https://api.moloni.pt/v1`
+- `MOLONI_REDIRECT_URI=https://marcacoes.fisio-up.pt/backoffice/settings/moloni/callback/`
+
 Opcional (segurança SSL/HSTS):
 - `SECURE_SSL_REDIRECT=1`
 - `SECURE_HSTS_SECONDS=0` (aumentar depois do HTTPS validado)
@@ -41,16 +59,37 @@ Opcional (segurança SSL/HSTS):
 
 3. Recolher estáticos
    - `python manage.py collectstatic`
+   python manage.py collectstatic --noinput
 
-4. Iniciar servidor
+   - Sempre que houver alterações no site público (`website/static/website/...`), repetir este passo.
+
+4. Reiniciar a app Python
+   - necessário quando muda o `.env` (ex: timeouts de sessão)
+
+5. Iniciar servidor
    - `ENV=production DEBUG=0 python manage.py runserver 0.0.0.0:8000` (dev/prod simples)
 
 ## 3) Static & Media
 
 - `STATIC_ROOT` está configurado para `staticfiles/`.
-- `MEDIA_ROOT` está configurado para `media/`.
+- `MEDIA_ROOT` por omissão é `media/`, mas em produção deve ser definido via env (ex: `/var/www/fisioapp/media`).
 - Em produção, servir `staticfiles/` e `media/` via Nginx ou outro servidor web.
 - Em desenvolvimento, o Django serve media automaticamente.
+
+Exemplo Nginx:
+```nginx
+location /media/ {
+    alias /var/www/fisioapp/media/;
+    expires 30d;
+    add_header Cache-Control "public";
+}
+
+location /static/ {
+    alias /var/www/fisioapp/staticfiles/;
+    expires 30d;
+    add_header Cache-Control "public";
+}
+```
 
 ## 4) Healthcheck
 
@@ -72,6 +111,10 @@ Opcional (segurança SSL/HSTS):
 - [ ] Criar marcação no backoffice
 - [ ] Ver `/prof/calendario/`
 - [ ] Enviar password reset
+- [ ] Confirmar aviso de sessão e logout automático por inatividade
+- [ ] Ligar Moloni em `/backoffice/settings/moloni/`
+- [ ] Testar ligação Moloni
+- [ ] Sincronizar clientes Moloni
 
 ## 7) Backups
 

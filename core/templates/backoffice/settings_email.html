@@ -1,0 +1,167 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  <div class="d-flex flex-column flex-xl-row gap-4">
+    <div class="content-sidebar content-sidebar-md">
+      <div class="content-sidebar-header bg-white sticky-top hstack justify-content-between">
+        <h4 class="fw-bolder mb-0">Settings</h4>
+        <a href="javascript:void(0);" class="app-sidebar-close-trigger d-flex">
+          <i class="feather-x"></i>
+        </a>
+      </div>
+      <div class="content-sidebar-body">
+        <ul class="nav flex-column nxl-content-sidebar-item">
+          <li class="nav-item">
+            <a class="nav-link disabled" href="javascript:void(0);" aria-disabled="true">
+              <i class="feather-airplay"></i>
+              <span>Geral</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="{% url 'backoffice_settings_email' %}">
+              <i class="feather-mail"></i>
+              <span>Email</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_settings_moloni' %}">
+              <i class="feather-link"></i>
+              <span>Moloni</span>
+            </a>
+          </li>
+          {% if is_admin_role %}
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_audit_logs' %}">
+              <i class="feather-shield"></i>
+              <span>Auditoria</span>
+            </a>
+          </li>
+          {% endif %}
+          {% if is_admin_role or is_professional %}
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_post_designer' %}">
+              <i class="feather-image"></i>
+              <span>Criador de posts</span>
+            </a>
+          </li>
+          {% endif %}
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_highlights' %}">
+              <i class="feather-image"></i>
+              <span>Destaques</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link disabled" href="javascript:void(0);" aria-disabled="true">
+              <i class="feather-sliders"></i>
+              <span>Outros</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="content-area flex-grow-1">
+      <form method="post">
+        {% csrf_token %}
+        <div class="content-area-header bg-white sticky-top d-flex flex-wrap align-items-center gap-3">
+          <div class="page-header-left">
+            <h4 class="fw-bold mb-1">Email</h4>
+            <span class="text-muted">Configuração de notificações automáticas.</span>
+          </div>
+          <div class="page-header-right ms-auto">
+            <button type="submit" class="btn btn-primary">
+              <i class="feather-save me-2"></i>
+              Guardar
+            </button>
+          </div>
+        </div>
+        <div class="content-area-body pt-4">
+          <div class="card mb-0">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Notificações internas (clínica)</h6>
+              <div class="mb-3">
+                <div class="form-check form-switch">
+                  {{ form.notify_admin_on_pending_registration }}
+                  <label class="form-check-label" for="{{ form.notify_admin_on_pending_registration.id_for_label }}">
+                    Pedido de registo pendente
+                  </label>
+                </div>
+                <div class="text-muted small">Envia email à clínica quando um utente se regista e fica pendente.</div>
+              </div>
+              <div class="mb-3">
+                <div class="form-check form-switch">
+                  {{ form.notify_clinic_on_new_booking }}
+                  <label class="form-check-label" for="{{ form.notify_clinic_on_new_booking.id_for_label }}">
+                    Nova marcação (cliente ou profissional)
+                  </label>
+                </div>
+                <div class="text-muted small">Notifica a clínica sempre que é criada uma marcação.</div>
+              </div>
+              <div class="mb-3">
+                <div class="form-check form-switch">
+                  {{ form.notify_clinic_on_client_reschedule }}
+                  <label class="form-check-label" for="{{ form.notify_clinic_on_client_reschedule.id_for_label }}">
+                    Reagendamento pelo utente
+                  </label>
+                </div>
+                <div class="text-muted small">Notifica a clínica quando o utente pede reagendamento.</div>
+              </div>
+              <div class="mb-4">
+                <div class="form-check form-switch">
+                  {{ form.notify_clinic_on_client_cancel }}
+                  <label class="form-check-label" for="{{ form.notify_clinic_on_client_cancel.id_for_label }}">
+                    Cancelamento pelo utente
+                  </label>
+                </div>
+                <div class="text-muted small">Notifica a clínica quando o utente cancela.</div>
+              </div>
+
+              <h6 class="fw-bold mb-3">Notificações para profissionais</h6>
+              <div class="mb-4">
+                <div class="form-check form-switch">
+                  {{ form.notify_professional_on_new_booking }}
+                  <label class="form-check-label" for="{{ form.notify_professional_on_new_booking.id_for_label }}">
+                    Nova marcação atribuída
+                  </label>
+                </div>
+                <div class="text-muted small">Envia email ao profissional quando recebe uma marcação.</div>
+              </div>
+
+              <h6 class="fw-bold mb-3">Notificações para clientes</h6>
+              <div class="mb-3">
+                <div class="form-check form-switch">
+                  {{ form.notify_client_on_new_booking }}
+                  <label class="form-check-label" for="{{ form.notify_client_on_new_booking.id_for_label }}">
+                    Marcação criada pela clínica/profissional
+                  </label>
+                </div>
+                <div class="text-muted small">Envia email ao cliente quando a clínica cria a marcação por ele.</div>
+              </div>
+              <div class="mb-4">
+                <div class="form-check form-switch">
+                  {{ form.notify_client_on_clinic_changes }}
+                  <label class="form-check-label" for="{{ form.notify_client_on_clinic_changes.id_for_label }}">
+                    Alterações feitas pela clínica
+                  </label>
+                </div>
+                <div class="text-muted small">Confirmações, cancelamentos ou reagendamentos feitos pela clínica.</div>
+              </div>
+
+              <h6 class="fw-bold mb-3">Emails de conta</h6>
+              <div class="mb-0">
+                <div class="form-check form-switch">
+                  {{ form.notify_password_reset }}
+                  <label class="form-check-label" for="{{ form.notify_password_reset.id_for_label }}">
+                    Recuperação de password
+                  </label>
+                </div>
+                <div class="text-muted small">Envia o link de recuperação quando o utilizador pede nova palavra-passe.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

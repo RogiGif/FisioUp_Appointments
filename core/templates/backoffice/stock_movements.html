@@ -1,0 +1,99 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Movimentos de stock" subtitle="Histórico de entradas e consumos." %}
+
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_dashboard' %}">Resumo</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_products' %}">Produtos</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_categories' %}">Categorias</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_entries' %}">Entradas</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'backoffice_stock_adjustments' %}">Ajustes</a>
+    <a class="btn btn-primary btn-sm" href="{% url 'backoffice_stock_movements' %}">Movimentos</a>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body py-2">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+          <label class="form-label small mb-0">Pesquisar</label>
+          <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Produto ou nota">
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label small mb-0">Produto</label>
+          <select name="product" class="form-select">
+            <option value="">Todos</option>
+            {% for product in products %}
+              <option value="{{ product.id }}" {% if product_id == product.id|stringformat:"s" %}selected{% endif %}>{{ product.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label small mb-0">Tipo</label>
+          <select name="type" class="form-select">
+            <option value="">Todos</option>
+            <option value="purchase" {% if movement_type == "purchase" %}selected{% endif %}>Entrada</option>
+            <option value="consumption" {% if movement_type == "consumption" %}selected{% endif %}>Consumo</option>
+            <option value="adjustment" {% if movement_type == "adjustment" %}selected{% endif %}>Ajuste</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small mb-0">De</label>
+          <input type="date" name="date_from" value="{{ date_from }}" class="form-control">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small mb-0">Até</label>
+          <input type="date" name="date_to" value="{{ date_to }}" class="form-control">
+        </div>
+        <div class="col-12 col-md-12 d-flex gap-2">
+          <button class="btn btn-primary">Filtrar</button>
+          <a class="btn btn-outline-secondary" href="{% url 'backoffice_stock_movements' %}">Limpar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      {% if movements %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Produto</th>
+                <th>Tipo</th>
+                <th class="text-end">Quantidade</th>
+                <th class="text-end">Custo</th>
+                <th>Referência</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for mv in movements %}
+                <tr>
+                  <td>{{ mv.created_at|date:"d/m/Y H:i" }}</td>
+                  <td>{{ mv.product.name }}</td>
+                  <td>{{ mv.get_movement_type_display }}</td>
+                  <td class="text-end">{{ mv.quantity_base|floatformat:2 }}</td>
+                  <td class="text-end">{% if mv.unit_cost %}{{ mv.unit_cost|floatformat:2 }} €{% else %}—{% endif %}</td>
+                  <td>
+                    {% if mv.appointment %}
+                      <a href="{% url 'professional_appointment_detail' mv.appointment.id %}">Marcação #{{ mv.appointment.id }}</a>
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if page_obj %}
+          {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+        {% endif %}
+      {% else %}
+        <div class="text-muted">Sem movimentos.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

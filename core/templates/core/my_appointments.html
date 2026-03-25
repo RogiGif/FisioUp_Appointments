@@ -1,146 +1,345 @@
-{% extends "core/base.html" %}
-
-{% block title %}Minhas marcações{% endblock %}
-
-{% block page_title %}Minhas marcações{% endblock %}
-{% block page_subtitle %}
-  <div class="muted">Vê a tua próxima consulta, histórico e cancela/reagenda se necessário.</div>
-{% endblock %}
+{% extends "core/base_duralux.html" %}
 
 {% block content %}
-
-  <div class="grid" style="grid-template-columns:1.3fr 1fr;">
-
-    <!-- COLUNA ESQUERDA -->
-    <div>
-
-      {% if next_appointment %}
-        <div class="card" style="border:1px solid #eee;">
-          <h3 style="margin:0 0 6px 0;">Próxima marcação</h3>
-
-          <div class="muted">
-            <strong>{{ next_appointment.date }}</strong>
-            {% if next_appointment.time %} às <strong>{{ next_appointment.time }}</strong>{% endif %}
-          </div>
-
-          <div style="margin-top:8px;">
-            <span class="pill">Serviço: <strong>{{ next_appointment.service.name }}</strong></span>
-            <span class="pill">Profissional: <strong>{{ next_appointment.professional.user.username }}</strong></span>
-            <span class="pill">Estado: <strong>{{ next_appointment.status_label|default:next_appointment.status }}</strong></span>
-          </div>
-
-          <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
-            <a class="btn" href="{% url 'book' %}">Marcar nova</a>
-
-            {% if next_appointment.status != "completed" and next_appointment.status != "cancelled" %}
-              <a class="btn secondary"
-               href="{% url 'reschedule_appointment' next_appointment.id %}">
-                Reagendar
-              </a>
-            {% endif %}
-
-            {% if next_appointment.status == "scheduled" %}
-              <form method="post" action="{% url 'cancel_appointment' next_appointment.id %}" style="margin:0;">
-                {% csrf_token %}
-                <button class="btn secondary" type="submit"
-                        onclick="return confirm('Queres cancelar esta marcação?');">
-                  Cancelar
-                </button>
-              </form>
-            {% endif %}
-          </div>
+    <div class="page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">{% if is_professional_view %}Marcações{% else %}Dashboard{% endif %}</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'my_appointments' %}">Home</a></li>
+                <li class="breadcrumb-item">
+                    {% if is_professional_view %}Minhas consultas{% else %}Minhas marcações{% endif %}
+                </li>
+            </ul>
         </div>
-      {% endif %}
-
-      <div class="card" style="margin-top:14px;">
-        <h3 style="margin:0 0 8px 0;">Futuras / por concluir</h3>
-
-        {% if upcoming %}
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Serviço</th>
-                <th>Profissional</th>
-                <th>Estado</th>
-                <th style="text-align:right;">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for a in upcoming %}
-                <tr>
-                  <td>
-                    {{ a.date }}
-                    {% if a.time %}<br><span class="muted">{{ a.time }}</span>{% endif %}
-                  </td>
-                  <td>{{ a.service.name }}</td>
-                  <td>{{ a.professional.user.username }}</td>
-                  <td>{{ a.status_label|default:a.status }}</td>
-
-                  <td style="text-align:right;white-space:nowrap;">
-                    {% if a.status != "completed" and a.status != "cancelled" %}
-                      <a class="btn secondary"
-                      href="{% url 'reschedule_appointment' a.id %}">
-                      Reagendar
-                      </a>
-                    {% endif %}
-
-                    {% if a.status == "scheduled" %}
-                      <form method="post" action="{% url 'cancel_appointment' a.id %}" style="margin:0; display:inline;">
-                        {% csrf_token %}
-                        <button class="btn secondary" type="submit"
-                                onclick="return confirm('Queres cancelar esta marcação?');">
-                          Cancelar
-                        </button>
-                      </form>
-                    {% endif %}
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <div class="muted">Não tens marcações futuras.</div>
+        {% if not is_professional_view %}
+            <div class="page-header-right ms-auto">
+                <a href="{% url 'book' %}" class="btn btn-primary">
+                    <i class="feather-plus me-2"></i>
+                    Nova marcação
+                </a>
+            </div>
         {% endif %}
-      </div>
-
     </div>
+    {% include "backoffice/partials/alerts.html" %}
 
-    <!-- COLUNA DIREITA -->
-    <div>
-      <div class="card">
-        <h3 style="margin:0 0 8px 0;">Histórico</h3>
+    <div class="row g-4 mt-3">
+        <div class="col-12 {% if not is_professional_view %}col-xl-6{% endif %}">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="mb-0">Próxima marcação</h5>
+                    {% if client_upcoming_count %}
+                        <span class="badge bg-soft-primary text-primary">{{ client_upcoming_count }} próximas</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if next_appointment %}
+                        <div class="d-flex align-items-center flex-wrap gap-3">
+                            <div class="avatar-text avatar-lg bg-primary text-white">
+                                <i class="feather-calendar"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold fs-5">
+                                    {{ next_appointment.date }}
+                                    {% if next_appointment.time %}às {{ next_appointment.time }}{% endif %}
+                                </div>
+                                <div class="text-muted">
+                                    {{ next_appointment.service.name }} ·
+                                    {% if is_professional_view %}
+                                        {{ next_appointment.client.get_full_name|default:next_appointment.client.username }}
+                                    {% else %}
+                                        {{ next_appointment.professional.user.get_full_name|default:next_appointment.professional.user.username }}
+                                    {% endif %}
+                                </div>
+                                <div class="mt-2">
+                                    {% if next_appointment.status == "completed" %}
+                                        <span class="badge bg-soft-success text-success">{{ next_appointment.status_label|default:next_appointment.status }}</span>
+                                    {% elif next_appointment.status == "cancelled" %}
+                                        <span class="badge bg-soft-danger text-danger">{{ next_appointment.status_label|default:next_appointment.status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-soft-warning text-warning">{{ next_appointment.status_label|default:next_appointment.status }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
 
-        {% if past %}
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Serviço</th>
-                <th>Profissional</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for a in past %}
-                <tr>
-                  <td>
-                    {{ a.date }}
-                    {% if a.time %}<br><span class="muted">{{ a.time }}</span>{% endif %}
-                  </td>
-                  <td>{{ a.service.name }}</td>
-                  <td>{{ a.professional.user.username }}</td>
-                  <td>{{ a.status_label|default:a.status }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <div class="muted">Ainda não tens histórico.</div>
+                        {% if not is_professional_view %}
+                            <div class="d-flex align-items-center gap-2 flex-wrap mt-3">
+                                <a class="btn btn-outline-primary" href="{% url 'book' %}">Marcar nova</a>
+                                {% if next_appointment.status != "completed" and next_appointment.status != "in_debt" and next_appointment.status != "cancelled" and next_appointment.status != "no_show" %}
+                                    <div class="d-inline-flex align-items-center gap-2 flex-nowrap">
+                                        <a class="btn btn-outline-secondary text-center" style="min-width: 130px;" href="{% url 'reschedule_appointment' next_appointment.id %}">
+                                            Reagendar
+                                        </a>
+                                        <form method="post" action="{% url 'cancel_appointment' next_appointment.id %}" class="d-inline m-0">
+                                            {% csrf_token %}
+                                            <button class="btn btn-outline-danger text-center" style="min-width: 130px;" type="submit"
+                                                    onclick="return confirm('Queres cancelar esta marcação?');">
+                                                Cancelar
+                                            </button>
+                                        </form>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-muted">
+                            {% if is_professional_view %}
+                                Ainda não tens consultas futuras.
+                            {% else %}
+                                Ainda não tens marcações futuras.
+                            {% endif %}
+                        </div>
+                        {% if not is_professional_view %}
+                            <div class="mt-3">
+                                <a class="btn btn-primary" href="{% url 'book' %}">Marcar nova</a>
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if not is_professional_view %}
+            <div class="col-12 col-xl-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">Próxima turma</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if next_group_upcoming %}
+                            <div class="d-flex align-items-center flex-wrap gap-3">
+                                <div class="avatar-text avatar-lg bg-success text-white">
+                                    <i class="feather-users"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold fs-5">
+                                        {{ next_group_upcoming.session.date }}
+                                        {% if next_group_upcoming.session.time %}às {{ next_group_upcoming.session.time }}{% endif %}
+                                    </div>
+                                    <div class="text-muted">
+                                        {{ next_group_upcoming.session.service.name }} ·
+                                        {% if next_group_upcoming.session.professional %}
+                                            {{ next_group_upcoming.session.professional.user.get_full_name|default:next_group_upcoming.session.professional.user.username }}
+                                        {% else %}
+                                            Sem profissional atribuído
+                                        {% endif %}
+                                    </div>
+                                    <div class="mt-2">
+                                        <span class="badge bg-soft-primary text-primary">{{ next_group_upcoming.get_status_display }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 flex-wrap mt-3">
+                                <a class="btn btn-outline-primary" href="{% url 'group_services_list' %}">Marcar nova</a>
+                                {% if next_group_upcoming.session.status == "scheduled" and next_group_upcoming.status != "attended" and next_group_upcoming.status != "no_show" and next_group_upcoming.status != "cancelled" %}
+                                    <div class="d-inline-flex align-items-center gap-2 flex-nowrap">
+                                        <a class="btn btn-outline-secondary text-center" style="min-width: 130px;" href="{% url 'group_sessions_list' next_group_upcoming.session.service.id %}">
+                                            Reagendar
+                                        </a>
+                                        <form method="post" action="{% url 'cancel_group_session_enrollment' next_group_upcoming.session.id %}" class="d-inline m-0">
+                                            {% csrf_token %}
+                                            <button class="btn btn-outline-danger text-center" style="min-width: 130px;" type="submit"
+                                                    onclick="return confirm('Queres cancelar esta inscrição na turma?');">
+                                                Cancelar
+                                            </button>
+                                        </form>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="text-muted">Ainda não tens turmas futuras.</div>
+                            <div class="mt-3">
+                                <a class="btn btn-primary" href="{% url 'group_services_list' %}">Marcar nova</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
         {% endif %}
-      </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        {% if is_professional_view %}Consultas futuras{% else %}Futuras / por concluir{% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if upcoming %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Serviço</th>
+                                        <th>{% if is_professional_view %}Cliente{% else %}Profissional{% endif %}</th>
+                                        <th>Preço</th>
+                                        <th>Pagamento</th>
+                                        <th>Estado</th>
+                                        <th class="text-end">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for a in upcoming %}
+                                        <tr>
+                                            <td>
+                                                {{ a.date }}
+                                                {% if a.time %}<div class="text-muted fs-12">{{ a.time }}</div>{% endif %}
+                                            </td>
+                                            <td>{{ a.service.name }}</td>
+                                            <td>
+                                                {% if is_professional_view %}
+                                                    {{ a.client.get_full_name|default:a.client.username }}
+                                                {% else %}
+                                                    {{ a.professional.user.get_full_name|default:a.professional.user.username }}
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ a.final_price|floatformat:2 }} €</td>
+                                            <td>
+                                                <span class="badge bg-soft-{{ a.payment_badge }} text-{{ a.payment_badge }}">
+                                                    {{ a.payment_label }}
+                                                </span>
+                                            </td>
+                                            <td>{{ a.status_label|default:a.status }}</td>
+                                            <td class="text-end">
+                                                {% if not is_professional_view %}
+                                                    {% if a.status != "completed" and a.status != "in_debt" and a.status != "cancelled" and a.status != "no_show" %}
+                                                        <div class="d-inline-flex align-items-center gap-2 flex-nowrap">
+                                                            <a class="btn btn-sm btn-outline-secondary text-center" style="min-width: 120px;" href="{% url 'reschedule_appointment' a.id %}">
+                                                                Reagendar
+                                                            </a>
+                                                            <form method="post" action="{% url 'cancel_appointment' a.id %}" class="d-inline m-0">
+                                                                {% csrf_token %}
+                                                                <button class="btn btn-sm btn-outline-danger text-center" style="min-width: 120px;" type="submit"
+                                                                        onclick="return confirm('Queres cancelar esta marcação?');">
+                                                                    Cancelar
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    {% endif %}
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if upcoming.has_other_pages %}
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="text-muted fs-12">
+                                    Mostrando {{ upcoming.start_index }}–{{ upcoming.end_index }} de {{ upcoming.paginator.count }}
+                                </div>
+                                <nav>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        {% if upcoming.has_previous %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?page={{ upcoming.previous_page_number }}{% if past.number %}&past_page={{ past.number }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}">Anterior</a>
+                                            </li>
+                                        {% endif %}
+                                        <li class="page-item active"><span class="page-link">{{ upcoming.number }}</span></li>
+                                        {% if upcoming.has_next %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?page={{ upcoming.next_page_number }}{% if past.number %}&past_page={{ past.number }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}">Seguinte</a>
+                                            </li>
+                                        {% endif %}
+                                    </ul>
+                                </nav>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-muted">
+                            {% if is_professional_view %}
+                                Não tens consultas futuras.
+                            {% else %}
+                                Não tens marcações futuras.
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Histórico</h5>
+                </div>
+                <div class="card-body">
+                    {% if past %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Serviço</th>
+                                        <th>{% if is_professional_view %}Cliente{% else %}Profissional{% endif %}</th>
+                                        <th>Preço</th>
+                                        <th>Pagamento</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for a in past %}
+                                        <tr>
+                                            <td>
+                                                {{ a.date }}
+                                                {% if a.time %}<div class="text-muted fs-12">{{ a.time }}</div>{% endif %}
+                                            </td>
+                                            <td>{{ a.service.name }}</td>
+                                            <td>
+                                                {% if is_professional_view %}
+                                                    {{ a.client.get_full_name|default:a.client.username }}
+                                                {% else %}
+                                                    {{ a.professional.user.get_full_name|default:a.professional.user.username }}
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ a.final_price|floatformat:2 }} €</td>
+                                            <td>
+                                                <span class="badge bg-soft-{{ a.payment_badge }} text-{{ a.payment_badge }}">
+                                                    {{ a.payment_label }}
+                                                </span>
+                                            </td>
+                                            <td>{{ a.status_label|default:a.status }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if past.has_other_pages %}
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="text-muted fs-12">
+                                    Mostrando {{ past.start_index }}–{{ past.end_index }} de {{ past.paginator.count }}
+                                </div>
+                                <nav>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        {% if past.has_previous %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?past_page={{ past.previous_page_number }}{% if selected_month %}&month={{ selected_month }}{% endif %}{% if upcoming.number %}&page={{ upcoming.number }}{% endif %}">Anterior</a>
+                                            </li>
+                                        {% endif %}
+                                        <li class="page-item active"><span class="page-link">{{ past.number }}</span></li>
+                                        {% if past.has_next %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?past_page={{ past.next_page_number }}{% if selected_month %}&month={{ selected_month }}{% endif %}{% if upcoming.number %}&page={{ upcoming.number }}{% endif %}">Seguinte</a>
+                                            </li>
+                                        {% endif %}
+                                    </ul>
+                                </nav>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-muted">
+                            {% if is_professional_view %}
+                                Ainda não tens histórico.
+                            {% else %}
+                                Ainda não tens histórico.
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
-
-  </div>
-
 {% endblock %}

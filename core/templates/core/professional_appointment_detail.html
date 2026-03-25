@@ -1,68 +1,417 @@
-{% extends "core/base.html" %}
-
-{% block title %}Marcação{% endblock %}
-{% block page_title %}Marcação{% endblock %}
-{% block page_subtitle %}
-  <div class="muted">
-    {{ appointment.date }}{% if appointment.time %} · {{ appointment.time }}{% endif %}
-  </div>
-{% endblock %}
+{% extends "core/base_duralux.html" %}
 
 {% block content %}
-  <div class="card">
-    <div class="muted" style="margin-bottom:8px;">
-      Serviço: <strong>{{ appointment.service.name }}</strong>
-      · Utente: <strong>{{ appointment.client.get_full_name|default:appointment.client.username }}</strong>
+    <div class="page-header">
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Marcação</h5>
+            </div>
+            <ul class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'professional_calendar' %}{% if week %}?week={{ week }}{% endif %}">Calendário</a></li>
+                <li class="breadcrumb-item">Marcação</li>
+            </ul>
+        </div>
+        <div class="page-header-right ms-auto">
+                <div class="page-header-right-items">
+                    <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                        <a href="{% if return_to %}{{ return_to }}{% else %}{% url 'professional_calendar' %}{% if week %}?week={{ week }}{% endif %}{% endif %}" class="btn btn-light-brand">
+                            <i class="feather-arrow-left me-2"></i>
+                            <span>Voltar ao calendário</span>
+                        </a>
+                        {% if appointment.status == "pending_confirmation" and can_confirm_appointment %}
+                            <form method="post" action="{% url 'professional_confirm_appointment' appointment.id %}{% if week %}?week={{ week }}{% endif %}" style="margin:0;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-success">
+                                    <i class="feather-check me-2"></i>
+                                    <span>Confirmar</span>
+                                </button>
+                            </form>
+                        {% endif %}
+                        <button type="submit" form="appointment-form" class="btn btn-primary">
+                            <i class="feather-save me-2"></i>
+                            <span>Guardar</span>
+                        </button>
+                    </div>
+            </div>
+        </div>
     </div>
-    <div class="muted" style="margin-bottom:8px;">
-      Estado: <strong>{{ appointment.status }}</strong>
+
+    <div class="main-content">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% else %}alert-info{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        <div class="row g-3">
+            <div class="col-12">
+                <div class="card border-2 {% if appointment.status == 'pending_confirmation' %}border-warning{% elif appointment.status == 'scheduled' %}border-success{% elif appointment.status == 'awaiting_validation' %}border-info{% elif appointment.status == 'completed' %}border-primary{% elif appointment.status == 'in_debt' %}border-warning{% elif appointment.status == 'no_show' %}border-danger{% else %}border-danger{% endif %}">
+                    <div class="card-body p-3">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar-text avatar-lg bg-soft-primary text-primary border-soft-primary rounded-circle">
+                                    <i class="feather-calendar"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-semibold fs-5">{{ appointment.service.name }}</div>
+                                    <div class="text-muted">{{ appointment.date|date:"d/m/Y" }}{% if appointment.time %} · {{ appointment.time|time:"H:i" }}{% endif %}</div>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div class="text-muted small fw-semibold">Estado atual</div>
+                                {% if appointment.status == "pending_confirmation" %}
+                                    <span class="badge bg-soft-warning text-warning fs-12 px-3 py-2">{{ appointment.get_status_display }}</span>
+                                {% elif appointment.status == "scheduled" %}
+                                    <span class="badge bg-soft-success text-success fs-12 px-3 py-2">{{ appointment.get_status_display }}</span>
+                                {% elif appointment.status == "awaiting_validation" %}
+                                    <span class="badge bg-soft-info text-info fs-12 px-3 py-2">{{ appointment.get_status_display }}</span>
+                                {% elif appointment.status == "completed" %}
+                                    <span class="badge bg-soft-primary text-primary fs-12 px-3 py-2">{{ appointment.get_status_display }}</span>
+                                {% elif appointment.status == "in_debt" %}
+                                    <span class="badge bg-soft-warning text-warning fs-12 px-3 py-2">{{ appointment.get_status_display }}</span>
+                                {% elif appointment.status == "no_show" %}
+                                    <span class="badge bg-soft-danger text-danger fs-12 px-3 py-2">{{ appointment.get_status_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-soft-danger text-danger fs-12 px-3 py-2">{{ appointment.get_status_display }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Utente</div>
+                                    <div class="fw-semibold">
+                                        {% if appointment.client.client_profile %}
+                                            <a class="text-decoration-none" href="{% url 'prof_customer_detail' appointment.client.client_profile.id %}">
+                                                {{ appointment.client.get_full_name|default:appointment.client.username }}
+                                            </a>
+                                        {% else %}
+                                            {{ appointment.client.get_full_name|default:appointment.client.username }}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Profissional</div>
+                                    <div class="fw-semibold">
+                                        {% if can_view_professional_link %}
+                                            <a class="text-decoration-none" href="{% url 'backoffice_professional_edit' appointment.professional.id %}?return_to={{ return_to|urlencode }}">
+                                                {{ appointment.professional.user.get_full_name|default:appointment.professional.user.username }}
+                                            </a>
+                                        {% else %}
+                                            {{ appointment.professional.user.get_full_name|default:appointment.professional.user.username }}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Preço final</div>
+                                    <div class="fw-semibold">{{ appointment.final_price|floatformat:2 }} €</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Parceria</div>
+                                    <div class="fw-semibold">{% if appointment.partner %}{{ appointment.partner.name }}{% else %}—{% endif %}</div>
+                                </div>
+                            </div>
+                            {% if appointment.symptomatology %}
+                                <div class="col-12">
+                                    <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                        <div class="text-muted small">Sintomatologia</div>
+                                        <div class="fw-semibold">{{ appointment.symptomatology }}</div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body p-3">
+                        <form id="appointment-form" method="post" action="{% url 'professional_appointment_detail' appointment.id %}{% if week %}?week={{ week }}{% endif %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="confirm_debt" id="confirmDebtInput" value="0">
+                            {% if return_to %}
+                                <input type="hidden" name="return_to" value="{{ return_to }}">
+                            {% endif %}
+                            <div class="row g-2">
+                                <div class="col-12 col-lg-6">
+                                    <div class="mb-2">
+                                        <label class="form-label">Estado</label>
+                                        <select name="status" id="statusSelect" class="form-select form-select-sm">
+                                            {% for value, label in status_choices %}
+                                                <option value="{{ value }}" {% if appointment.status == value %}selected{% endif %}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="paidSwitch" name="is_paid" {% if appointment.is_paid %}checked{% endif %}>
+                                        <label class="form-check-label" for="paidSwitch">Pago pelo cliente</label>
+                                        {% if appointment.is_paid and appointment.paid_at %}
+                                            <div class="text-muted small mt-1">Pago em {{ appointment.paid_at|date:"d/m/Y H:i" }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Resumo</label>
+                                        <textarea name="summary" id="summaryField" class="form-control" rows="3" placeholder="Resumo clínico da marcação">{{ appointment.summary }}</textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Tratamento realizado</label>
+                                        <textarea name="treatment_done" id="treatmentField" class="form-control" rows="3" placeholder="Descrição do tratamento">{{ appointment.treatment_done }}</textarea>
+                                        {% if requires_review_completion %}
+                                            <div class="form-text text-warning mt-1">
+                                                Resumo e tratamento são opcionais. Se guardares sem pagamento, a marcação ficará em estado "Em dívida".
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-12 col-lg-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Consumíveis utilizados</label>
+                                        <div class="d-flex flex-column gap-1" id="consumables-container">
+                                            {% for c in consumptions %}
+                                                <div class="row g-2 align-items-end consumable-row">
+                                                    <div class="col-8">
+                                                        <select name="consumable_product" class="form-select form-select-sm consumable-product">
+                                                            <option value="">— escolher —</option>
+                                                            {% for product in products %}
+                                                                <option value="{{ product.id }}" data-unit="{{ product.unit_base }}" {% if product.id == c.product.id %}selected{% endif %}>
+                                                                    {{ product.name }}
+                                                                </option>
+                                                            {% endfor %}
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-3">
+                                                        <input type="text" name="consumable_quantity" class="form-control form-control-sm" value="{{ c.quantity_base|floatformat:2 }}">
+                                                    </div>
+                                                    <div class="col-1 text-muted small unit-label">
+                                                        {{ c.product.unit_base }}
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                            {% for _ in "12" %}
+                                                <div class="row g-2 align-items-end consumable-row">
+                                                    <div class="col-8">
+                                                        <select name="consumable_product" class="form-select form-select-sm consumable-product">
+                                                            <option value="">— escolher —</option>
+                                                            {% for product in products %}
+                                                                <option value="{{ product.id }}" data-unit="{{ product.unit_base }}">
+                                                                    {{ product.name }}
+                                                                </option>
+                                                            {% endfor %}
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-3">
+                                                        <input type="text" name="consumable_quantity" class="form-control form-control-sm" value="">
+                                                    </div>
+                                                    <div class="col-1 text-muted small unit-label">—</div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                        <button class="btn btn-link px-0 mt-2" type="button" id="add-consumable-row">+ adicionar consumíveis</button>
+                                        <div class="text-muted small">As quantidades são sempre na unidade base do produto.</div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <button class="btn btn-primary w-100" type="submit">Guardar alterações</button>
+                                </div>
+                            </div>
+                        </form>
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            {% if appointment.client.client_profile %}
+                                <a class="btn btn-outline-secondary" href="{% url 'prof_customer_detail' appointment.client.client_profile.id %}">Ver ficha</a>
+                            {% endif %}
+                            {% if appointment.status != "completed" and appointment.status != "cancelled" and appointment.status != "in_debt" and appointment.status != "no_show" %}
+                                <a class="btn btn-outline-secondary" href="{% url 'professional_reschedule_appointment' appointment.id %}?week={{ week }}">Reagendar</a>
+                            {% endif %}
+                            {% if appointment.status != "completed" and appointment.status != "cancelled" and appointment.status != "in_debt" and appointment.status != "no_show" %}
+                                <form method="post" action="{% url 'professional_cancel_appointment' appointment.id %}?week={{ week }}" style="margin:0;">
+                                    {% csrf_token %}
+                                    <button class="btn btn-outline-danger" type="submit" onclick="return confirm('Cancelar esta marcação?');">Cancelar</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                            <h6 class="mb-0">Auditoria</h6>
+                            <span class="badge bg-soft-primary text-primary">Ref: {{ audit_data.reference }}</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Criada em</div>
+                                    <div class="fw-semibold">
+                                        {% if audit_data.created_at %}{{ audit_data.created_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Criada por</div>
+                                    <div class="fw-semibold">{{ audit_data.created_by }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Última alteração em</div>
+                                    <div class="fw-semibold">
+                                        {% if audit_data.last_changed_at %}{{ audit_data.last_changed_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Última alteração por</div>
+                                    <div class="fw-semibold">{{ audit_data.last_changed_by }}</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Concluída em</div>
+                                    <div class="fw-semibold">
+                                        {% if appointment.completed_at %}{{ appointment.completed_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Concluída por</div>
+                                    <div class="fw-semibold">
+                                        {% if appointment.completed_by %}{{ appointment.completed_by.get_full_name|default:appointment.completed_by.username }}{% else %}—{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Paga em</div>
+                                    <div class="fw-semibold">
+                                        {% if appointment.paid_at %}{{ appointment.paid_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
+                                    <div class="text-muted small">Última ação</div>
+                                    <div class="fw-semibold">{{ audit_data.last_action }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="text-muted small mb-2">Registos recentes</div>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Ação</th>
+                                            <th>Utilizador</th>
+                                            <th>Nota</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for log in audit_data.recent_logs %}
+                                            <tr>
+                                                <td>{{ log.created_at|date:"d/m/Y H:i" }}</td>
+                                                <td>{{ log.get_action_display }}</td>
+                                                <td>{% if log.actor %}{{ log.actor.get_full_name|default:log.actor.username }}{% else %}—{% endif %}</td>
+                                                <td>{{ log.note|default:"—" }}</td>
+                                            </tr>
+                                        {% empty %}
+                                            <tr>
+                                                <td colspan="4" class="text-muted">Sem registos de auditoria.</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    {% if appointment.notes %}
-      <div class="muted">Notas: {{ appointment.notes }}</div>
-    {% endif %}
-  </div>
+{% endblock %}
 
-  <div class="card" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-    {% if appointment.client.client_profile %}
-      <a class="btn secondary" href="{% url 'prof_customer_detail' appointment.client.client_profile.id %}">
-        Ver ficha
-      </a>
-    {% endif %}
+{% block extra_scripts %}
+<script>
+  function bindConsumableRow(row) {
+    if (!row) return;
+    const select = row.querySelector(".consumable-product");
+    if (!select) return;
+    select.addEventListener("change", function () {
+      const unit = select.options[select.selectedIndex]?.dataset?.unit || "—";
+      const label = row.querySelector(".unit-label");
+      if (label) label.textContent = unit;
+    });
+  }
 
-    {% if appointment.status == "scheduled" %}
-      <form method="post"
-            action="{% url 'professional_cancel_appointment' appointment.id %}?week={{ week }}"
-            style="margin:0;">
-        {% csrf_token %}
-        <button class="btn secondary" type="submit"
-                onclick="return confirm('Cancelar esta marcação?');">
-          Cancelar
-        </button>
-      </form>
-    {% endif %}
+  document.querySelectorAll(".consumable-row").forEach(bindConsumableRow);
 
-    {% if appointment.status != "completed" %}
-      <form method="post"
-            action="{% url 'professional_complete_appointment' appointment.id %}?week={{ week }}"
-            style="margin:0;">
-        {% csrf_token %}
-        <button class="btn secondary" type="submit"
-                onclick="return confirm('Marcar como concluída?');">
-          Concluir
-        </button>
-      </form>
-    {% endif %}
+  const addBtn = document.getElementById("add-consumable-row");
+  const container = document.getElementById("consumables-container");
+  if (addBtn && container) {
+    addBtn.addEventListener("click", function () {
+      const template = container.querySelector(".consumable-row:last-child");
+      if (!template) return;
+      const clone = template.cloneNode(true);
+      clone.querySelectorAll("select").forEach(function (sel) {
+        sel.selectedIndex = 0;
+      });
+      clone.querySelectorAll("input").forEach(function (input) {
+        input.value = "";
+      });
+      const label = clone.querySelector(".unit-label");
+      if (label) label.textContent = "—";
+      container.appendChild(clone);
+      bindConsumableRow(clone);
+    });
+  }
 
-    {% if appointment.status != "completed" and appointment.status != "cancelled" %}
-      <a class="btn secondary"
-         href="{% url 'professional_reschedule_appointment' appointment.id %}?week={{ week }}">
-        Reagendar
-      </a>
-    {% endif %}
+  (function () {
+    const requiresReviewCompletion = {{ requires_review_completion|yesno:"true,false" }};
+    if (!requiresReviewCompletion) return;
 
-    <a class="btn secondary"
-       href="{% url 'professional_calendar' %}{% if week %}?week={{ week }}{% endif %}">
-      Voltar ao calendário
-    </a>
-  </div>
+    const form = document.getElementById("appointment-form");
+    const status = document.getElementById("statusSelect");
+    const paid = document.getElementById("paidSwitch");
+    const summary = document.getElementById("summaryField");
+    const treatment = document.getElementById("treatmentField");
+    const confirmDebtInput = document.getElementById("confirmDebtInput");
+    if (!form || !status || !paid || !summary || !treatment || !confirmDebtInput) return;
+
+    form.addEventListener("submit", function (event) {
+      if (status.value === "cancelled" || status.value === "awaiting_validation" || status.value === "no_show") {
+        confirmDebtInput.value = "0";
+        return;
+      }
+
+      const missingPaid = !paid.checked;
+      const shouldMarkDebt = missingPaid;
+
+      if (!shouldMarkDebt) {
+        confirmDebtInput.value = "0";
+        return;
+      }
+
+      const ok = window.confirm(
+        "Esta consulta ficará registada como \"Em dívida\" por falta de pagamento. Pretende continuar?"
+      );
+      if (!ok) {
+        event.preventDefault();
+        return;
+      }
+      confirmDebtInput.value = "1";
+    });
+  })();
+</script>
 {% endblock %}

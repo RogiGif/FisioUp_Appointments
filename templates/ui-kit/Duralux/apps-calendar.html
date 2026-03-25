@@ -28,6 +28,61 @@
     <!--! BEGIN: Custom CSS-->
     <link rel="stylesheet" type="text/css" href="assets/css/theme.min.css">
     <!--! END: Custom CSS-->
+    <style>
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content,
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content,
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area,
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area .content-area-body {
+            min-height: 0;
+        }
+
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area .content-area-header,
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area .footer {
+            flex: 0 0 auto;
+        }
+
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area .content-area-body {
+            flex: 1 1 auto;
+            overflow: hidden;
+        }
+
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area #tui-calendar-init {
+            height: 100%;
+            min-height: 0;
+        }
+
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area #tui-calendar-init .tui-full-calendar-layout,
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area #tui-calendar-init .tui-full-calendar-week-container {
+            height: 100% !important;
+            min-height: 0 !important;
+        }
+
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area #tui-calendar-init .tui-full-calendar-timegrid-container {
+            height: 100% !important;
+            overflow-y: auto !important;
+            overscroll-behavior: contain;
+        }
+
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area #tui-calendar-init .tui-full-calendar-dayname-container,
+        .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area #tui-calendar-init .tui-full-calendar-month-dayname {
+            position: sticky;
+            top: 0;
+            z-index: 8;
+            background: #fff;
+            overflow-y: visible !important;
+        }
+
+        html.app-skin-dark .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area #tui-calendar-init .tui-full-calendar-dayname-container,
+        html.app-skin-dark .nxl-container.apps-calendar .nxl-content.nxl-full-content .main-content .content-area #tui-calendar-init .tui-full-calendar-month-dayname {
+            background: #121a2d;
+        }
+    </style>
     <!--! HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries !-->
     <!--! WARNING: Respond.js doesn"t work if you view the page via file: !-->
     <!--[if lt IE 9]>
@@ -2465,7 +2520,7 @@
                 </div>
                 <!-- [ Content Sidebar  ] end -->
                 <!-- [ Main Area  ] start -->
-                <div class="content-area" data-scrollbar-target="#psScrollbarInit">
+                <div class="content-area calendar-content-area">
                     <div class="content-area-header sticky-top">
                         <div class="page-header-left d-flex align-items-center gap-2">
                             <a href="javascript:void(0);" class="app-sidebar-open-trigger me-2">
@@ -2565,7 +2620,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="content-area-body p-0">
+                    <div class="content-area-body p-0 calendar-content-body">
                         <div id="tui-calendar-init"></div>
                     </div>
                     <!-- [ Footer ] start -->
@@ -3124,6 +3179,46 @@
     <!--! BEGIN: Apps Init  !-->
     <script src="assets/js/common-init.min.js"></script>
     <script src="assets/js/apps-calendar-init.min.js"></script>
+    <script>
+        (function () {
+            function setCalendarHeight() {
+                var contentBody = document.querySelector(".nxl-container.apps-calendar .calendar-content-body");
+                var calendarRoot = document.getElementById("tui-calendar-init");
+
+                if (!contentBody || !calendarRoot) {
+                    return;
+                }
+
+                var contentBodyHeight = Math.max(contentBody.clientHeight, 220);
+                calendarRoot.style.height = contentBodyHeight + "px";
+
+                if (window.cal && typeof window.cal.render === "function") {
+                    window.cal.render();
+                }
+            }
+
+            var resizeTimer = null;
+
+            function scheduleSetCalendarHeight() {
+                window.clearTimeout(resizeTimer);
+                resizeTimer = window.setTimeout(setCalendarHeight, 80);
+            }
+
+            window.setCalendarHeight = setCalendarHeight;
+            document.addEventListener("DOMContentLoaded", function () {
+                window.setTimeout(setCalendarHeight, 120);
+            });
+            window.addEventListener("load", scheduleSetCalendarHeight);
+            window.addEventListener("resize", scheduleSetCalendarHeight);
+
+            document.addEventListener("click", function (event) {
+                if (!event.target.closest("[data-action]")) {
+                    return;
+                }
+                window.setTimeout(setCalendarHeight, 30);
+            });
+        })();
+    </script>
     <!--! END: Apps Init !-->
     <!--! BEGIN: Theme Customizer  !-->
     <script src="assets/js/theme-customizer-init.min.js"></script>

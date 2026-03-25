@@ -1,0 +1,273 @@
+{% extends "backoffice/base_duralux.html" %}
+{% load backoffice_extras %}
+
+{% block backoffice_content %}
+  {% include "backoffice/partials/page_header.html" with title="Despesas Subcontratados" subtitle="Controlo de pagamentos aos profissionais subcontratados." %}
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+          <label class="form-label">Período</label>
+          <select class="form-select" name="period" id="period-select">
+            <option value="month" {% if filters.period == "month" %}selected{% endif %}>Último mês</option>
+            <option value="total" {% if filters.period == "total" %}selected{% endif %}>Total</option>
+            <option value="custom" {% if filters.period == "custom" %}selected{% endif %}>Intervalo personalizado</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Data início</label>
+          <input class="form-control" id="period-start" type="date" name="start" value="{{ filters.start }}" {% if filters.period != "custom" %}disabled{% endif %}>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Data fim</label>
+          <input class="form-control" id="period-end" type="date" name="end" value="{{ filters.end }}" {% if filters.period != "custom" %}disabled{% endif %}>
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label">Profissional</label>
+          <select class="form-select" name="professional_id">
+            <option value="">Todos</option>
+            {% for prof in professionals %}
+              <option value="{{ prof.id }}" {% if filters.professional_id == prof.id|stringformat:"s" %}selected{% endif %}>
+                {{ prof.user.get_full_name|default:prof.user.username }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label">Serviço</label>
+          <select class="form-select" name="service_id">
+            <option value="">Todos</option>
+            {% for s in services %}
+              <option value="{{ s.id }}" {% if filters.service_id == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label">Estado</label>
+          <select class="form-select" name="status">
+            <option value="">Todos</option>
+            {% for key,label in status_choices %}
+              <option value="{{ key }}" {% if filters.status == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <label class="form-label">Por página</label>
+          <select class="form-select" name="per_page">
+            {% for n in "5,10,15,25,50"|split_csv %}
+              <option value="{{ n }}" {% if per_page|stringformat:"s" == n %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-9 d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary" type="submit">Filtrar</button>
+          <a class="btn btn-outline-secondary" href="{% url 'backoffice_subcontractors' %}">Limpar</a>
+          <a class="btn btn-outline-primary" href="{% url 'backoffice_subcontractors_export' %}?{{ export_qs }}">Exportar CSV</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Total do período</div>
+          <div class="h5 mb-0">{{ total_period|floatformat:2 }} €</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Média por dia</div>
+          <div class="h5 mb-0">
+            {% if avg_per_day is not None %}
+              {{ avg_per_day|floatformat:2 }} €
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Linhas no período</div>
+          <div class="h5 mb-0">{{ total_count }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+      <div class="card h-100 border-success">
+        <div class="card-body">
+          <div class="text-muted small">Total pago</div>
+          <div class="h5 mb-0">{{ total_paid|floatformat:2 }} €</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card h-100 border-warning">
+        <div class="card-body">
+          <div class="text-muted small">Total em aberto</div>
+          <div class="h5 mb-0">{{ total_open|floatformat:2 }} €</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card h-100 border-warning">
+        <div class="card-body">
+          <div class="text-muted small">Total a pagar (período)</div>
+          <div class="h5 mb-0">{{ total_unpaid|floatformat:2 }} €</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" id="subcontractor-payments-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" id="bulk-action-input" value="">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">Pagamentos</h5>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success btn-sm js-bulk-action" type="button" data-action="mark_paid">Marcar como pago</button>
+          <button class="btn btn-outline-secondary btn-sm js-bulk-action" type="button" data-action="mark_unpaid">Marcar como em aberto</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width:32px;">
+                  <input type="checkbox" class="form-check-input" id="select-all-lines">
+                </th>
+                <th>Data</th>
+                <th>Hora</th>
+                <th>Utente</th>
+                <th>Serviço</th>
+                <th>Profissional</th>
+                <th>Preço final</th>
+                <th>%</th>
+                <th>A pagar</th>
+                <th>Estado</th>
+                <th class="text-end">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if lines %}
+                {% for line in lines %}
+                  <tr>
+                    <td>
+                      <input type="checkbox" class="form-check-input line-checkbox" name="line_ids" value="{{ line.id }}">
+                    </td>
+                    <td>{{ line.appointment_date|date:"d/m/Y" }}</td>
+                    <td>{{ line.appointment_time|time:"H:i" }}</td>
+                    <td>{{ line.client.full_name|default:"—" }}</td>
+                    <td>{{ line.service.name|default:"—" }}</td>
+                    <td>{{ line.professional.user.get_full_name|default:line.professional.user.username }}</td>
+                    <td>{{ line.gross_amount|floatformat:2 }} €</td>
+                    <td>{{ line.percentage|floatformat:2 }}%</td>
+                    <td class="fw-semibold">{{ line.payable_amount|floatformat:2 }} €</td>
+                    <td>
+                      {% if line.status == "paid" %}
+                        <span class="badge bg-success">Pago</span>
+                      {% elif line.status == "void" %}
+                        <span class="badge bg-secondary">Anulado</span>
+                      {% else %}
+                        <span class="badge bg-warning text-dark">Em aberto</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-end">
+                      {% if line.status != "paid" %}
+                        <button class="btn btn-sm btn-success js-line-action" type="button" data-action="mark_paid" data-line-id="{{ line.id }}">Pagar</button>
+                      {% else %}
+                        <button class="btn btn-sm btn-outline-secondary js-line-action" type="button" data-action="mark_unpaid" data-line-id="{{ line.id }}">Reabrir</button>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="11" class="text-center text-muted py-4">Sem linhas para mostrar.</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  {% include "backoffice/partials/pagination.html" with page_obj=page_obj %}
+
+  <script>
+    (function () {
+      const periodSelect = document.getElementById("period-select");
+      const startInput = document.getElementById("period-start");
+      const endInput = document.getElementById("period-end");
+      if (!periodSelect || !startInput || !endInput) return;
+
+      const syncPeriodInputs = () => {
+        const isCustom = periodSelect.value === "custom";
+        startInput.disabled = !isCustom;
+        endInput.disabled = !isCustom;
+      };
+
+      periodSelect.addEventListener("change", syncPeriodInputs);
+      syncPeriodInputs();
+    })();
+
+    (function () {
+      const selectAll = document.getElementById("select-all-lines");
+      if (!selectAll) return;
+      const checkboxes = document.querySelectorAll(".line-checkbox");
+      selectAll.addEventListener("change", () => {
+        checkboxes.forEach((cb) => {
+          cb.checked = selectAll.checked;
+        });
+      });
+    })();
+
+    (function () {
+      const form = document.getElementById("subcontractor-payments-form");
+      const actionInput = document.getElementById("bulk-action-input");
+      const checkboxes = document.querySelectorAll(".line-checkbox");
+      if (!form || !actionInput) return;
+
+      const submitWithAction = (action) => {
+        actionInput.value = action;
+        form.submit();
+      };
+
+      document.querySelectorAll(".js-bulk-action").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const anyChecked = Array.from(checkboxes).some((cb) => cb.checked);
+          if (!anyChecked) {
+            alert("Seleciona pelo menos uma linha.");
+            return;
+          }
+          submitWithAction(btn.dataset.action || "");
+        });
+      });
+
+      document.querySelectorAll(".js-line-action").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const lineId = btn.dataset.lineId;
+          if (!lineId) return;
+          checkboxes.forEach((cb) => {
+            cb.checked = cb.value === lineId;
+          });
+          submitWithAction(btn.dataset.action || "");
+        });
+      });
+    })();
+  </script>
+{% endblock %}
