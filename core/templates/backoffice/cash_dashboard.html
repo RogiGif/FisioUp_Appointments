@@ -2,18 +2,17 @@
 
 {% block backoffice_content %}
   {% if selected_session %}
-    {% include "backoffice/partials/page_header.html" with title="Caixa" subtitle="Abertura, movimentos e fecho diário da caixa." actions='<div class="d-flex gap-2"><a class="btn btn-outline-secondary btn-sm" href="?'|add:closing_export_qs|add:'">Exportar resumo</a><a class="btn btn-outline-primary btn-sm" href="?'|add:export_qs|add:'">Exportar CSV</a></div>' %}
+    {% include "backoffice/partials/page_header.html" with title="Caixa" subtitle="Operação diária e resumo mensal do caixa." actions='<div class="d-flex gap-2"><a class="btn btn-outline-secondary btn-sm" href="?'|add:closing_export_qs|add:'">Exportar resumo</a><a class="btn btn-outline-primary btn-sm" href="?'|add:export_qs|add:'">Exportar CSV</a></div>' %}
   {% else %}
-    {% include "backoffice/partials/page_header.html" with title="Caixa" subtitle="Abertura, movimentos e fecho diário da caixa." %}
+    {% include "backoffice/partials/page_header.html" with title="Caixa" subtitle="Operação diária e resumo mensal do caixa." %}
   {% endif %}
 
   <div class="card mb-4">
     <div class="card-body py-2">
       <div class="nav nav-pills gap-2">
-        <a class="btn btn-sm {% if active_tab == 'overview' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=overview">Visão geral</a>
-        <a class="btn btn-sm {% if active_tab == 'receipts' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=receipts">Recebimentos</a>
-        <a class="btn btn-sm {% if active_tab == 'history' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=history">Histórico</a>
-        <a class="btn btn-sm {% if active_tab == 'closings' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=closings">Histórico de fechos</a>
+        <a class="btn btn-sm {% if active_tab == 'overview' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=overview">Operação</a>
+        <a class="btn btn-sm {% if active_tab == 'history' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=history">Movimentos</a>
+        <a class="btn btn-sm {% if active_tab == 'closings' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=closings">Fechos</a>
       </div>
     </div>
   </div>
@@ -35,58 +34,62 @@
           <label class="form-label">Data da sessão</label>
           <input type="date" class="form-control" name="session_date" value="{{ session_date }}">
         </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Tipo movimento</label>
-          <select class="form-select" name="movement_type">
-            <option value="all" {% if movement_type == "all" %}selected{% endif %}>Todos</option>
-            {% for value,label in cash_movement_type_choices %}
-              <option value="{{ value }}" {% if movement_type == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Método</label>
-          <select class="form-select" name="payment_method">
-            <option value="all" {% if payment_method == "all" %}selected{% endif %}>Todos</option>
-            {% for value,label in cash_payment_method_choices %}
-              <option value="{{ value }}" {% if payment_method == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Origem</label>
-          <select class="form-select" name="source_type">
-            <option value="all" {% if source_type == "all" %}selected{% endif %}>Todas</option>
-            {% for value,label in cash_source_type_choices %}
-              <option value="{{ value }}" {% if source_type == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Estado do movimento</label>
-          <select class="form-select" name="void_status">
-            <option value="active" {% if void_status == "active" %}selected{% endif %}>Ativos</option>
-            <option value="voided" {% if void_status == "voided" %}selected{% endif %}>Anulados</option>
-            <option value="all" {% if void_status == "all" %}selected{% endif %}>Todos</option>
-          </select>
-        </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Movimentos desde</label>
-          <input type="date" class="form-control" name="movement_start" value="{{ movement_start }}">
-        </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Movimentos até</label>
-          <input type="date" class="form-control" name="movement_end" value="{{ movement_end }}">
-        </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Por página</label>
-          <select class="form-select" name="movement_per_page">
-            <option value="15" {% if movement_per_page == 15 %}selected{% endif %}>15</option>
-            <option value="30" {% if movement_per_page == 30 %}selected{% endif %}>30</option>
-            <option value="50" {% if movement_per_page == 50 %}selected{% endif %}>50</option>
-            <option value="100" {% if movement_per_page == 100 %}selected{% endif %}>100</option>
-          </select>
-        </div>
+
+        {% if active_tab != "overview" %}
+          <div class="col-12 col-md-3">
+            <label class="form-label">Tipo movimento</label>
+            <select class="form-select" name="movement_type">
+              <option value="all" {% if movement_type == "all" %}selected{% endif %}>Todos</option>
+              {% for value,label in cash_movement_type_choices %}
+                <option value="{{ value }}" {% if movement_type == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Método</label>
+            <select class="form-select" name="payment_method">
+              <option value="all" {% if payment_method == "all" %}selected{% endif %}>Todos</option>
+              {% for value,label in cash_payment_method_choices %}
+                <option value="{{ value }}" {% if payment_method == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Origem</label>
+            <select class="form-select" name="source_type">
+              <option value="all" {% if source_type == "all" %}selected{% endif %}>Todas</option>
+              {% for value,label in cash_source_type_choices %}
+                <option value="{{ value }}" {% if source_type == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Estado do movimento</label>
+            <select class="form-select" name="void_status">
+              <option value="active" {% if void_status == "active" %}selected{% endif %}>Ativos</option>
+              <option value="voided" {% if void_status == "voided" %}selected{% endif %}>Anulados</option>
+              <option value="all" {% if void_status == "all" %}selected{% endif %}>Todos</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Movimentos desde</label>
+            <input type="date" class="form-control" name="movement_start" value="{{ movement_start }}">
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Movimentos até</label>
+            <input type="date" class="form-control" name="movement_end" value="{{ movement_end }}">
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label">Por página</label>
+            <select class="form-select" name="movement_per_page">
+              <option value="15" {% if movement_per_page == 15 %}selected{% endif %}>15</option>
+              <option value="30" {% if movement_per_page == 30 %}selected{% endif %}>30</option>
+              <option value="50" {% if movement_per_page == 50 %}selected{% endif %}>50</option>
+              <option value="100" {% if movement_per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+          </div>
+        {% endif %}
+
         {% if selected_session %}
           <input type="hidden" name="session_id" value="{{ selected_session.id }}">
         {% endif %}
@@ -98,91 +101,97 @@
     </div>
   </div>
 
-  {% if selected_session %}
+  {% if active_tab == "overview" %}
     <div class="card mb-4">
       <div class="card-body">
-        <div class="fw-semibold mb-3">Totais por origem</div>
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+          <div>
+            <div class="fw-semibold">Resumo corrido do mês</div>
+            <div class="text-muted small">{{ monthly_summary.month_start|date:"m/Y" }} · {{ monthly_summary.session_count }} sessões de caixa</div>
+          </div>
+          {% if selected_session %}
+            <div class="text-muted small">
+              Sessão selecionada: {{ selected_session.session_date|date:"d/m/Y" }} · {{ selected_session.get_status_display }}
+            </div>
+          {% endif %}
+        </div>
         <div class="row g-3">
-          {% for row in source_breakdown %}
-            <div class="col-12 col-md-6 col-xl-3">
-              <div class="border rounded p-3 h-100">
-                <div class="text-muted small">{{ row.label }}</div>
-                <div class="h6 mb-1">{{ row.total|floatformat:2 }} €</div>
-                <div class="text-muted small">{{ row.count }} movimentos</div>
-              </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <div class="border rounded p-3 h-100">
+              <div class="text-muted small">Recebimentos lançados</div>
+              <div class="h5 mb-0 text-success">{{ monthly_summary.received_total|floatformat:2 }} €</div>
             </div>
-          {% empty %}
-            <div class="col-12 text-muted">Sem movimentos ativos nesta sessão.</div>
-          {% endfor %}
+          </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <div class="border rounded p-3 h-100">
+              <div class="text-muted small">Despesas lançadas</div>
+              <div class="h5 mb-0 text-danger">{{ monthly_summary.expense_total|floatformat:2 }} €</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <div class="border rounded p-3 h-100">
+              <div class="text-muted small">Saldo lançado</div>
+              <div class="h5 mb-0">{{ monthly_summary.balance|floatformat:2 }} €</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <div class="border rounded p-3 h-100">
+              <div class="text-muted small">Em dívida</div>
+              <div class="h5 mb-0 text-warning">{{ monthly_summary.debt_total|floatformat:2 }} €</div>
+              <div class="text-muted small">{{ monthly_summary.debt_count }} registos</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <div class="border rounded p-3 h-100">
+              <div class="text-muted small">Subcontratados pagos</div>
+              <div class="h5 mb-0">{{ monthly_summary.subcontract_paid_total|floatformat:2 }} €</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-2">
+            <div class="border rounded p-3 h-100">
+              <div class="text-muted small">Subcontratados em aberto</div>
+              <div class="h5 mb-0 text-warning">{{ monthly_summary.subcontract_open_total|floatformat:2 }} €</div>
+              <div class="text-muted small">{{ monthly_summary.subcontract_open_count }} linhas</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  {% endif %}
 
-  {% if active_tab == "overview" %}
-    <div class="row g-3 mb-4">
-      <div class="col-12 col-md-6 col-xl-3">
-        <div class="card h-100">
-          <div class="card-body">
-            <div class="text-muted small">Sessão selecionada</div>
-            <div class="h5 mb-1">
-              {% if selected_session %}
-                {{ selected_session.session_date|date:"d/m/Y" }}
-              {% else %}
-                Sem sessão
-              {% endif %}
+    {% if voiding_movement %}
+      <div class="card border-danger mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="fw-semibold text-danger">Anular lançamento manual</div>
+            <a class="btn btn-sm btn-outline-secondary" href="{% if current_view_qs %}?{{ current_view_qs }}{% else %}{% url 'backoffice_cash_dashboard' %}{% endif %}">Cancelar</a>
+          </div>
+          <div class="small text-muted mb-3">
+            {{ voiding_movement.happened_at|date:"d/m/Y H:i" }} · {{ voiding_movement.description }} · {{ voiding_movement.amount|floatformat:2 }} €
+          </div>
+          <form method="post" class="vstack gap-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="void_manual_movement">
+            <input type="hidden" name="session_id" value="{{ selected_session.id }}">
+            <input type="hidden" name="tab" value="overview">
+            <input type="hidden" name="movement_id" value="{{ voiding_movement.id }}">
+            {% if void_form.errors %}
+              <div class="alert alert-danger py-2 mb-0">{{ void_form.errors }}</div>
+            {% endif %}
+            <div>
+              <label class="form-label">Motivo da anulação</label>
+              {{ void_form.void_reason }}
             </div>
-            <div class="text-muted small">
-              {% if selected_session %}
-                {{ selected_session.get_status_display }}
-              {% else %}
-                Abre uma sessão para começar.
-              {% endif %}
-            </div>
-          </div>
+            <button type="submit" class="btn btn-danger">Confirmar anulação</button>
+          </form>
         </div>
       </div>
-      <div class="col-12 col-md-6 col-xl-3">
-        <div class="card h-100">
-          <div class="card-body">
-            <div class="text-muted small">Entradas</div>
-            <div class="h5 mb-1">{{ selected_totals.total_in|floatformat:2 }} €</div>
-            <div class="text-muted small">{{ selected_totals.movement_count }} movimentos ativos</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-12 col-md-6 col-xl-3">
-        <div class="card h-100">
-          <div class="card-body">
-            <div class="text-muted small">Saídas</div>
-            <div class="h5 mb-1">{{ selected_totals.total_out|floatformat:2 }} €</div>
-            <div class="text-muted small">Saldo teórico: {{ selected_totals.balance|floatformat:2 }} €</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-12 col-md-6 col-xl-3">
-        <div class="card h-100 border-primary">
-          <div class="card-body">
-            <div class="text-muted small">Numerário esperado</div>
-            <div class="h5 mb-1">{{ selected_totals.expected_cash|floatformat:2 }} €</div>
-            <div class="text-muted small">
-              {% if selected_session and selected_session.status == "closed" %}
-                Contado: {{ selected_session.counted_cash_amount|default_if_none:0|floatformat:2 }} €
-              {% else %}
-                Pendentes para lançar: {{ pending_appointments_count|add:pending_group_monthly_count }}
-              {% endif %}
-            </div>
-            <div class="text-muted small mt-1">Anulados: {{ selected_totals.voided_count }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
+    {% endif %}
 
     <div class="row g-3 mb-4">
       <div class="col-12 col-xl-4">
         <div class="card h-100">
           <div class="card-body">
-            <div class="fw-semibold mb-3">Sessão de caixa</div>
+            <div class="fw-semibold mb-3">Caixa do dia</div>
             {% if open_session %}
               <div class="alert {% if selected_session and selected_session.id == open_session.id %}alert-success{% else %}alert-warning{% endif %} mb-3">
                 <div class="fw-semibold mb-1">Já existe uma sessão aberta.</div>
@@ -220,6 +229,9 @@
                 <button type="submit" class="btn btn-primary">Abrir caixa</button>
               </form>
             {% elif selected_session and selected_session.status == "open" %}
+              <div class="small text-muted mb-3">
+                Fundo inicial: {{ selected_session.opening_amount|floatformat:2 }} €
+              </div>
               <form method="post" class="vstack gap-3">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="close_session">
@@ -228,9 +240,6 @@
                 {% if close_form.errors %}
                   <div class="alert alert-danger py-2 mb-0">{{ close_form.errors }}</div>
                 {% endif %}
-                <div class="small text-muted">
-                  Fundo inicial: {{ selected_session.opening_amount|floatformat:2 }} €
-                </div>
                 <div>
                   <label class="form-label">Numerário contado</label>
                   {{ close_form.counted_cash_amount }}
@@ -250,7 +259,7 @@
                   <div>Numerário contado: {{ selected_session.counted_cash_amount|default_if_none:0|floatformat:2 }} €</div>
                   <div>Diferença: {{ selected_session.difference_amount|floatformat:2 }} €</div>
                 </div>
-                {% if is_admin_role and not open_session %}
+                {% if can_reopen_session and not open_session %}
                   <form method="post" class="mt-3">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="reopen_session">
@@ -265,49 +274,47 @@
         </div>
       </div>
 
-      {% if selected_session %}
-        <div class="col-12 col-xl-8">
-          <div class="card h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div class="fw-semibold">Resumo de fecho da sessão</div>
-                <div class="d-flex gap-2">
-                  <a class="btn btn-sm btn-outline-secondary" href="{% url 'backoffice_cash_session_print' selected_session.id %}" target="_blank" rel="noopener">Imprimir</a>
-                  <a class="btn btn-sm btn-outline-secondary" href="?{{ closing_export_qs }}">Exportar resumo</a>
-                </div>
-              </div>
-              <div class="row g-3 small">
+      <div class="col-12 col-xl-8">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="fw-semibold">Resumo operacional da sessão</div>
+              {% if selected_session %}
+                <div class="small text-muted">{{ selected_session.session_date|date:"d/m/Y" }}</div>
+              {% endif %}
+            </div>
+            {% if selected_session %}
+              <div class="row g-3 mb-3">
                 <div class="col-12 col-md-4 col-xl-2">
-                  <div class="text-muted">Abertura</div>
+                  <div class="text-muted small">Abertura</div>
                   <div class="fw-semibold">{{ selected_session.opening_amount|floatformat:2 }} €</div>
                 </div>
                 <div class="col-12 col-md-4 col-xl-2">
-                  <div class="text-muted">Entradas</div>
+                  <div class="text-muted small">Entradas</div>
                   <div class="fw-semibold text-success">{{ selected_totals.total_in|floatformat:2 }} €</div>
                 </div>
                 <div class="col-12 col-md-4 col-xl-2">
-                  <div class="text-muted">Saídas</div>
+                  <div class="text-muted small">Saídas</div>
                   <div class="fw-semibold text-danger">{{ selected_totals.total_out|floatformat:2 }} €</div>
                 </div>
                 <div class="col-12 col-md-4 col-xl-2">
-                  <div class="text-muted">Saldo teórico</div>
+                  <div class="text-muted small">Saldo lançado</div>
                   <div class="fw-semibold">{{ selected_totals.balance|floatformat:2 }} €</div>
                 </div>
                 <div class="col-12 col-md-4 col-xl-2">
-                  <div class="text-muted">Numerário esperado</div>
+                  <div class="text-muted small">Numerário esperado</div>
                   <div class="fw-semibold">{{ selected_totals.expected_cash|floatformat:2 }} €</div>
                 </div>
                 <div class="col-12 col-md-4 col-xl-2">
-                  <div class="text-muted">Diferença</div>
-                  <div class="fw-semibold {% if selected_session.difference_amount < 0 %}text-danger{% elif selected_session.difference_amount > 0 %}text-warning{% endif %}">
-                    {{ selected_session.difference_amount|floatformat:2 }} €
-                  </div>
+                  <div class="text-muted small">Pendentes por lançar</div>
+                  <div class="fw-semibold">{{ pending_appointments_count|add:pending_client_payments_count|add:pending_group_monthly_count }}</div>
                 </div>
               </div>
-              <div class="border-top pt-3 mt-3">
-                <div class="fw-semibold mb-2">Totais por origem no fecho</div>
+
+              <div class="border-top pt-3">
+                <div class="fw-semibold mb-2">De onde vem o lançado de hoje</div>
                 <div class="row g-3">
-                  {% for row in selected_totals.source_breakdown %}
+                  {% for row in source_breakdown %}
                     <div class="col-12 col-md-6 col-xl-3">
                       <div class="border rounded p-3 h-100">
                         <div class="text-muted small">{{ row.label }}</div>
@@ -320,30 +327,31 @@
                   {% endfor %}
                 </div>
               </div>
-            </div>
+            {% else %}
+              <div class="text-muted">Seleciona ou abre uma sessão para veres o resumo do dia.</div>
+            {% endif %}
           </div>
         </div>
-      {% endif %}
+      </div>
     </div>
-  {% endif %}
 
-  {% if active_tab == "receipts" %}
     <div class="row g-3 mb-4">
       <div class="col-12 col-xl-4">
         <div class="card h-100">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
-              <div class="fw-semibold">{% if editing_movement %}Editar movimento manual{% else %}Movimento manual{% endif %}</div>
+              <div class="fw-semibold">{% if editing_movement %}Editar lançamento{% else %}Registo rápido{% endif %}</div>
               {% if editing_movement %}
                 <a class="btn btn-sm btn-outline-secondary" href="{% if current_view_qs %}?{{ current_view_qs }}{% else %}{% url 'backoffice_cash_dashboard' %}{% endif %}">Cancelar edição</a>
               {% endif %}
             </div>
+            <div class="text-muted small mb-3">Usa este formulário para despesas, ajustes ou entradas que não venham diretamente de uma marcação.</div>
             {% if selected_session and selected_session.status == "open" %}
               <form method="post" class="vstack gap-3">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="{% if editing_movement %}update_manual_movement{% else %}add_manual_movement{% endif %}">
                 <input type="hidden" name="session_id" value="{{ selected_session.id }}">
-                <input type="hidden" name="tab" value="receipts">
+                <input type="hidden" name="tab" value="overview">
                 {% if editing_movement %}
                   <input type="hidden" name="movement_id" value="{{ editing_movement.id }}">
                 {% endif %}
@@ -374,132 +382,156 @@
                   <label class="form-label">Notas</label>
                   {{ manual_form.notes }}
                 </div>
-                <button type="submit" class="btn btn-outline-primary">{% if editing_movement %}Guardar alterações{% else %}Registar movimento{% endif %}</button>
+                <button type="submit" class="btn btn-outline-primary">{% if editing_movement %}Guardar alterações{% else %}Registar lançamento{% endif %}</button>
               </form>
             {% else %}
-              <div class="text-muted">Abre uma sessão de caixa para lançar movimentos.</div>
+              <div class="text-muted">Abre uma sessão de caixa para registares movimentos.</div>
             {% endif %}
           </div>
         </div>
       </div>
 
-      <div class="col-12 col-xl-4">
+      <div class="col-12 col-xl-8">
         <div class="card h-100">
           <div class="card-body">
-            <div class="fw-semibold mb-3">Recebimentos de marcações pagas</div>
+            <div class="fw-semibold mb-3">Recebimentos por lançar</div>
+            <div class="text-muted small mb-3">O objetivo é fechar aqui o que já foi recebido na operação e ainda não entrou na sessão de caixa.</div>
             {% if selected_session and selected_session.status == "open" %}
-              <form method="post" class="vstack gap-3">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add_paid_appointment">
-                <input type="hidden" name="session_id" value="{{ selected_session.id }}">
-                <input type="hidden" name="tab" value="receipts">
-                {% if appointment_form.errors %}
-                  <div class="alert alert-danger py-2 mb-0">{{ appointment_form.errors }}</div>
-                {% endif %}
-                <div>
-                  <label class="form-label">Marcação paga</label>
-                  {{ appointment_form.appointment }}
-                </div>
-                <div>
-                  <label class="form-label">Método</label>
-                  {{ appointment_form.payment_method }}
-                </div>
-                <div>
-                  <label class="form-label">Notas</label>
-                  {{ appointment_form.notes }}
-                </div>
-                <button type="submit" class="btn btn-outline-primary">Lançar recebimento</button>
-              </form>
-              <div class="border-top pt-3 mt-3">
-                <div class="small text-muted mb-2">Pendentes do dia: {{ pending_appointments_count }}</div>
-                {% if pending_appointments_preview %}
-                  <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
-                      <thead>
-                        <tr>
-                          <th>Hora</th>
-                          <th>Utente</th>
-                          <th class="text-end">Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {% for appt in pending_appointments_preview %}
-                          <tr>
-                            <td>{{ appt.time|time:"H:i" }}</td>
-                            <td>{{ appt.client_label }}</td>
-                            <td class="text-end">{{ appt.final_price|floatformat:2 }} €</td>
-                          </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
+              <div class="row g-3">
+                <div class="col-12 col-lg-4">
+                  <div class="border rounded p-3 h-100">
+                    <div class="fw-semibold mb-2">Pagamentos do checkout</div>
+                    <div class="text-muted small mb-3">Pendentes do dia: {{ pending_client_payments_count }}</div>
+                    <form method="post" class="vstack gap-3">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="add_client_payment">
+                      <input type="hidden" name="session_id" value="{{ selected_session.id }}">
+                      <input type="hidden" name="tab" value="overview">
+                      {% if client_payment_form.errors %}
+                        <div class="alert alert-danger py-2 mb-0">{{ client_payment_form.errors }}</div>
+                      {% endif %}
+                      <div>
+                        <label class="form-label">Pagamento</label>
+                        {{ client_payment_form.client_payment }}
+                      </div>
+                      <div>
+                        <label class="form-label">Notas adicionais</label>
+                        {{ client_payment_form.notes }}
+                      </div>
+                      <button type="submit" class="btn btn-outline-primary">Lançar pagamento</button>
+                    </form>
                   </div>
-                {% else %}
-                  <div class="text-muted small">Sem marcações pagas pendentes para esta sessão.</div>
-                {% endif %}
-              </div>
-            {% else %}
-              <div class="text-muted">Abre uma sessão de caixa para reconciliares recebimentos.</div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
+                </div>
 
-      <div class="col-12 col-xl-4">
-        <div class="card h-100">
-          <div class="card-body">
-            <div class="fw-semibold mb-3">Recebimentos de turmas pagas</div>
-            {% if selected_session and selected_session.status == "open" %}
-              <form method="post" class="vstack gap-3">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add_paid_group_monthly">
-                <input type="hidden" name="session_id" value="{{ selected_session.id }}">
-                <input type="hidden" name="tab" value="receipts">
-                {% if group_monthly_form.errors %}
-                  <div class="alert alert-danger py-2 mb-0">{{ group_monthly_form.errors }}</div>
-                {% endif %}
-                <div>
-                  <label class="form-label">Mensalidade paga</label>
-                  {{ group_monthly_form.group_monthly_charge }}
-                </div>
-                <div>
-                  <label class="form-label">Método</label>
-                  {{ group_monthly_form.payment_method }}
-                </div>
-                <div>
-                  <label class="form-label">Notas</label>
-                  {{ group_monthly_form.notes }}
-                </div>
-                <button type="submit" class="btn btn-outline-primary">Lançar recebimento</button>
-              </form>
-              <div class="border-top pt-3 mt-3">
-                <div class="small text-muted mb-2">Pendentes do dia: {{ pending_group_monthly_count }}</div>
-                {% if pending_group_monthly_preview %}
-                  <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
-                      <thead>
-                        <tr>
-                          <th>Mês</th>
-                          <th>Utente</th>
-                          <th class="text-end">Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {% for charge in pending_group_monthly_preview %}
-                          <tr>
-                            <td>{{ charge.month|date:"m/Y" }}</td>
-                            <td>{{ charge.client_label }} · {{ charge.class_label }}</td>
-                            <td class="text-end">{{ charge.final_price|floatformat:2 }} €</td>
-                          </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
+                <div class="col-12 col-lg-4">
+                  <div class="border rounded p-3 h-100">
+                    <div class="fw-semibold mb-2">Marcações antigas</div>
+                    <div class="text-muted small mb-3">Compatibilidade para marcações pagas sem checkout financeiro.</div>
+                    <form method="post" class="vstack gap-3">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="add_paid_appointment">
+                      <input type="hidden" name="session_id" value="{{ selected_session.id }}">
+                      <input type="hidden" name="tab" value="overview">
+                      {% if appointment_form.errors %}
+                        <div class="alert alert-danger py-2 mb-0">{{ appointment_form.errors }}</div>
+                      {% endif %}
+                      <div>
+                        <label class="form-label">Marcação paga</label>
+                        {{ appointment_form.appointment }}
+                      </div>
+                      <div>
+                        <label class="form-label">Método</label>
+                        {{ appointment_form.payment_method }}
+                      </div>
+                      <div>
+                        <label class="form-label">Notas</label>
+                        {{ appointment_form.notes }}
+                      </div>
+                      <button type="submit" class="btn btn-outline-primary">Lançar marcação</button>
+                    </form>
                   </div>
-                {% else %}
-                  <div class="text-muted small">Sem mensalidades pagas pendentes para esta sessão.</div>
-                {% endif %}
+                </div>
+
+                <div class="col-12 col-lg-4">
+                  <div class="border rounded p-3 h-100">
+                    <div class="fw-semibold mb-2">Mensalidades de turma</div>
+                    <div class="text-muted small mb-3">Pendentes do dia: {{ pending_group_monthly_count }}</div>
+                    <form method="post" class="vstack gap-3">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="add_paid_group_monthly">
+                      <input type="hidden" name="session_id" value="{{ selected_session.id }}">
+                      <input type="hidden" name="tab" value="overview">
+                      {% if group_monthly_form.errors %}
+                        <div class="alert alert-danger py-2 mb-0">{{ group_monthly_form.errors }}</div>
+                      {% endif %}
+                      <div>
+                        <label class="form-label">Mensalidade paga</label>
+                        {{ group_monthly_form.group_monthly_charge }}
+                      </div>
+                      <div>
+                        <label class="form-label">Método</label>
+                        {{ group_monthly_form.payment_method }}
+                      </div>
+                      <div>
+                        <label class="form-label">Notas</label>
+                        {{ group_monthly_form.notes }}
+                      </div>
+                      <button type="submit" class="btn btn-outline-primary">Lançar turma</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-top pt-3 mt-3">
+                <div class="row g-3">
+                  <div class="col-12">
+                    {% if pending_client_payments_preview or pending_appointments_preview or pending_group_monthly_preview %}
+                      <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                          <thead>
+                            <tr>
+                              <th>Origem</th>
+                              <th>Quando</th>
+                              <th>Descrição</th>
+                              <th class="text-end">Valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for payment in pending_client_payments_preview %}
+                              <tr>
+                                <td>Checkout</td>
+                                <td>{{ payment.received_at|date:"d/m H:i" }}</td>
+                                <td>{{ payment.client_label }} · {{ payment.method_label }}</td>
+                                <td class="text-end">{{ payment.amount_received|floatformat:2 }} €</td>
+                              </tr>
+                            {% endfor %}
+                            {% for appt in pending_appointments_preview %}
+                              <tr>
+                                <td>Marcação</td>
+                                <td>{{ appt.date|date:"d/m" }} {{ appt.time|time:"H:i" }}</td>
+                                <td>{{ appt.client_label }} · {{ appt.service.name }}</td>
+                                <td class="text-end">{{ appt.final_price|floatformat:2 }} €</td>
+                              </tr>
+                            {% endfor %}
+                            {% for charge in pending_group_monthly_preview %}
+                              <tr>
+                                <td>Turma</td>
+                                <td>{{ charge.month|date:"m/Y" }}</td>
+                                <td>{{ charge.client_label }} · {{ charge.class_label }}</td>
+                                <td class="text-end">{{ charge.final_price|floatformat:2 }} €</td>
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                    {% else %}
+                      <div class="text-muted small">Sem recebimentos pendentes para esta sessão.</div>
+                    {% endif %}
+                  </div>
+                </div>
               </div>
             {% else %}
-              <div class="text-muted">Abre uma sessão de caixa para reconciliares recebimentos.</div>
+              <div class="text-muted">Abre uma sessão de caixa para lançares recebimentos e saídas.</div>
             {% endif %}
           </div>
         </div>
@@ -507,84 +539,146 @@
     </div>
 
     <div class="row g-3 mb-4">
-      <div class="col-12 col-xl-4">
+      <div class="col-12 col-xl-6">
         <div class="card h-100">
           <div class="card-body">
-            <div class="fw-semibold mb-3">Venda rápida de stock</div>
-            {% if selected_session and selected_session.status == "open" %}
-              <form method="post" class="vstack gap-3">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add_stock_sale">
-                <input type="hidden" name="session_id" value="{{ selected_session.id }}">
-                <input type="hidden" name="tab" value="receipts">
-                {% if stock_sale_form.errors %}
-                  <div class="alert alert-danger py-2 mb-0">{{ stock_sale_form.errors }}</div>
-                {% endif %}
-                <div>
-                  <label class="form-label">Produto</label>
-                  {{ stock_sale_form.product }}
-                </div>
-                <div>
-                  <label class="form-label">Utente</label>
-                  {{ stock_sale_form.client_profile }}
-                  <div class="form-text">Opcional. Usa quando a venda de stock está associada a um utente.</div>
-                </div>
-                <div>
-                  <label class="form-label">Quantidade</label>
-                  {{ stock_sale_form.quantity_base }}
-                </div>
-                <div>
-                  <label class="form-label">Valor</label>
-                  {{ stock_sale_form.amount }}
-                </div>
-                <div>
-                  <label class="form-label">Método</label>
-                  {{ stock_sale_form.payment_method }}
-                </div>
-                <div>
-                  <label class="form-label">Quando</label>
-                  {{ stock_sale_form.happened_at }}
-                </div>
-                <div>
-                  <label class="form-label">Notas</label>
-                  {{ stock_sale_form.notes }}
-                </div>
-                <button type="submit" class="btn btn-outline-primary">Registar venda</button>
-              </form>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="fw-semibold">Dívidas em aberto do mês</div>
+              <div class="text-muted small">{{ monthly_summary.debt_count }} registos</div>
+            </div>
+            {% if monthly_summary.debt_preview %}
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Origem</th>
+                      <th>Data</th>
+                      <th>Cliente</th>
+                      <th>Descrição</th>
+                      <th class="text-end">Em aberto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in monthly_summary.debt_preview %}
+                      <tr>
+                        <td>{{ row.kind }}</td>
+                        <td>
+                          {{ row.date|date:"d/m/Y" }}
+                          {% if row.time %}<div class="text-muted small">{{ row.time|time:"H:i" }}</div>{% endif %}
+                        </td>
+                        <td>{{ row.client_label }}</td>
+                        <td>{{ row.description }}</td>
+                        <td class="text-end text-warning">{{ row.amount|floatformat:2 }} €</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
             {% else %}
-              <div class="text-muted">Abre uma sessão de caixa para registares vendas de stock.</div>
+              <div class="text-muted">Sem dívidas em aberto neste mês.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-xl-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="fw-semibold">Pagamentos a subcontratados</div>
+              <a class="btn btn-sm btn-outline-secondary" href="{% url 'backoffice_subcontractors' %}">Abrir lista completa</a>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-12 col-md-6">
+                <div class="border rounded p-3 h-100">
+                  <div class="text-muted small">Pago no mês</div>
+                  <div class="h5 mb-0">{{ monthly_summary.subcontract_paid_total|floatformat:2 }} €</div>
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="border rounded p-3 h-100">
+                  <div class="text-muted small">Em aberto</div>
+                  <div class="h5 mb-0 text-warning">{{ monthly_summary.subcontract_open_total|floatformat:2 }} €</div>
+                </div>
+              </div>
+            </div>
+            {% if monthly_summary.subcontract_preview %}
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Profissional</th>
+                      <th>Utente</th>
+                      <th class="text-end">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in monthly_summary.subcontract_preview %}
+                      <tr>
+                        <td>
+                          {{ row.date|date:"d/m/Y" }}
+                          <div class="text-muted small">{{ row.time|time:"H:i" }}</div>
+                        </td>
+                        <td>{{ row.professional_label }}</td>
+                        <td>{{ row.client_label }}</td>
+                        <td class="text-end text-warning">{{ row.amount|floatformat:2 }} €</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="text-muted">Sem pagamentos em aberto para subcontratados neste mês.</div>
             {% endif %}
           </div>
         </div>
       </div>
     </div>
-  {% endif %}
 
-  {% if voiding_movement %}
-    <div class="card border-danger mb-4">
+    <div class="card">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <div class="fw-semibold text-danger">Anular movimento manual</div>
-          <a class="btn btn-sm btn-outline-secondary" href="{% if current_view_qs %}?{{ current_view_qs }}{% else %}{% url 'backoffice_cash_dashboard' %}{% endif %}">Cancelar</a>
-        </div>
-        <div class="small text-muted mb-3">
-          {{ voiding_movement.happened_at|date:"d/m/Y H:i" }} · {{ voiding_movement.description }} · {{ voiding_movement.amount|floatformat:2 }} €
-        </div>
-        <form method="post" class="vstack gap-3">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="void_manual_movement">
-          <input type="hidden" name="session_id" value="{{ selected_session.id }}">
-          <input type="hidden" name="tab" value="receipts">
-          <input type="hidden" name="movement_id" value="{{ voiding_movement.id }}">
-          {% if void_form.errors %}
-            <div class="alert alert-danger py-2 mb-0">{{ void_form.errors }}</div>
+          <div class="fw-semibold">Movimentos recentes da sessão</div>
+          {% if selected_session %}
+            <a class="btn btn-sm btn-outline-secondary" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=history">Ver todos</a>
           {% endif %}
-          <div>
-            <label class="form-label">Motivo da anulação</label>
-            {{ void_form.void_reason }}
+        </div>
+        {% if selected_session and session_recent_movements %}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Quando</th>
+                  <th>Origem</th>
+                  <th>Descrição</th>
+                  <th>Método</th>
+                  <th class="text-end">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for movement in session_recent_movements %}
+                  <tr>
+                    <td>{{ movement.happened_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ movement.get_source_type_display }}</td>
+                    <td>
+                      {{ movement.description }}
+                      {% if movement.is_void %}
+                        <span class="badge bg-danger-subtle text-danger-emphasis ms-1">Anulado</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ movement.get_payment_method_display }}</td>
+                    <td class="text-end {% if movement.movement_type == 'out' %}text-danger{% else %}text-success{% endif %}">
+                      {% if movement.movement_type == "out" %}-{% else %}+{% endif %}{{ movement.amount|floatformat:2 }} €
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
-          <button type="submit" class="btn btn-danger">Confirmar anulação</button>
-        </form>
+        {% else %}
+          <div class="text-muted">Sem movimentos recentes para mostrar.</div>
+        {% endif %}
       </div>
     </div>
   {% endif %}
@@ -654,8 +748,8 @@
                         <td class="text-end">
                           {% if selected_session.status == "open" and movement.source_type == "manual" and not movement.is_void %}
                             <div class="d-inline-flex gap-2 justify-content-end">
-                              <a class="btn btn-sm btn-outline-secondary" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=receipts&edit_movement_id={{ movement.id }}">Editar</a>
-                              <a class="btn btn-sm btn-outline-danger" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=receipts&void_movement_id={{ movement.id }}">Anular</a>
+                              <a class="btn btn-sm btn-outline-secondary" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=overview&edit_movement_id={{ movement.id }}">Editar</a>
+                              <a class="btn btn-sm btn-outline-danger" href="?{% if tab_base_qs %}{{ tab_base_qs }}&{% endif %}tab=overview&void_movement_id={{ movement.id }}">Anular</a>
                             </div>
                           {% else %}
                             <span class="text-muted small">—</span>

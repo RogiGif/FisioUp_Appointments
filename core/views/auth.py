@@ -40,6 +40,7 @@ from core.permissions import (
 from core.ratelimit import check_rate_limit, rate_limited_response, is_json_request, rate_limit
 from core.emails import send_templated_email, clinic_email, clinic_settings, log_email_skip
 from core.services.audit import log_audit_event
+from core.services import moloni as moloni_service
 from core.session_timeout import get_session_timeout_config
 from core.forms import (
     RegisterForm,
@@ -87,6 +88,33 @@ def _get_real_ip(request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR", "")
+
+
+def _moloni_auto_sync_is_ready():
+    if not moloni_service.is_configured():
+        return False
+    integ = MoloniIntegration.get_solo()
+    return bool(integ.refresh_token and moloni_service.get_company_id())
+
+
+def _sync_client_profile_with_moloni(profile, request, *, source):
+    try:
+        result = moloni_service.sync_client_profile(profile)
+    except moloni_service.MoloniError as exc:
+        messages.warning(request, f"Registo submetido, mas a sincronização com a Moloni falhou: {exc}")
+        return None
+
+    log_audit_event(
+        category="integrations",
+        action="moloni_customer_synced",
+        request=request,
+        actor=getattr(request, "user", None),
+        instance=profile,
+        source=source,
+        message="Cliente sincronizado com a Moloni.",
+        after=result,
+    )
+    return result
 
 
 def home_view(request):
@@ -382,8 +410,9 @@ def register_view(request):
                     profile.require_complete_profile = True
                     profile.updated_by = user
                     profile.save()
+                    target_profile = profile
                 else:
-                    ClientProfile.objects.create(
+                    target_profile = ClientProfile.objects.create(
                         user=user,
                         full_name=full_name,
                         phone=phone,
@@ -404,6 +433,13 @@ def register_view(request):
                         require_complete_profile=True,
                         created_by=user,
                         updated_by=user,
+                    )
+
+                if target_profile.nif and _moloni_auto_sync_is_ready():
+                    _sync_client_profile_with_moloni(
+                        target_profile,
+                        request,
+                        source="public_register",
                     )
 
                 if settings_obj.notify_admin_on_pending_registration:

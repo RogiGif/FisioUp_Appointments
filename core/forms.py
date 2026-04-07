@@ -23,6 +23,7 @@ from .models import (
     CashMovement,
     Appointment,
     GroupMonthlyCharge,
+    ClientPayment,
 )
 from .models import Product, ProductCategory
 from .models import TreatmentRecord
@@ -202,6 +203,7 @@ class BackofficeServiceForm(forms.ModelForm):
         fields = [
             "name",
             "duration_minutes",
+            "slot_interval_minutes",
             "service_type",
             "capacity",
             "allow_waitlist",
@@ -226,9 +228,17 @@ class BackofficeServiceForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         service_type = cleaned.get("service_type")
+        duration = cleaned.get("duration_minutes")
+        slot_interval = cleaned.get("slot_interval_minutes")
         if service_type != "group":
-            cleaned["capacity"] = None
             cleaned["allow_waitlist"] = False
+        else:
+            cleaned["slot_interval_minutes"] = None
+        if slot_interval:
+            if slot_interval < 5:
+                self.add_error("slot_interval_minutes", "O intervalo deve ser no mínimo 5 minutos.")
+            if duration and slot_interval > duration:
+                self.add_error("slot_interval_minutes", "O intervalo não pode ser maior do que a duração.")
         pricing_mode = cleaned.get("pricing_mode")
         price = cleaned.get("price")
         price_first = cleaned.get("price_first")
@@ -376,10 +386,11 @@ class WeeklyScheduleForm(forms.ModelForm):
 
 SCHEDULE_START_MINUTES = 9 * 60
 SCHEDULE_END_MINUTES = 21 * 60
+SCHEDULE_STEP_MINUTES = 15
 
 
 def _time_choices(
-    step_minutes=30,
+    step_minutes=SCHEDULE_STEP_MINUTES,
     start_minutes=SCHEDULE_START_MINUTES,
     end_minutes=SCHEDULE_END_MINUTES,
 ):
@@ -396,8 +407,8 @@ def _time_choices(
 class WeeklyWorkingBlockForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        start_time_choices = _time_choices(end_minutes=SCHEDULE_END_MINUTES - 30)
-        end_time_choices = _time_choices(start_minutes=SCHEDULE_START_MINUTES + 30)
+        start_time_choices = _time_choices(end_minutes=SCHEDULE_END_MINUTES - SCHEDULE_STEP_MINUTES)
+        end_time_choices = _time_choices(start_minutes=SCHEDULE_START_MINUTES + SCHEDULE_STEP_MINUTES)
         for name, field in self.fields.items():
             if name == "weekday":
                 field.widget = forms.HiddenInput()
@@ -416,8 +427,8 @@ class WeeklyWorkingBlockForm(forms.ModelForm):
 class WeeklyBreakBlockForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        start_time_choices = _time_choices(end_minutes=SCHEDULE_END_MINUTES - 30)
-        end_time_choices = _time_choices(start_minutes=SCHEDULE_START_MINUTES + 30)
+        start_time_choices = _time_choices(end_minutes=SCHEDULE_END_MINUTES - SCHEDULE_STEP_MINUTES)
+        end_time_choices = _time_choices(start_minutes=SCHEDULE_START_MINUTES + SCHEDULE_STEP_MINUTES)
         for name, field in self.fields.items():
             if name == "weekday":
                 field.widget = forms.HiddenInput()
@@ -1226,6 +1237,31 @@ class CashAppointmentMovementForm(forms.Form):
         return f"{appointment.date:%d/%m/%Y} {appointment.time:%H:%M} · {client_name} · {service_name} · {amount_display}"
 
 
+class CashClientPaymentMovementForm(forms.Form):
+    client_payment = forms.ModelChoiceField(queryset=ClientPayment.objects.none(), label="Pagamento de cliente")
+    notes = forms.CharField(widget=forms.Textarea, required=False, label="Notas adicionais")
+
+    def __init__(self, *args, payment_queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["client_payment"].queryset = payment_queryset or ClientPayment.objects.none()
+        self.fields["client_payment"].label_from_instance = self._payment_label
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+                field.widget.attrs.setdefault("rows", 2)
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+
+    @staticmethod
+    def _payment_label(payment):
+        client_name = payment.client_profile.full_name if payment.client_profile else "Cliente"
+        amount_display = f"{payment.amount_received:.2f} €"
+        method_label = dict(ClientPayment.PAYMENT_METHOD_CHOICES).get(payment.payment_method, payment.payment_method)
+        return f"{payment.received_at:%d/%m/%Y %H:%M} · {client_name} · {amount_display} · {method_label}"
+
+
 class CashGroupMonthlyMovementForm(forms.Form):
     group_monthly_charge = forms.ModelChoiceField(queryset=GroupMonthlyCharge.objects.none(), label="Mensalidade paga")
     payment_method = forms.ChoiceField(choices=CashMovement.PAYMENT_METHOD_CHOICES, label="Método")
@@ -1296,3 +1332,17 @@ class CashVoidMovementForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["void_reason"].widget.attrs.setdefault("class", "form-control")
         self.fields["void_reason"].widget.attrs.setdefault("rows", 2)
+
+
+class MoloniCustomerDefaultsForm(forms.Form):
+    payment_method_id = forms.IntegerField(min_value=1, label="payment_method_id")
+    document_type_id = forms.IntegerField(min_value=1, label="document_type_id")
+    language_id = forms.IntegerField(min_value=1, label="language_id")
+    maturity_date_id = forms.IntegerField(min_value=1, label="maturity_date_id")
+    country_id = forms.IntegerField(min_value=1, label="country_id")
+    delivery_method_id = forms.IntegerField(min_value=1, required=False, label="delivery_method_id")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")

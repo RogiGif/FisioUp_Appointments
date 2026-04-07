@@ -263,11 +263,6 @@
         });
       }
 
-      window.addEventListener("beforeunload", (event) => {
-        if (!isDirty) return;
-        event.preventDefault();
-        event.returnValue = "";
-      });
     })();
   </script>
 {% endblock %}

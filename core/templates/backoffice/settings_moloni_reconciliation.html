@@ -1,0 +1,250 @@
+{% extends "backoffice/base_duralux.html" %}
+
+{% block backoffice_content %}
+  <div class="d-flex flex-column flex-xl-row gap-4">
+    <div class="content-sidebar content-sidebar-md">
+      <div class="content-sidebar-header bg-white sticky-top hstack justify-content-between">
+        <h4 class="fw-bolder mb-0">Settings</h4>
+        <a href="javascript:void(0);" class="app-sidebar-close-trigger d-flex">
+          <i class="feather-x"></i>
+        </a>
+      </div>
+      <div class="content-sidebar-body">
+        <ul class="nav flex-column nxl-content-sidebar-item">
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_settings_moloni' %}">
+              <i class="feather-link"></i>
+              <span>Moloni</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="{% url 'backoffice_moloni_reconciliation' %}">
+              <i class="feather-refresh-cw"></i>
+              <span>Reconciliação Moloni</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'backoffice_audit_logs' %}">
+              <i class="feather-shield"></i>
+              <span>Auditoria</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="content-area flex-grow-1">
+      <div class="content-area-header bg-white sticky-top d-flex flex-wrap align-items-center gap-3">
+        <div class="page-header-left">
+          <h4 class="fw-bold mb-1">Reconciliação Moloni</h4>
+          <span class="text-muted">Comparação de dados, sincronização incremental e revisão de conflitos.</span>
+        </div>
+      </div>
+
+      <div class="content-area-body pt-4">
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="text-muted small text-uppercase mb-2">Estado</div>
+                <div class="fs-5 fw-bold">{% if moloni_ready %}Pronto{% else %}Incompleto{% endif %}</div>
+                <div class="text-muted small">
+                  {% if moloni_company_name %}
+                    Empresa: {{ moloni_company_name }}
+                  {% elif moloni_company_id %}
+                    Company ID: {{ moloni_company_id }}
+                  {% else %}
+                    Falta ligação ou empresa Moloni.
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="text-muted small text-uppercase mb-2">Última sincronização</div>
+                <div class="fs-5 fw-bold">{{ moloni_integration.last_sync_at|date:"d/m/Y H:i"|default:"—" }}</div>
+                <div class="text-muted small">Base para a sync incremental.</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="text-muted small text-uppercase mb-2">Ação</div>
+                <div class="fs-5 fw-bold">Bidirecional</div>
+                <div class="text-muted small">Moloni → app e app → Moloni para clientes com NIF.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+              <div>
+                <h6 class="fw-bold mb-1">Executar reconciliação</h6>
+                <div class="text-muted small">A corrida incremental usa `last_sync_at`. A completa percorre todos os clientes remotos e locais com NIF.</div>
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <form method="post" action="{% url 'backoffice_moloni_run_reconciliation' %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="sync_mode" value="incremental">
+                  <button type="submit" class="btn btn-primary" {% if not moloni_ready %}disabled{% endif %}>
+                    <i class="feather-refresh-cw me-2"></i>Reconciliação incremental
+                  </button>
+                </form>
+                <form method="post" action="{% url 'backoffice_moloni_run_reconciliation' %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="sync_mode" value="full">
+                  <button type="submit" class="btn btn-outline-secondary" {% if not moloni_ready %}disabled{% endif %}>
+                    <i class="feather-rotate-cw me-2"></i>Reconciliação completa
+                  </button>
+                </form>
+              </div>
+            </div>
+            {% if not moloni_ready %}
+              <div class="alert alert-warning mt-3 mb-0">
+                Liga primeiro a integração Moloni e define a empresa antes de executar a reconciliação.
+              </div>
+            {% endif %}
+            {% if report_error %}
+              <div class="alert alert-warning mt-3 mb-0">{{ report_error }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if report %}
+          <div class="row g-3 mb-4">
+            <div class="col-12 col-md-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <div class="text-muted small text-uppercase mb-2">Clientes Moloni</div>
+                  <div class="fs-5 fw-bold">{{ report.remote_total }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <div class="text-muted small text-uppercase mb-2">Conflitos por NIF</div>
+                  <div class="fs-5 fw-bold">{{ report.conflicts|length }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <div class="text-muted small text-uppercase mb-2">Sem NIF / Duplicados</div>
+                  <div class="fs-5 fw-bold">{{ report.clients_without_nif|length }} / {{ report.duplicate_groups|length }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mb-4">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Conflitos com o Moloni por NIF</h6>
+              {% if report.conflicts %}
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0">
+                    <thead>
+                      <tr>
+                        <th>Utente</th>
+                        <th>NIF</th>
+                        <th>Diferenças</th>
+                        <th>Moloni</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for item in report.conflicts %}
+                        <tr>
+                          <td>
+                            <a href="{% url 'prof_customer_detail' item.profile.id %}">{{ item.profile.full_name }}</a>
+                          </td>
+                          <td>{{ item.profile.nif }}</td>
+                          <td>{{ item.diff_fields|join:", " }}</td>
+                          <td>#{{ item.remote_customer_id|default:"-" }}</td>
+                          <td>
+                            <form method="post" action="{% url 'prof_customer_moloni_sync' item.profile.id %}" class="d-inline">
+                              {% csrf_token %}
+                              <button type="submit" class="btn btn-sm btn-outline-primary">Atualizar Moloni</button>
+                            </form>
+                            <form method="post" action="{% url 'backoffice_moloni_apply_remote' item.profile.id %}" class="d-inline">
+                              {% csrf_token %}
+                              <button type="submit" class="btn btn-sm btn-outline-secondary">Atualizar app</button>
+                            </form>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <div class="text-muted">Sem conflitos detetados.</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="card mb-4">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Utentes sem NIF</h6>
+              {% if report.clients_without_nif %}
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0">
+                    <thead>
+                      <tr>
+                        <th>Utente</th>
+                        <th>Telefone</th>
+                        <th>Email</th>
+                        <th>Atualizado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for profile in report.clients_without_nif %}
+                        <tr>
+                          <td><a href="{% url 'prof_customer_detail' profile.id %}">{{ profile.full_name }}</a></td>
+                          <td>{{ profile.phone|default:"-" }}</td>
+                          <td>{% if profile.user_id %}{{ profile.user.email|default:"-" }}{% else %}-{% endif %}</td>
+                          <td>{{ profile.updated_at|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <div class="text-muted">Sem utentes sem NIF.</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              <h6 class="fw-bold mb-3">Possíveis duplicados locais</h6>
+              {% if report.duplicate_groups %}
+                <div class="vstack gap-3">
+                  {% for group in report.duplicate_groups %}
+                    <div class="border rounded p-3">
+                      <div class="fw-semibold mb-2">Grupo {{ forloop.counter }}</div>
+                      <div class="d-flex flex-wrap gap-2">
+                        {% for profile in group %}
+                          <a href="{% url 'prof_customer_detail' profile.id %}" class="badge bg-soft-primary text-primary text-decoration-none">
+                            #{{ profile.id }} {{ profile.full_name }}{% if profile.phone %} · {{ profile.phone }}{% endif %}
+                          </a>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="text-muted">Sem grupos duplicados detetados por nome + telefone.</div>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}

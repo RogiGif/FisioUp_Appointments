@@ -26,6 +26,15 @@
                         <span>Voltar</span>
                     </a>
                     {% if can_edit_clients %}
+                        <form method="post" action="{% url 'prof_customer_moloni_sync' client_profile.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-secondary">
+                                <i class="feather-refresh-cw me-2"></i>
+                                <span>Atualizar no Moloni</span>
+                            </button>
+                        </form>
+                    {% endif %}
+                    {% if can_edit_clients %}
                         <a href="{% url 'prof_customer_edit' client_profile.id %}" class="btn btn-primary">
                             <i class="feather-edit me-2"></i>
                             <span>Editar</span>
@@ -96,6 +105,36 @@
                             </div>
                         </div>
                         <ul class="list-unstyled mb-4">
+                            <li class="mb-4">
+                                <div class="small text-muted text-uppercase mb-1">Moloni</div>
+                                <div>{{ moloni_status_text }}</div>
+                                <div class="mt-3">
+                                    <div class="small text-muted text-uppercase mb-2">Histórico de sincronização</div>
+                                    {% if moloni_sync_history %}
+                                        <div class="border border-dashed border-gray-5 rounded-3 p-3">
+                                            {% for item in moloni_sync_history %}
+                                                <div class="{% if not forloop.last %}border-bottom border-gray-3 pb-3 mb-3{% endif %}">
+                                                    <div class="d-flex justify-content-between align-items-start gap-3 mb-1">
+                                                        <div class="fw-semibold">{{ item.label }}</div>
+                                                        <div class="text-muted small text-nowrap">{{ item.created_at|date:"d/m/Y H:i" }}</div>
+                                                    </div>
+                                                    <div class="small mb-1">{{ item.detail }}</div>
+                                                    <div class="small text-muted mb-2">{{ item.actor_display }} · {{ item.source }}</div>
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-link btn-sm p-0 moloni-audit-detail-trigger"
+                                                        data-detail-url="{% url 'prof_customer_moloni_audit_detail' client_profile.id item.id %}"
+                                                    >
+                                                        Ver detalhe
+                                                    </button>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="small text-muted">Ainda não existe histórico de sincronizações Moloni para este cliente.</div>
+                                    {% endif %}
+                                </div>
+                            </li>
                             <li class="hstack justify-content-between mb-4">
                                 <span class="text-muted fw-medium hstack gap-3"><i class="feather-map-pin"></i>Localização</span>
                                 <span class="float-end">{{ client_profile.city|default:client_profile.locality|default:"-" }}</span>
@@ -114,6 +153,15 @@
                                 <i class="feather-arrow-left me-2"></i>
                                 <span>Voltar</span>
                             </a>
+                            {% if can_edit_clients %}
+                                <form method="post" action="{% url 'prof_customer_moloni_sync' client_profile.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-secondary">
+                                        <i class="feather-refresh-cw me-2"></i>
+                                        <span>Atualizar no Moloni</span>
+                                    </button>
+                                </form>
+                            {% endif %}
                             {% if can_edit_clients %}
                                 <a href="{% url 'prof_customer_edit' client_profile.id %}" class="btn btn-primary">
                                     <i class="feather-edit me-2"></i>
@@ -149,4 +197,81 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="moloniAuditDetailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Detalhe da sincronização Moloni</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3"><strong>Quando:</strong> <span data-audit-created-at>-</span></div>
+                    <div class="mb-3"><strong>Path:</strong> <span data-audit-request-line>-</span></div>
+                    <div class="mb-3">
+                        <strong>Antes:</strong>
+                        <pre class="mb-0 mt-2 small" data-audit-before>-</pre>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Depois:</strong>
+                        <pre class="mb-0 mt-2 small" data-audit-after>-</pre>
+                    </div>
+                    <div class="mb-0">
+                        <strong>Meta:</strong>
+                        <pre class="mb-0 mt-2 small" data-audit-meta>-</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_scripts %}
+    {{ block.super }}
+    <script>
+        (function () {
+            const modalEl = document.getElementById("moloniAuditDetailModal");
+            if (!modalEl || typeof bootstrap === "undefined") return;
+            const modal = new bootstrap.Modal(modalEl);
+            const createdAtEl = modalEl.querySelector("[data-audit-created-at]");
+            const requestLineEl = modalEl.querySelector("[data-audit-request-line]");
+            const beforeEl = modalEl.querySelector("[data-audit-before]");
+            const afterEl = modalEl.querySelector("[data-audit-after]");
+            const metaEl = modalEl.querySelector("[data-audit-meta]");
+
+            function fillDetail(data) {
+                createdAtEl.textContent = data.created_at || "-";
+                requestLineEl.textContent = data.request_line || "-";
+                beforeEl.textContent = data.before || "-";
+                afterEl.textContent = data.after || "-";
+                metaEl.textContent = data.metadata || "-";
+            }
+
+            document.querySelectorAll(".moloni-audit-detail-trigger").forEach((button) => {
+                button.addEventListener("click", async () => {
+                    const detailUrl = button.dataset.detailUrl;
+                    if (!detailUrl) return;
+                    fillDetail({created_at: "A carregar...", request_line: "-", before: "-", after: "-", metadata: "-"});
+                    modal.show();
+                    try {
+                        const response = await fetch(detailUrl, {
+                            headers: {"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
+                            credentials: "same-origin"
+                        });
+                        if (!response.ok) throw new Error("Falha a carregar detalhe do log.");
+                        const data = await response.json();
+                        fillDetail(data);
+                    } catch (error) {
+                        fillDetail({
+                            created_at: "-",
+                            request_line: "-",
+                            before: "Não foi possível carregar o detalhe.",
+                            after: "-",
+                            metadata: "-"
+                        });
+                    }
+                });
+            });
+        })();
+    </script>
 {% endblock %}

@@ -388,11 +388,53 @@
     if (!quickError) return;
     if (!message) {
       quickError.classList.add("d-none");
+      quickError.classList.remove("alert-success", "alert-warning", "alert-danger");
       quickError.textContent = "";
       return;
     }
+    quickError.classList.remove("d-none", "alert-success", "alert-warning", "alert-danger");
+    quickError.classList.add("alert", "alert-danger");
     quickError.textContent = message;
-    quickError.classList.remove("d-none");
+  }
+
+  function setQuickSuccess(message) {
+    if (!quickError) return;
+    if (!message) {
+      quickError.classList.add("d-none");
+      quickError.classList.remove("alert-success", "alert-warning", "alert-danger");
+      quickError.textContent = "";
+      return;
+    }
+    quickError.classList.remove("d-none", "alert-success", "alert-warning", "alert-danger");
+    quickError.classList.add("alert", "alert-success");
+    quickError.textContent = message;
+  }
+
+  function showCalendarFlash(message, tone) {
+    if (!message) {
+      return;
+    }
+    const existing = document.getElementById("calendar-floating-flash");
+    if (existing) {
+      existing.remove();
+    }
+    const alert = document.createElement("div");
+    alert.id = "calendar-floating-flash";
+    alert.className = `alert ${tone === "success" ? "alert-success" : "alert-danger"}`;
+    alert.textContent = message;
+    alert.style.position = "fixed";
+    alert.style.top = "92px";
+    alert.style.right = "24px";
+    alert.style.zIndex = "2000";
+    alert.style.minWidth = "320px";
+    alert.style.maxWidth = "520px";
+    alert.style.boxShadow = "0 12px 28px rgba(15, 23, 42, 0.18)";
+    document.body.appendChild(alert);
+    window.setTimeout(() => {
+      if (alert.parentNode) {
+        alert.remove();
+      }
+    }, 3200);
   }
 
   function setRescheduleError(message) {
@@ -1916,6 +1958,10 @@
           if (!payload.ok) {
             setQuickError(payload.message || "Erro ao criar marcação.");
             return;
+          }
+          if (payload.message) {
+            setQuickSuccess(payload.message);
+            showCalendarFlash(payload.message, "success");
           }
           if (quickModal) {
             quickModal.hide();

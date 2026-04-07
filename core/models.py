@@ -14,6 +14,7 @@ from django.utils.text import slugify
 class Service(models.Model):
     name = models.CharField(max_length=100)
     duration_minutes = models.PositiveIntegerField(default=30)
+    slot_interval_minutes = models.PositiveIntegerField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     PRICING_MODE_CHOICES = (
         ("single", "Preço único"),
@@ -43,6 +44,11 @@ class Service(models.Model):
 
     def clean(self):
         super().clean()
+        if self.slot_interval_minutes:
+            if self.slot_interval_minutes < 5:
+                raise ValidationError({"slot_interval_minutes": "O intervalo deve ser no mínimo 5 minutos."})
+            if self.slot_interval_minutes > self.duration_minutes:
+                raise ValidationError({"slot_interval_minutes": "O intervalo não pode ser maior do que a duração."})
         if self.pricing_mode == "first_followup":
             # Não existe preço base neste modo
             self.price = Decimal("0.00")
@@ -325,6 +331,15 @@ class Appointment(models.Model):
         (STATUS_CANCELLED, "Cancelada"),
     )
 
+    SETTLEMENT_PRICING_MODE_AUTO = "auto"
+    SETTLEMENT_PRICING_MODE_WITHOUT_PARTNER = "without_partner"
+    SETTLEMENT_PRICING_MODE_MANUAL = "manual"
+    SETTLEMENT_PRICING_MODE_CHOICES = (
+        (SETTLEMENT_PRICING_MODE_AUTO, "Automático"),
+        (SETTLEMENT_PRICING_MODE_WITHOUT_PARTNER, "Sem parceria"),
+        (SETTLEMENT_PRICING_MODE_MANUAL, "Manual"),
+    )
+
     client = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -387,6 +402,31 @@ class Appointment(models.Model):
     base_price_applied = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     partner_price_applied = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     discount_applied = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    settlement_pricing_mode = models.CharField(
+        max_length=20,
+        choices=SETTLEMENT_PRICING_MODE_CHOICES,
+        default=SETTLEMENT_PRICING_MODE_AUTO,
+    )
+    settlement_partner = models.ForeignKey(
+        "Partner",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="appointment_settlements",
+    )
+    settlement_discount_type = models.CharField(
+        max_length=20,
+        choices=(
+            ("none", "Sem desconto"),
+            ("percent", "Percentagem"),
+            ("fixed", "Valor fixo"),
+        ),
+        default="none",
+    )
+    settlement_discount_value = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    settlement_final_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    settlement_locked_at = models.DateTimeField(null=True, blank=True)
+    settlement_notes = models.CharField(max_length=255, blank=True, default="")
 
     is_paid = models.BooleanField(default=False)
     paid_at = models.DateTimeField(null=True, blank=True)
@@ -412,6 +452,39 @@ class Appointment(models.Model):
 
     def __str__(self):
         return f"{self.client} – {self.date} {self.time}"
+
+    def get_charge_amount(self):
+        if self.settlement_locked_at:
+            return self.settlement_final_price or Decimal("0.00")
+        return self.final_price or Decimal("0.00")
+
+    def get_paid_amount(self):
+        total = (
+            self.payment_allocations.filter(payment__status=ClientPayment.STATUS_POSTED)
+            .aggregate(total=models.Sum("allocated_amount"))
+            .get("total")
+        )
+        if total:
+            return total
+        if self.is_paid:
+            return self.get_charge_amount()
+        return Decimal("0.00")
+
+    def get_outstanding_amount(self):
+        remaining = self.get_charge_amount() - self.get_paid_amount()
+        return remaining if remaining > 0 else Decimal("0.00")
+
+    @property
+    def charge_amount(self):
+        return self.get_charge_amount()
+
+    @property
+    def paid_amount(self):
+        return self.get_paid_amount()
+
+    @property
+    def outstanding_amount(self):
+        return self.get_outstanding_amount()
 
 
 class SubcontractorPaymentLine(models.Model):
@@ -625,11 +698,13 @@ class CashMovement(models.Model):
     )
 
     SOURCE_MANUAL = "manual"
+    SOURCE_CLIENT_PAYMENT = "client_payment"
     SOURCE_APPOINTMENT = "appointment"
     SOURCE_GROUP_MONTHLY = "group_monthly"
     SOURCE_STOCK_SALE = "stock_sale"
     SOURCE_CHOICES = (
         (SOURCE_MANUAL, "Manual"),
+        (SOURCE_CLIENT_PAYMENT, "Pagamento de cliente"),
         (SOURCE_APPOINTMENT, "Marcação"),
         (SOURCE_GROUP_MONTHLY, "Turma"),
         (SOURCE_STOCK_SALE, "Stock"),
@@ -739,6 +814,11 @@ class CashMovement(models.Model):
                 raise ValidationError({"stock_movement": "Não combines turma e stock no mesmo movimento."})
             if self.client_profile_id:
                 raise ValidationError({"client_profile": "O utente é definido pela mensalidade associada."})
+        elif self.source_type == self.SOURCE_CLIENT_PAYMENT:
+            if self.movement_type != self.TYPE_IN:
+                raise ValidationError({"movement_type": "Pagamentos de cliente só podem ser entradas."})
+            if self.appointment_id or self.group_monthly_charge_id or self.stock_movement_id:
+                raise ValidationError({"source_type": "Pagamentos de cliente não podem combinar outras origens."})
         elif self.source_type == self.SOURCE_STOCK_SALE:
             if not self.stock_movement_id:
                 raise ValidationError({"stock_movement": "Seleciona o movimento de stock associado."})
@@ -866,6 +946,12 @@ class MoloniIntegration(models.Model):
     refresh_token = models.TextField(blank=True)
     company_id = models.CharField(max_length=50, blank=True)
     company_name = models.CharField(max_length=255, blank=True)
+    customer_payment_method_id = models.PositiveIntegerField(null=True, blank=True)
+    customer_document_type_id = models.PositiveIntegerField(null=True, blank=True)
+    customer_language_id = models.PositiveIntegerField(null=True, blank=True)
+    customer_maturity_date_id = models.PositiveIntegerField(null=True, blank=True)
+    customer_country_id = models.PositiveIntegerField(null=True, blank=True)
+    customer_delivery_method_id = models.PositiveIntegerField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     last_sync_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1301,6 +1387,212 @@ class GroupMonthlyCharge(models.Model):
     def __str__(self):
         label = self.class_name or self.service.name
         return f"{label} · {self.client} · {self.month:%Y-%m}"
+
+    def get_charge_amount(self):
+        return self.final_price or Decimal("0.00")
+
+    def get_paid_amount(self):
+        total = (
+            self.payment_allocations.filter(payment__status=ClientPayment.STATUS_POSTED)
+            .aggregate(total=models.Sum("allocated_amount"))
+            .get("total")
+        )
+        if total:
+            return total
+        if self.status == self.STATUS_PAID:
+            return self.get_charge_amount()
+        return Decimal("0.00")
+
+    def get_outstanding_amount(self):
+        remaining = self.get_charge_amount() - self.get_paid_amount()
+        return remaining if remaining > 0 else Decimal("0.00")
+
+    @property
+    def charge_amount(self):
+        return self.get_charge_amount()
+
+    @property
+    def paid_amount(self):
+        return self.get_paid_amount()
+
+    @property
+    def outstanding_amount(self):
+        return self.get_outstanding_amount()
+
+
+class ClientPayment(models.Model):
+    STATUS_POSTED = "posted"
+    STATUS_VOID = "void"
+    STATUS_CHOICES = (
+        (STATUS_POSTED, "Registado"),
+        (STATUS_VOID, "Anulado"),
+    )
+
+    METHOD_CASH = "cash"
+    METHOD_CARD = "card"
+    METHOD_MBWAY = "mbway"
+    METHOD_TRANSFER = "transfer"
+    METHOD_OTHER = "other"
+    PAYMENT_METHOD_CHOICES = (
+        (METHOD_CASH, "Numerário"),
+        (METHOD_CARD, "Multibanco"),
+        (METHOD_MBWAY, "MB Way"),
+        (METHOD_TRANSFER, "Transferência"),
+        (METHOD_OTHER, "Outro"),
+    )
+
+    MOLONI_SYNC_PENDING = "pending"
+    MOLONI_SYNC_SYNCED = "synced"
+    MOLONI_SYNC_ERROR = "error"
+    MOLONI_SYNC_SKIPPED = "skipped"
+    MOLONI_SYNC_CHOICES = (
+        (MOLONI_SYNC_PENDING, "Pendente"),
+        (MOLONI_SYNC_SYNCED, "Sincronizado"),
+        (MOLONI_SYNC_ERROR, "Erro"),
+        (MOLONI_SYNC_SKIPPED, "Ignorado"),
+    )
+
+    client_profile = models.ForeignKey(
+        "ClientProfile",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="client_payments",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_POSTED, db_index=True)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default=METHOD_CASH, db_index=True)
+    amount_received = models.DecimalField(max_digits=10, decimal_places=2)
+    received_at = models.DateTimeField(default=timezone.now, db_index=True)
+    reference = models.CharField(max_length=255, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="client_payments_created",
+    )
+    cash_movement = models.OneToOneField(
+        "CashMovement",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="client_payment",
+    )
+    void_reason = models.CharField(max_length=255, blank=True, default="")
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="client_payments_voided",
+    )
+    moloni_sync_status = models.CharField(
+        max_length=20,
+        choices=MOLONI_SYNC_CHOICES,
+        default=MOLONI_SYNC_PENDING,
+        db_index=True,
+    )
+    moloni_document_id = models.CharField(max_length=50, blank=True, default="")
+    moloni_document_number = models.CharField(max_length=100, blank=True, default="")
+    moloni_sync_error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-received_at", "-id")
+        verbose_name = "Pagamento de cliente"
+        verbose_name_plural = "Pagamentos de clientes"
+
+    def __str__(self):
+        client_name = self.client_profile.full_name if self.client_profile else "Sem cliente"
+        return f"{client_name} · {self.amount_received} · {self.received_at:%d/%m/%Y %H:%M}"
+
+    def clean(self):
+        super().clean()
+        if self.amount_received is None or self.amount_received <= 0:
+            raise ValidationError({"amount_received": "Indica um valor positivo."})
+        if self.status == self.STATUS_VOID and not self.voided_at:
+            raise ValidationError({"voided_at": "Indica quando o pagamento foi anulado."})
+        if self.cash_movement_id and self.cash_movement.movement_type != CashMovement.TYPE_IN:
+            raise ValidationError({"cash_movement": "O movimento de caixa associado ao pagamento tem de ser uma entrada."})
+
+    def get_allocated_amount(self):
+        total = self.allocations.aggregate(total=models.Sum("allocated_amount")).get("total")
+        return total or Decimal("0.00")
+
+    def get_unallocated_amount(self):
+        remaining = (self.amount_received or Decimal("0.00")) - self.get_allocated_amount()
+        return remaining if remaining > 0 else Decimal("0.00")
+
+    @property
+    def allocated_amount(self):
+        return self.get_allocated_amount()
+
+    @property
+    def unallocated_amount(self):
+        return self.get_unallocated_amount()
+
+
+class ClientPaymentAllocation(models.Model):
+    payment = models.ForeignKey(
+        "ClientPayment",
+        on_delete=models.CASCADE,
+        related_name="allocations",
+    )
+    appointment = models.ForeignKey(
+        "Appointment",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="payment_allocations",
+    )
+    group_monthly_charge = models.ForeignKey(
+        "GroupMonthlyCharge",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="payment_allocations",
+    )
+    allocated_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        verbose_name = "Afetação de pagamento"
+        verbose_name_plural = "Afetações de pagamentos"
+        unique_together = (
+            ("payment", "appointment"),
+            ("payment", "group_monthly_charge"),
+        )
+
+    def __str__(self):
+        target = self.appointment or self.group_monthly_charge
+        return f"{self.payment_id} · {target or '-'} · {self.allocated_amount}"
+
+    def clean(self):
+        super().clean()
+        has_appointment = bool(self.appointment_id)
+        has_group_monthly = bool(self.group_monthly_charge_id)
+        if has_appointment == has_group_monthly:
+            raise ValidationError("Seleciona exatamente um destino para a afetação.")
+        if self.allocated_amount is None or self.allocated_amount <= 0:
+            raise ValidationError({"allocated_amount": "Indica um valor positivo."})
+        if not self.payment_id:
+            return
+
+        payment_profile_id = self.payment.client_profile_id
+        if has_appointment:
+            appointment_profile = getattr(getattr(self.appointment.client, "client_profile", None), "id", None)
+            if payment_profile_id and appointment_profile and payment_profile_id != appointment_profile:
+                raise ValidationError({"appointment": "A marcação selecionada não pertence ao cliente deste pagamento."})
+        elif has_group_monthly:
+            monthly_profile = getattr(getattr(self.group_monthly_charge.client, "client_profile", None), "id", None)
+            if payment_profile_id and monthly_profile and payment_profile_id != monthly_profile:
+                raise ValidationError({"group_monthly_charge": "A mensalidade selecionada não pertence ao cliente deste pagamento."})
 
 
 class ProductCategory(models.Model):

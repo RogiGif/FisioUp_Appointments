@@ -122,6 +122,9 @@ def build_slots(
     existing_appointments=None,
     blocked_slots=None,
     occupied_intervals=None,
+    hard_blocked_intervals=None,
+    slot_step_minutes=None,
+    simultaneous_capacity=1,
 ):
     if not professional:
         return []
@@ -133,19 +136,33 @@ def build_slots(
     taken = set(existing_appointments or [])
     blocked = set(blocked_slots or [])
     occupied = _normalize_occupied_intervals(occupied_intervals)
+    hard_blocked = _normalize_occupied_intervals(hard_blocked_intervals)
+    step_minutes = slot_step_minutes or service_duration_minutes
+    capacity = max(simultaneous_capacity or 1, 1)
 
     slots = []
     seen = set()
     for start, end in get_working_blocks(professional, date_obj):
-        for t in _time_range(start, end, step_minutes=service_duration_minutes):
+        block_end = datetime.combine(datetime.today().date(), end)
+        for t in _time_range(start, end, step_minutes=step_minutes):
             if date_obj == today and t <= now_t:
                 continue
             if t in taken or t in blocked:
                 continue
+            slot_start = datetime.combine(datetime.today().date(), t)
+            slot_end = slot_start + timedelta(minutes=service_duration_minutes)
+            if slot_end > block_end:
+                continue
+            if hard_blocked:
+                if any(slot_start < occ_end and occ_start < slot_end for occ_start, occ_end in hard_blocked):
+                    continue
             if occupied:
-                slot_start = datetime.combine(datetime.today().date(), t)
-                slot_end = slot_start + timedelta(minutes=service_duration_minutes)
-                if any(slot_start < occ_end and occ_start < slot_end for occ_start, occ_end in occupied):
+                overlap_count = sum(
+                    1
+                    for occ_start, occ_end in occupied
+                    if slot_start < occ_end and occ_start < slot_end
+                )
+                if overlap_count >= capacity:
                     continue
             time_str = t.strftime("%H:%M")
             if time_str not in seen:

@@ -13,6 +13,8 @@ from .models import (
     WeeklyBreakBlock,
     Appointment,
     SubcontractorPaymentLine,
+    ClientPayment,
+    ClientPaymentAllocation,
     ClientProfile,
     ClinicalRecord,
     TreatmentRecord,
@@ -115,7 +117,17 @@ class PartnerServicePriceInline(admin.TabularInline):
 @admin.register(Service)
 class ServiceAdmin(admin.ModelAdmin):
     form = BackofficeServiceForm
-    list_display = ("name", "service_type", "pricing_mode", "price", "price_first", "price_followup", "duration_minutes", "capacity")
+    list_display = (
+        "name",
+        "service_type",
+        "pricing_mode",
+        "price",
+        "price_first",
+        "price_followup",
+        "duration_minutes",
+        "slot_interval_minutes",
+        "capacity",
+    )
     search_fields = ("name",)
     ordering = ("name",)
 
@@ -292,6 +304,15 @@ class SubcontractorPaymentInline(admin.StackedInline):
     fields = readonly_fields
 
 
+class ClientPaymentAllocationInline(admin.TabularInline):
+    model = ClientPaymentAllocation
+    fk_name = "appointment"
+    extra = 0
+    can_delete = False
+    readonly_fields = ("payment", "allocated_amount", "notes", "created_at", "updated_at")
+    fields = readonly_fields
+
+
 @admin.register(Appointment)
 class AppointmentAdmin(admin.ModelAdmin):
     list_display = ("date", "time", "client", "professional", "service", "status", "session_index", "pricing_tier", "final_price", "open_client_record")
@@ -308,11 +329,12 @@ class AppointmentAdmin(admin.ModelAdmin):
 
     autocomplete_fields = ("client", "professional", "service")
     readonly_fields = ("open_client_record",)
-    inlines = (SubcontractorPaymentInline,)
+    inlines = (SubcontractorPaymentInline, ClientPaymentAllocationInline)
 
     fieldsets = (
         (None, {"fields": ("client", "professional", "service", "date", "time", "status")}),
         ("Financeiro", {"fields": ("base_price", "partner", "partner_price", "discount_type", "discount_value", "base_price_applied", "partner_price_applied", "discount_applied", "final_price", "session_index", "pricing_tier")}),
+        ("Liquidação", {"fields": ("settlement_pricing_mode", "settlement_partner", "settlement_discount_type", "settlement_discount_value", "settlement_final_price", "settlement_locked_at", "settlement_notes")}),
         ("Ações rápidas", {"fields": ("open_client_record",)}),
     )
 
@@ -374,6 +396,66 @@ class SubcontractorPaymentLineAdmin(BackofficeAccessAdminMixin, admin.ModelAdmin
     @admin.action(description="Marcar como em aberto")
     def mark_unpaid(self, request, queryset):
         queryset.update(status=SubcontractorPaymentLine.STATUS_UNPAID, paid_at=None, paid_by=None)
+
+
+class ClientPaymentAllocationPaymentInline(admin.TabularInline):
+    model = ClientPaymentAllocation
+    extra = 0
+    raw_id_fields = ("appointment", "group_monthly_charge")
+    fields = ("appointment", "group_monthly_charge", "allocated_amount", "notes", "created_at", "updated_at")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ClientPayment)
+class ClientPaymentAdmin(BackofficeAccessAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "received_at",
+        "client_profile",
+        "amount_received",
+        "payment_method",
+        "status",
+        "moloni_sync_status",
+        "cash_movement",
+        "allocated_amount_display",
+        "unallocated_amount_display",
+    )
+    list_filter = ("status", "payment_method", "moloni_sync_status", "received_at")
+    search_fields = ("client_profile__full_name", "reference", "notes", "moloni_document_number")
+    ordering = ("-received_at", "-id")
+    autocomplete_fields = ("client_profile", "created_by", "voided_by", "cash_movement")
+    readonly_fields = (
+        "cash_movement",
+        "moloni_document_id",
+        "moloni_document_number",
+        "moloni_sync_error",
+        "created_at",
+        "updated_at",
+    )
+    inlines = (ClientPaymentAllocationPaymentInline,)
+
+    def allocated_amount_display(self, obj):
+        return obj.allocated_amount
+
+    allocated_amount_display.short_description = "Afetado"
+
+    def unallocated_amount_display(self, obj):
+        return obj.unallocated_amount
+
+    unallocated_amount_display.short_description = "Por afetar"
+
+
+@admin.register(ClientPaymentAllocation)
+class ClientPaymentAllocationAdmin(BackofficeAccessAdminMixin, admin.ModelAdmin):
+    list_display = ("payment", "appointment", "group_monthly_charge", "allocated_amount", "created_at")
+    list_filter = ("created_at",)
+    search_fields = (
+        "payment__client_profile__full_name",
+        "appointment__client__client_profile__full_name",
+        "group_monthly_charge__client__client_profile__full_name",
+    )
+    ordering = ("-created_at", "-id")
+    raw_id_fields = ("payment", "appointment", "group_monthly_charge")
+    readonly_fields = ("created_at", "updated_at")
 
 # --------- CONTEÚDOS ---------
 

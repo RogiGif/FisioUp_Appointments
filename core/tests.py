@@ -73,6 +73,61 @@ class WeeklyScheduleSlotsTests(TestCase):
         self.assertEqual(slots, [])
 
 
+class OneToOneCapacitySlotsTests(TestCase):
+    def setUp(self):
+        self.prof_user = User.objects.create_user(username="prof_capacity", password="pass")
+        self.prof = Professional.objects.create(user=self.prof_user)
+        self.service = Service.objects.create(
+            name="Acupuntura",
+            duration_minutes=45,
+            slot_interval_minutes=15,
+            capacity=4,
+            price="30.00",
+            service_type="one_to_one",
+        )
+        self.prof.services.add(self.service)
+        schedule = WeeklySchedule.objects.create(professional=self.prof, timezone="Europe/Lisbon", is_active=True)
+        WeeklyWorkingBlock.objects.create(
+            weekly_schedule=schedule,
+            weekday=0,
+            start_time=time(19, 0),
+            end_time=time(21, 0),
+        )
+        self.target_date = _next_weekday(timezone.localdate(), 0)
+
+    def _create_appointment(self, username, start_time):
+        client = User.objects.create_user(username=username, password="pass")
+        Appointment.objects.create(
+            client=client,
+            professional=self.prof,
+            service=self.service,
+            date=self.target_date,
+            time=start_time,
+        )
+
+    def test_service_can_offer_staggered_slots_shorter_than_duration(self):
+        slots = _get_slots(self.prof, self.target_date, service=self.service)
+        self.assertIn("19:15", slots)
+        self.assertIn("19:30", slots)
+
+    def test_capacity_allows_overlap_until_limit(self):
+        self._create_appointment("client_a", time(19, 0))
+        self._create_appointment("client_b", time(19, 15))
+        self._create_appointment("client_c", time(19, 45))
+
+        slots = _get_slots(self.prof, self.target_date, service=self.service)
+        self.assertIn("19:30", slots)
+
+    def test_capacity_blocks_slot_when_limit_is_reached(self):
+        self._create_appointment("client_d", time(19, 0))
+        self._create_appointment("client_e", time(19, 15))
+        self._create_appointment("client_f", time(19, 30))
+        self._create_appointment("client_g", time(19, 45))
+
+        slots = _get_slots(self.prof, self.target_date, service=self.service)
+        self.assertNotIn("19:30", slots)
+
+
 class SeriesBookingStatusTests(TestCase):
     def setUp(self):
         self.service = Service.objects.create(

@@ -204,7 +204,7 @@ def _book_series_client_view(request, profile):
                 elif _is_slot_blocked(prof, date_obj, time_obj):
                     row_error = "Horário indisponível."
                 else:
-                    slots_now = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+                    slots_now = _get_slots(prof, date_obj, service=service)
                     if t not in slots_now:
                         row_error = "Horário já não disponível."
 
@@ -323,7 +323,7 @@ def _book_series_client_view(request, profile):
 
                     if prof_for_series:
                         if professional_works_on_date(prof_for_series, current_start):
-                            slots_now = _get_slots(prof_for_series, current_start, step_minutes=service.duration_minutes)
+                            slots_now = _get_slots(prof_for_series, current_start, service=service)
                             if slots_now:
                                 prof_for_row = prof_for_series
                                 slot_time = slots_now[0]
@@ -331,7 +331,7 @@ def _book_series_client_view(request, profile):
                         for p in prof_candidates:
                             if not professional_works_on_date(p, current_start):
                                 continue
-                            slots_now = _get_slots(p, current_start, step_minutes=service.duration_minutes)
+                            slots_now = _get_slots(p, current_start, service=service)
                             if slots_now:
                                 prof_for_row = p
                                 slot_time = slots_now[0]
@@ -662,15 +662,15 @@ def book_view(request):
                     slots = []
                 elif date_obj == today and time_obj <= now_t:
                     message = "Este horário já passou."
-                    slots = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+                    slots = _get_slots(prof, date_obj, service=service)
                 elif not is_same_slot and _is_slot_blocked(prof, date_obj, time_obj):
                     message = "Este horário está indisponível."
-                    slots = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+                    slots = _get_slots(prof, date_obj, service=service)
                 elif not professional_works_on_date(prof, date_obj):
                     message = f"Este profissional não atende nesse dia. Atende: {', '.join(prof_days) or '—'}."
                     slots = []
                 else:
-                    slots_now = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+                    slots_now = _get_slots(prof, date_obj, service=service)
                     if time_str not in slots_now and not is_same_slot:
                         message = "Esse horário já não está disponível. Atualiza a página."
                         slots = slots_now
@@ -900,7 +900,7 @@ def book_view(request):
 
                         except IntegrityError:
                             message = "Esse horário acabou de ser reservado. Escolhe outro."
-                            slots = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+                            slots = _get_slots(prof, date_obj, service=service)
 
     # GET → só calcular slots quando tiver serviço + profissional + data
     if selected_service_id and selected_professional_id and selected_date and request.method != "POST":
@@ -932,7 +932,7 @@ def book_view(request):
                     message = "Não podes marcar consultas no passado."
                     slots = []
                 elif date_obj == today:
-                    slots = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+                    slots = _get_slots(prof, date_obj, service=service)
                     if not slots:
                         message = "Não há horários disponíveis para este dia."
                 elif not professional_works_on_date(prof, date_obj):
@@ -940,7 +940,7 @@ def book_view(request):
                     message = f"Este profissional não atende nesse dia. Atende: {', '.join(prof_days) or '—'}."
                     slots = []
                 else:
-                    slots = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+                    slots = _get_slots(prof, date_obj, service=service)
                     if not slots:
                         message = "Não há horários disponíveis para este dia."
                 if reschedule_appt and reschedule_appt.time and reschedule_appt.date.strftime("%Y-%m-%d") == selected_date and str(reschedule_appt.professional_id) == str(selected_professional_id):
@@ -1062,7 +1062,7 @@ def slots_api_view(request):
     if not works_on_date and not is_current_reschedule_slot_context:
         return JsonResponse({"ok": False, "slots": [], "message": "Este profissional não atende nesse dia."})
 
-    slots = _get_slots(prof, date_obj, step_minutes=service.duration_minutes) if works_on_date else []
+    slots = _get_slots(prof, date_obj, service=service) if works_on_date else []
     if is_current_reschedule_slot_context:
         reschedule_time = reschedule_appt.time.strftime("%H:%M")
         if reschedule_time not in slots:
@@ -1205,7 +1205,7 @@ def bulk_book_view(request):
                 elif _is_slot_blocked(prof, date_obj, time_obj):
                     row_error = "Horário indisponível."
                 else:
-                    slots_now = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+                    slots_now = _get_slots(prof, date_obj, service=service)
                     if t not in slots_now:
                         row_error = "Horário já não disponível."
 
@@ -1508,7 +1508,7 @@ def _professional_book_series_view(
                     elif _is_slot_blocked(prof_row, date_obj, time_obj):
                         row_error = "Horário indisponível."
                     else:
-                        slots_now = _get_slots(prof_row, date_obj, step_minutes=service.duration_minutes)
+                        slots_now = _get_slots(prof_row, date_obj, service=service)
                         if t not in slots_now:
                             row_error = "Horário já não disponível."
 
@@ -1653,7 +1653,7 @@ def _professional_book_series_view(
 
                     if prof_for_series:
                         if professional_works_on_date(prof_for_series, current_start):
-                            slots_now = _get_slots(prof_for_series, current_start, step_minutes=service.duration_minutes)
+                            slots_now = _get_slots(prof_for_series, current_start, service=service)
                             if slots_now:
                                 prof_for_row = prof_for_series
                                 slot_time = slots_now[0]
@@ -1661,7 +1661,7 @@ def _professional_book_series_view(
                         for p in prof_candidates:
                             if not professional_works_on_date(p, current_start):
                                 continue
-                            slots_now = _get_slots(p, current_start, step_minutes=service.duration_minutes)
+                            slots_now = _get_slots(p, current_start, service=service)
                             if slots_now:
                                 prof_for_row = p
                                 slot_time = slots_now[0]
@@ -1952,7 +1952,7 @@ def professional_book_view(request):
 
     if selected_service and selected_date and selected_prof:
         date_obj = datetime.strptime(selected_date, "%Y-%m-%d").date()
-        slots = _get_slots(selected_prof, date_obj, step_minutes=selected_service.duration_minutes)
+        slots = _get_slots(selected_prof, date_obj, service=selected_service)
 
     selected_professional_name = selected_prof.user.get_full_name() or selected_prof.user.username if selected_prof else ""
 
@@ -2045,7 +2045,7 @@ def professional_book_view(request):
                     str(p.id): [{"id": s.id, "name": s.name} for s in p.services.all().order_by("name")]
                     for p in professionals
                 }
-                valid_slots = _get_slots(selected_prof, date_obj, step_minutes=service.duration_minutes) if selected_prof else []
+                valid_slots = _get_slots(selected_prof, date_obj, service=service) if selected_prof else []
                 selected_service_id = service_id
                 selected_date = date_str
                 selected_time = time_str
@@ -2090,7 +2090,7 @@ def professional_book_view(request):
                     str(p.id): [{"id": s.id, "name": s.name} for s in p.services.all().order_by("name")]
                     for p in professionals
                 }
-                valid_slots = _get_slots(selected_prof, date_obj, step_minutes=service.duration_minutes)
+                valid_slots = _get_slots(selected_prof, date_obj, service=service)
                 selected_service_id = service_id
                 selected_date = date_str
                 selected_time = time_str
@@ -2128,7 +2128,7 @@ def professional_book_view(request):
                     },
                 )
 
-            valid_slots = _get_slots(selected_prof, date_obj, step_minutes=service.duration_minutes)
+            valid_slots = _get_slots(selected_prof, date_obj, service=service)
             if time_str not in valid_slots:
                 message = "Hora inválida ou já ocupada."
                 selected_service_id = service_id

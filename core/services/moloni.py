@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 from django.conf import settings
 from django.utils import timezone
 
-from core.models import MoloniIntegration
+from core.models import ClientProfile, MoloniIntegration
 
 
 BASE_URL = (getattr(settings, "MOLONI_BASE_URL", "https://api.moloni.pt/v1") or "").rstrip("/")
@@ -193,6 +193,10 @@ def customers_get_all(*, qty: int = 50, offset: int = 0) -> Dict[str, Any]:
     return moloni_request("customers/getAll", {"qty": qty, "offset": offset})
 
 
+def customers_get_modified_since(*, date: str, qty: int = 50, offset: int = 0) -> Dict[str, Any]:
+    return moloni_request("customers/getModifiedSince", {"date": date, "qty": qty, "offset": offset})
+
+
 def customers_get_by_vat(vat: str) -> Dict[str, Any]:
     return moloni_request("customers/getByVat", {"vat": vat})
 
@@ -203,6 +207,18 @@ def customers_get_one(customer_id: str) -> Dict[str, Any]:
 
 def customers_search(query: str) -> Dict[str, Any]:
     return moloni_request("customers/getBySearch", {"search": query})
+
+
+def customers_insert(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return moloni_request("customers/insert", payload)
+
+
+def customers_update(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return moloni_request("customers/update", payload)
+
+
+def customers_get_next_number() -> Dict[str, Any]:
+    return moloni_request("customers/getNextNumber", {})
 
 
 def companies_get_all() -> Dict[str, Any]:
@@ -267,4 +283,257 @@ def test_connection() -> Dict[str, Any]:
         "company_id": company["company_id"],
         "company_name": company["company_name"],
         "customer_count_sample": len(customers or []),
+    }
+
+
+def _safe_get(data: Dict[str, Any], *keys: str, default=""):
+    for key in keys:
+        value = data.get(key)
+        if value not in (None, ""):
+            return value
+    return default
+
+
+def _normalize_vat(value: str) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _clean_postal_code(value: str) -> str:
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    digits = _normalize_vat(value)
+    if len(digits) == 7:
+        return f"{digits[:4]}-{digits[4:]}"
+    return value
+
+
+def get_customer_defaults_status() -> Dict[str, Any]:
+    integ = _get_settings()
+    defaults = {
+        "language_id": integ.customer_language_id,
+        "maturity_date_id": integ.customer_maturity_date_id,
+        "payment_method_id": integ.customer_payment_method_id,
+        "delivery_method_id": integ.customer_delivery_method_id,
+        "country_id": integ.customer_country_id,
+        "document_type_id": integ.customer_document_type_id,
+    }
+    missing = [
+        name for name in (
+            "language_id",
+            "maturity_date_id",
+            "payment_method_id",
+            "country_id",
+            "document_type_id",
+        ) if not defaults.get(name)
+    ]
+    return {
+        "defaults": defaults,
+        "missing": missing,
+        "ready": not missing,
+    }
+
+
+def get_customer_defaults_suggestions(*, qty: int = 25) -> Dict[str, Any]:
+    data = customers_get_all(qty=qty, offset=0)
+    customers = data.get("customers") if isinstance(data, dict) else data
+    customers = customers or []
+    fields = {
+        "payment_method_id": {},
+        "document_type_id": {},
+        "language_id": {},
+        "maturity_date_id": {},
+        "country_id": {},
+        "delivery_method_id": {},
+    }
+
+    for customer in customers:
+        customer = customer or {}
+        customer_name = (
+            _safe_get(customer, "name", "company_name", "company", default="Cliente sem nome")
+            or "Cliente sem nome"
+        )
+        copies = customer.get("copies") or []
+        document_type_id = _safe_get(customer, "document_type_id")
+        if isinstance(copies, list) and copies:
+            first_copy = copies[0] or {}
+            document_type_id = _safe_get(first_copy, "document_type_id") or document_type_id
+
+        values = {
+            "payment_method_id": _safe_get(customer, "payment_method_id"),
+            "document_type_id": document_type_id,
+            "language_id": _safe_get(customer, "language_id"),
+            "maturity_date_id": _safe_get(customer, "maturity_date_id"),
+            "country_id": _safe_get(customer, "country_id"),
+            "delivery_method_id": _safe_get(customer, "delivery_method_id"),
+        }
+        for field_name, value in values.items():
+            if value in (None, ""):
+                continue
+            value_key = str(value).strip()
+            if not value_key:
+                continue
+            sample_names = fields[field_name].setdefault(value_key, [])
+            if customer_name not in sample_names and len(sample_names) < 3:
+                sample_names.append(customer_name)
+
+    field_rows = []
+    for field_name, values in fields.items():
+        options = []
+        for value_key, sample_names in sorted(values.items(), key=lambda item: item[0]):
+            options.append({
+                "value": value_key,
+                "sample_names": sample_names,
+            })
+        field_rows.append({
+            "field": field_name,
+            "options": options,
+        })
+
+    return {
+        "customer_count": len(customers),
+        "fields": field_rows,
+    }
+
+
+def _resolve_customer_defaults() -> Dict[str, Any]:
+    status = get_customer_defaults_status()
+    if status["missing"]:
+        raise MoloniError(
+            "A configuração de defaults de clientes da Moloni está incompleta na app: "
+            + ", ".join(status["missing"])
+            + "."
+        )
+
+    defaults = dict(status["defaults"])
+    document_type_id = int(defaults["document_type_id"])
+    defaults["copies"] = [{"document_type_id": document_type_id, "copies": 1}]
+    return defaults
+
+
+def _next_customer_number() -> str:
+    data = customers_get_next_number()
+    candidates = []
+    if isinstance(data, dict):
+        candidates = [
+            data.get("number"),
+            data.get("next_number"),
+            data.get("customer_number"),
+        ]
+    elif isinstance(data, list) and data:
+        first = data[0] or {}
+        candidates = [
+            first.get("number"),
+            first.get("next_number"),
+            first.get("customer_number"),
+        ]
+    for value in candidates:
+        if value not in (None, ""):
+            return str(value).strip()
+    raise MoloniError("Moloni não devolveu o próximo número de cliente.")
+
+
+def _get_existing_remote_customer(profile: ClientProfile) -> tuple[Dict[str, Any], str]:
+    if profile.moloni_customer_id:
+        data = customers_get_one(profile.moloni_customer_id)
+        customer = data.get("customer") if isinstance(data, dict) else data
+        if isinstance(customer, list):
+            customer = customer[0] if customer else {}
+        if customer:
+            return customer, "id"
+
+    vat = _normalize_vat(profile.nif)
+    if vat:
+        data = customers_get_by_vat(vat)
+        if isinstance(data, dict):
+            customers = data.get("customers") or data.get("customer") or []
+        else:
+            customers = data
+        if isinstance(customers, dict):
+            customers = [customers]
+        customers = customers or []
+        if customers:
+            return customers[0], "vat"
+
+    return {}, ""
+
+
+def _build_customer_payload(profile: ClientProfile, existing_customer: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    existing_customer = existing_customer or {}
+    defaults = _resolve_customer_defaults()
+    email = ""
+    if profile.user_id and getattr(profile.user, "email", ""):
+        email = profile.user.email.strip().lower()
+
+    payload: Dict[str, Any] = {
+        "number": str(_safe_get(existing_customer, "number") or _next_customer_number()),
+        "vat": _normalize_vat(profile.nif),
+        "name": (profile.full_name or _safe_get(existing_customer, "name") or "Cliente Fisio-UP").strip(),
+        "address": (profile.address_line1 or _safe_get(existing_customer, "address", "address_1", "address1") or "Por definir").strip(),
+        "zip_code": _clean_postal_code(profile.postal_code or _safe_get(existing_customer, "zip_code", "postal_code")),
+        "city": (profile.city or profile.locality or profile.county or _safe_get(existing_customer, "city", "locality") or "Por definir").strip(),
+        "country_id": int(_safe_get(existing_customer, "country_id") or defaults["country_id"]),
+        "language_id": int(_safe_get(existing_customer, "language_id") or defaults["language_id"]),
+        "maturity_date_id": int(_safe_get(existing_customer, "maturity_date_id") or defaults["maturity_date_id"]),
+        "payment_method_id": int(_safe_get(existing_customer, "payment_method_id") or defaults["payment_method_id"]),
+        "document_type_id": int(_safe_get(existing_customer, "document_type_id") or defaults["document_type_id"]),
+        "copies": existing_customer.get("copies") or defaults["copies"],
+        "phone": (profile.phone or _safe_get(existing_customer, "phone", "mobile", "telephone") or "").strip(),
+        "email": email or _safe_get(existing_customer, "email"),
+        "contact_name": (profile.full_name or _safe_get(existing_customer, "contact_name") or "").strip(),
+    }
+
+    delivery_method = _safe_get(existing_customer, "delivery_method_id") or defaults.get("delivery_method_id")
+    if delivery_method not in (None, ""):
+        payload["delivery_method_id"] = int(delivery_method)
+
+    if existing_customer.get("customer_id") or existing_customer.get("id"):
+        payload["customer_id"] = int(_safe_get(existing_customer, "customer_id", "id"))
+
+    return payload
+
+
+def sync_client_profile(profile: ClientProfile) -> Dict[str, Any]:
+    if not is_configured():
+        raise MoloniError("Configuração Moloni incompleta.")
+    integ = _get_settings()
+    if not integ.refresh_token:
+        raise MoloniError("Integração Moloni não ligada.")
+
+    vat = _normalize_vat(profile.nif)
+    if not vat:
+        raise MoloniError("O cliente não tem NIF; não pode ser sincronizado automaticamente com a Moloni.")
+
+    existing_customer, matched_by = _get_existing_remote_customer(profile)
+    payload = _build_customer_payload(profile, existing_customer)
+
+    if payload.get("customer_id"):
+        response = customers_update(payload)
+        action = "updated"
+    else:
+        response = customers_insert(payload)
+        action = "created"
+
+    customer = response.get("customer") if isinstance(response, dict) else response
+    if isinstance(response, dict) and not customer:
+        customer = response.get("customer_id") and {"customer_id": response.get("customer_id")}
+    if isinstance(customer, list):
+        customer = customer[0] if customer else {}
+    customer = customer or {}
+    customer_id = str(_safe_get(customer, "customer_id", "id") or payload.get("customer_id") or "").strip()
+    if not customer_id:
+        raise MoloniError("A Moloni não devolveu o customer_id do cliente sincronizado.")
+
+    if profile.moloni_customer_id != customer_id:
+        profile.moloni_customer_id = customer_id
+        profile.save(update_fields=["moloni_customer_id", "updated_at"])
+
+    integ.last_sync_at = timezone.now()
+    integ.save(update_fields=["last_sync_at", "updated_at"])
+
+    return {
+        "action": action,
+        "customer_id": customer_id,
+        "matched_by": matched_by or ("vat" if action == "updated" else ""),
+        "customer_name": payload["name"],
     }

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, time as dtime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from collections import defaultdict
 from dataclasses import dataclass
 from uuid import uuid4
@@ -14,6 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import views as auth_views
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Count, Sum, Max
@@ -82,6 +83,7 @@ from core.models import (
     Partner,
     PartnerServicePrice,
     ContentPost,
+    ClientPayment,
 )
 
 from core.views.common import (
@@ -98,7 +100,11 @@ from core.views.common import (
     _has_availability_window,
     _is_slot_blocked,
     _is_slot_occupied,
-    _occupied_intervals_for_professional_day,
+    _find_matching_cancelled_appointment,
+    _appointment_intervals_for_professional_day,
+    _group_session_intervals_for_professional_day,
+    _service_simultaneous_capacity,
+    _service_slot_step_minutes,
 )
 from core.services.scheduling import (
     get_active_weekly_schedule,
@@ -107,6 +113,12 @@ from core.services.scheduling import (
     build_slots,
 )
 from core.services.subcontracting import sync_subcontractor_payout
+from core.services.payments import (
+    build_appointment_settlement,
+    create_client_payment,
+    quantize_money,
+    sync_appointment_payment_flags,
+)
 from core.utils.stock import (
     get_stock,
     get_existing_consumption_totals,
@@ -128,6 +140,94 @@ def _appointment_consumptions_snapshot(appointment):
             .order_by("product__name", "id")
         )
     ]
+
+
+def _parse_money_input(raw_value, *, field_label):
+    text = (raw_value or "").strip()
+    if not text:
+        return None
+    normalized = text.replace("€", "").replace(" ", "").replace(",", ".")
+    try:
+        value = quantize_money(normalized)
+    except (InvalidOperation, TypeError, ValueError):
+        raise DjangoValidationError({field_label: "Valor inválido."})
+    if value < 0:
+        raise DjangoValidationError({field_label: "O valor não pode ser negativo."})
+    return value
+
+
+def _appointment_posted_paid_total(appointment):
+    total = (
+        appointment.payment_allocations
+        .filter(payment__status=ClientPayment.STATUS_POSTED)
+        .aggregate(total=Sum("allocated_amount"))
+        .get("total")
+    )
+    return total or Decimal("0.00")
+
+
+def _appointment_debt_candidates(appointment, user):
+    qset = (
+        Appointment.objects
+        .select_related("service", "professional", "professional__user")
+        .filter(client_id=appointment.client_id)
+        .exclude(id=appointment.id)
+        .exclude(status__in=[Appointment.STATUS_CANCELLED, Appointment.STATUS_NO_SHOW])
+        .order_by("date", "time", "id")
+    )
+    if not can_view_all_calendar(user):
+        qset = qset.filter(professional=appointment.professional)
+
+    today = timezone.localdate()
+    now_t = timezone.localtime().time()
+    items = []
+    for debt_appointment in qset:
+        is_past = (
+            debt_appointment.date < today
+            or (debt_appointment.date == today and (debt_appointment.time or dtime.min) < now_t)
+        )
+        if not is_past:
+            continue
+        if debt_appointment.get_outstanding_amount() <= 0:
+            continue
+        items.append(debt_appointment)
+    return items
+
+
+def _sync_financial_status_for_appointment(appointment, *, actor, request=None, force_completed=False):
+    old_status = appointment.status
+    changed_fields, _, outstanding = sync_appointment_payment_flags(appointment)
+    if appointment.status not in {
+        Appointment.STATUS_CANCELLED,
+        Appointment.STATUS_NO_SHOW,
+        Appointment.STATUS_AWAITING_VALIDATION,
+    }:
+        if outstanding <= 0 and (force_completed or appointment.status == Appointment.STATUS_IN_DEBT):
+            if appointment.status != Appointment.STATUS_COMPLETED:
+                appointment.status = Appointment.STATUS_COMPLETED
+                changed_fields.append("status")
+            if not appointment.completed_at:
+                appointment.completed_at = timezone.now()
+                changed_fields.append("completed_at")
+            if appointment.completed_by_id != getattr(actor, "id", None):
+                appointment.completed_by = actor if getattr(actor, "is_authenticated", False) else None
+                changed_fields.append("completed_by")
+        elif outstanding > 0 and appointment.status == Appointment.STATUS_COMPLETED:
+            appointment.status = Appointment.STATUS_IN_DEBT
+            changed_fields.append("status")
+    if changed_fields:
+        appointment.save(update_fields=list(dict.fromkeys(changed_fields)))
+        if old_status != appointment.status:
+            log_appt(
+                AppointmentLog.ACTION_STATUS_UPDATED,
+                appointment,
+                actor,
+                old_status=old_status,
+                new_status=appointment.status,
+                note="Estado financeiro atualizado pela liquidação.",
+                request=request,
+            )
+    return outstanding
 
 
 def _calendar_service_colors(request=None):
@@ -898,18 +998,19 @@ def professional_calendar_availability_events_view(request):
         .filter(professional__in=professionals, date__range=(start, end))
         .values_list("professional_id", "date", "time")
     )
-    occupied_by_prof_day = defaultdict(list)
+    appointment_intervals_by_prof_day = defaultdict(list)
+    hard_blocked_intervals_by_prof_day = defaultdict(list)
     blocked_by_prof_day = defaultdict(set)
     for appointment in appointments_qs:
         duration = getattr(appointment.service, "duration_minutes", None) or 30
         end_dt = datetime.combine(appointment.date, appointment.time) + timedelta(minutes=duration)
-        occupied_by_prof_day[(appointment.professional_id, appointment.date)].append(
+        appointment_intervals_by_prof_day[(appointment.professional_id, appointment.date)].append(
             (appointment.time, end_dt.time())
         )
     for session in group_sessions_qs:
         duration = session.duration_minutes or getattr(session.service, "duration_minutes", None) or 60
         end_dt = datetime.combine(session.date, session.time) + timedelta(minutes=duration)
-        occupied_by_prof_day[(session.professional_id, session.date)].append(
+        hard_blocked_intervals_by_prof_day[(session.professional_id, session.date)].append(
             (session.time, end_dt.time())
         )
     for prof_id, day, tm in blocked_qs:
@@ -929,7 +1030,8 @@ def professional_calendar_availability_events_view(request):
         if not relevant_services:
             continue
         for day in _daterange(start, end):
-            occupied = occupied_by_prof_day.get((prof.id, day), [])
+            occupied = appointment_intervals_by_prof_day.get((prof.id, day), [])
+            hard_blocked = hard_blocked_intervals_by_prof_day.get((prof.id, day), [])
             blocked = blocked_by_prof_day.get((prof.id, day), set())
             for service in relevant_services:
                 slots = build_slots(
@@ -938,6 +1040,9 @@ def professional_calendar_availability_events_view(request):
                     service_duration_minutes=service.duration_minutes,
                     blocked_slots=blocked,
                     occupied_intervals=occupied,
+                    hard_blocked_intervals=hard_blocked,
+                    slot_step_minutes=_service_slot_step_minutes(service),
+                    simultaneous_capacity=_service_simultaneous_capacity(service),
                 )
                 for slot in slots:
                     start_dt = datetime.combine(day, datetime.strptime(slot, "%H:%M").time())
@@ -1025,7 +1130,8 @@ def client_calendar_availability_events_view(request):
                 professional=prof,
                 date=day,
             ).values_list("time", flat=True)
-            occupied = _occupied_intervals_for_professional_day(prof, day)
+            occupied = _appointment_intervals_for_professional_day(prof, day)
+            hard_blocked = _group_session_intervals_for_professional_day(prof, day)
 
             for service in relevant_services:
                 slots = build_slots(
@@ -1034,6 +1140,9 @@ def client_calendar_availability_events_view(request):
                     service_duration_minutes=service.duration_minutes,
                     blocked_slots=blocked,
                     occupied_intervals=occupied,
+                    hard_blocked_intervals=hard_blocked,
+                    slot_step_minutes=_service_slot_step_minutes(service),
+                    simultaneous_capacity=_service_simultaneous_capacity(service),
                 )
                 for slot in slots:
                     key = (day, slot, service.id)
@@ -1255,7 +1364,12 @@ def professional_calendar_quick_create_view(request):
     if not _has_availability_window(selected_prof, date_obj, time_obj) and not is_current_reschedule_slot_selected:
         return JsonResponse({"ok": False, "message": "Profissional não atende neste horário."}, status=400)
 
-    valid_slots = _get_slots(selected_prof, date_obj, step_minutes=service.duration_minutes)
+    valid_slots = _get_slots(
+        selected_prof,
+        date_obj,
+        service=service,
+        exclude_appointment_id=appt_to_reschedule.id if is_reschedule and appt_to_reschedule else None,
+    )
     if is_current_reschedule_slot_context:
         current_time = appt_to_reschedule.time.strftime("%H:%M")
         if current_time not in valid_slots:
@@ -1264,14 +1378,13 @@ def professional_calendar_quick_create_view(request):
     if time_str not in valid_slots:
         return JsonResponse({"ok": False, "message": "Horário inválido para este serviço."}, status=400)
 
-    occupied_qs = Appointment.objects.filter(
-        professional=selected_prof,
-        date=date_obj,
-        time=time_obj,
-    ).exclude(status=Appointment.STATUS_CANCELLED)
-    if is_reschedule and appt_to_reschedule:
-        occupied_qs = occupied_qs.exclude(id=appt_to_reschedule.id)
-    if occupied_qs.exists():
+    if _is_slot_occupied(
+        selected_prof,
+        date_obj,
+        time_obj,
+        service=service,
+        exclude_appointment_id=appt_to_reschedule.id if is_reschedule and appt_to_reschedule else None,
+    ):
         return JsonResponse({"ok": False, "message": "Este horário já está ocupado."}, status=400)
 
     settings_obj = clinic_settings()
@@ -1337,6 +1450,71 @@ def professional_calendar_quick_create_view(request):
         return JsonResponse({"ok": True, "appointment_id": appt_to_reschedule.id, "rescheduled": True})
 
     pricing = compute_pricing(service, client_profile)
+    reactivated_cancelled = _find_matching_cancelled_appointment(
+        client_user=client_user,
+        professional=selected_prof,
+        service=service,
+        date_obj=date_obj,
+        time_obj=time_obj,
+    )
+    if reactivated_cancelled:
+        old_status = reactivated_cancelled.status
+        reactivated_cancelled.symptomatology = ""
+        reactivated_cancelled.status = Appointment.STATUS_SCHEDULED
+        reactivated_cancelled.base_price = pricing["base_price_applied"]
+        reactivated_cancelled.partner = pricing["partner"]
+        reactivated_cancelled.partner_price = pricing["partner_price_applied"]
+        reactivated_cancelled.discount_type = pricing["discount_type"]
+        reactivated_cancelled.discount_value = pricing["discount_value"]
+        reactivated_cancelled.final_price = pricing["final_price"]
+        reactivated_cancelled.session_index = pricing["session_index"]
+        reactivated_cancelled.pricing_tier = pricing["pricing_tier"]
+        reactivated_cancelled.base_price_applied = pricing["base_price_applied"]
+        reactivated_cancelled.partner_price_applied = pricing["partner_price_applied"]
+        reactivated_cancelled.discount_applied = pricing["discount_applied"]
+        reactivated_cancelled.is_paid = False
+        reactivated_cancelled.paid_at = None
+        reactivated_cancelled.completed_by = None
+        reactivated_cancelled.completed_at = None
+        reactivated_cancelled.save(
+            update_fields=[
+                "symptomatology",
+                "status",
+                "base_price",
+                "partner",
+                "partner_price",
+                "discount_type",
+                "discount_value",
+                "final_price",
+                "session_index",
+                "pricing_tier",
+                "base_price_applied",
+                "partner_price_applied",
+                "discount_applied",
+                "is_paid",
+                "paid_at",
+                "completed_by",
+                "completed_at",
+            ]
+        )
+        log_appt(
+            AppointmentLog.ACTION_STATUS_UPDATED,
+            reactivated_cancelled,
+            request.user,
+            old_status=old_status,
+            new_status=reactivated_cancelled.status,
+            note="Reativada a partir de uma marcação cancelada do mesmo slot.",
+            request=request,
+        )
+        return JsonResponse(
+            {
+                "ok": True,
+                "appointment_id": reactivated_cancelled.id,
+                "reactivated": True,
+                "message": "Marcação cancelada anterior reativada para este horário.",
+            }
+        )
+
     appt = Appointment.objects.create(
         client=client_user,
         professional=selected_prof,
@@ -1544,14 +1722,79 @@ def client_calendar_quick_create_view(request):
     if not _has_availability_window(selected_prof, date_obj, time_obj):
         return JsonResponse({"ok": False, "message": "Profissional não atende neste horário."}, status=400)
 
-    valid_slots = _get_slots(selected_prof, date_obj, step_minutes=service.duration_minutes)
+    valid_slots = _get_slots(selected_prof, date_obj, service=service)
     if time_str not in valid_slots:
         return JsonResponse({"ok": False, "message": "Horário inválido para este serviço."}, status=400)
 
-    if _is_slot_occupied(selected_prof, date_obj, time_obj):
+    if _is_slot_occupied(selected_prof, date_obj, time_obj, service=service):
         return JsonResponse({"ok": False, "message": "Este horário já está ocupado."}, status=400)
 
     pricing = compute_pricing(service, client_profile)
+    reactivated_cancelled = _find_matching_cancelled_appointment(
+        client_user=request.user,
+        professional=selected_prof,
+        service=service,
+        date_obj=date_obj,
+        time_obj=time_obj,
+    )
+    if reactivated_cancelled:
+        old_status = reactivated_cancelled.status
+        reactivated_cancelled.symptomatology = ""
+        reactivated_cancelled.status = Appointment.STATUS_PENDING
+        reactivated_cancelled.base_price = pricing["base_price_applied"]
+        reactivated_cancelled.partner = pricing["partner"]
+        reactivated_cancelled.partner_price = pricing["partner_price_applied"]
+        reactivated_cancelled.discount_type = pricing["discount_type"]
+        reactivated_cancelled.discount_value = pricing["discount_value"]
+        reactivated_cancelled.final_price = pricing["final_price"]
+        reactivated_cancelled.session_index = pricing["session_index"]
+        reactivated_cancelled.pricing_tier = pricing["pricing_tier"]
+        reactivated_cancelled.base_price_applied = pricing["base_price_applied"]
+        reactivated_cancelled.partner_price_applied = pricing["partner_price_applied"]
+        reactivated_cancelled.discount_applied = pricing["discount_applied"]
+        reactivated_cancelled.is_paid = False
+        reactivated_cancelled.paid_at = None
+        reactivated_cancelled.completed_by = None
+        reactivated_cancelled.completed_at = None
+        reactivated_cancelled.save(
+            update_fields=[
+                "symptomatology",
+                "status",
+                "base_price",
+                "partner",
+                "partner_price",
+                "discount_type",
+                "discount_value",
+                "final_price",
+                "session_index",
+                "pricing_tier",
+                "base_price_applied",
+                "partner_price_applied",
+                "discount_applied",
+                "is_paid",
+                "paid_at",
+                "completed_by",
+                "completed_at",
+            ]
+        )
+        log_appt(
+            AppointmentLog.ACTION_STATUS_UPDATED,
+            reactivated_cancelled,
+            request.user,
+            old_status=old_status,
+            new_status=reactivated_cancelled.status,
+            note="Reativada a partir de uma marcação cancelada do mesmo slot.",
+            request=request,
+        )
+        return JsonResponse(
+            {
+                "ok": True,
+                "appointment_id": reactivated_cancelled.id,
+                "reactivated": True,
+                "message": "Pedido criado a partir de uma marcação cancelada anterior.",
+            }
+        )
+
     appt = Appointment.objects.create(
         client=request.user,
         professional=selected_prof,
@@ -1705,7 +1948,7 @@ def _calendar_availability_options_payload(professionals, services, date_obj, ti
                 continue
             cache_key = (prof.id, service.id)
             if cache_key not in slots_cache:
-                all_slots = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+                all_slots = _get_slots(prof, date_obj, service=service)
                 slots_cache[cache_key] = _filter_slots_in_window(all_slots, time_obj, window_minutes)
             if slots_cache[cache_key]:
                 has_service_slots = True
@@ -1720,7 +1963,7 @@ def _calendar_availability_options_payload(professionals, services, date_obj, ti
                 continue
             cache_key = (prof.id, selected_service.id)
             if cache_key not in slots_cache:
-                all_slots = _get_slots(prof, date_obj, step_minutes=selected_service.duration_minutes)
+                all_slots = _get_slots(prof, date_obj, service=selected_service)
                 slots_cache[cache_key] = _filter_slots_in_window(all_slots, time_obj, window_minutes)
             if not slots_cache[cache_key]:
                 continue
@@ -2051,22 +2294,33 @@ def professional_appointment_detail_view(request, appointment_id):
     return_to = _safe_return_to(request, request.POST.get("return_to") or request.GET.get("return_to"))
 
     status_choices = list(Appointment.STATUS_CHOICES)
+    try:
+        client_profile = appt.client.client_profile
+    except ClientProfile.DoesNotExist:
+        client_profile = None
 
     if request.method == "POST":
+        detail_snapshot_fields = [
+            "status",
+            "is_paid",
+            "paid_at",
+            "summary",
+            "treatment_done",
+            "final_price",
+            "settlement_pricing_mode",
+            "settlement_partner_id",
+            "settlement_discount_type",
+            "settlement_discount_value",
+            "settlement_final_price",
+            "settlement_locked_at",
+            "settlement_notes",
+        ]
         detail_before = snapshot_instance(
             appt,
-            fields=[
-                "status",
-                "is_paid",
-                "paid_at",
-                "summary",
-                "treatment_done",
-                "final_price",
-            ],
+            fields=detail_snapshot_fields,
         )
         consumptions_before = _appointment_consumptions_snapshot(appt)
         status = (request.POST.get("status") or "").strip()
-        is_paid = request.POST.get("is_paid") == "on"
         summary = (request.POST.get("summary") or "").strip()
         treatment_done = (request.POST.get("treatment_done") or "").strip()
         confirm_debt = request.POST.get("confirm_debt") == "1"
@@ -2119,6 +2373,134 @@ def professional_appointment_detail_view(request, appointment_id):
                 appt.date < now_local.date()
                 or (appt.date == now_local.date() and appt.time < now_local.time())
             )
+            checkout_enabled = (
+                is_past_appointment
+                or appt.status in {Appointment.STATUS_COMPLETED, Appointment.STATUS_IN_DEBT}
+            )
+            settlement_before_values = {
+                "settlement_pricing_mode": appt.settlement_pricing_mode,
+                "settlement_partner_id": appt.settlement_partner_id,
+                "settlement_discount_type": appt.settlement_discount_type,
+                "settlement_discount_value": appt.settlement_discount_value,
+                "settlement_final_price": appt.settlement_final_price,
+                "settlement_locked_at": appt.settlement_locked_at,
+                "settlement_notes": appt.settlement_notes,
+            }
+            settlement_pricing_mode = appt.settlement_pricing_mode or Appointment.SETTLEMENT_PRICING_MODE_AUTO
+            settlement_notes = appt.settlement_notes or ""
+            settle_current_appointment = False
+            payment_amount = Decimal("0.00")
+            payment_method = ClientPayment.METHOD_CASH
+            payment_reference = ""
+            payment_notes = ""
+            selected_debt_appointments = []
+            payment_created = None
+            checkout_has_errors = False
+
+            if checkout_enabled:
+                settlement_pricing_mode = (
+                    request.POST.get("settlement_pricing_mode")
+                    or appt.settlement_pricing_mode
+                    or Appointment.SETTLEMENT_PRICING_MODE_AUTO
+                )
+                valid_pricing_modes = {
+                    choice[0] for choice in Appointment.SETTLEMENT_PRICING_MODE_CHOICES
+                }
+                if settlement_pricing_mode not in valid_pricing_modes:
+                    messages.error(request, "Modo de liquidação inválido.")
+                    settlement_pricing_mode = Appointment.SETTLEMENT_PRICING_MODE_AUTO
+                    checkout_has_errors = True
+
+                settlement_notes = (request.POST.get("settlement_notes") or "").strip()
+                settle_current_appointment = request.POST.get("settle_current_appointment") == "on"
+                payment_reference = (request.POST.get("payment_reference") or "").strip()
+                payment_notes = (request.POST.get("payment_notes") or "").strip()
+                raw_method = (request.POST.get("payment_method") or "").strip()
+                valid_methods = {choice[0] for choice in ClientPayment.PAYMENT_METHOD_CHOICES}
+                payment_method = raw_method if raw_method in valid_methods else ClientPayment.METHOD_CASH
+
+                try:
+                    payment_amount = _parse_money_input(
+                        request.POST.get("payment_amount"),
+                        field_label="payment_amount",
+                    ) or Decimal("0.00")
+                    manual_settlement_price = _parse_money_input(
+                        request.POST.get("manual_settlement_final_price"),
+                        field_label="manual_settlement_final_price",
+                    )
+                except DjangoValidationError as exc:
+                    if hasattr(exc, "message_dict"):
+                        for field_errors in exc.message_dict.values():
+                            for err in field_errors:
+                                messages.error(request, err)
+                    else:
+                        messages.error(request, str(exc))
+                    manual_settlement_price = None
+                    payment_amount = Decimal("0.00")
+                    checkout_has_errors = True
+
+                if (
+                    settlement_pricing_mode == Appointment.SETTLEMENT_PRICING_MODE_MANUAL
+                    and manual_settlement_price is None
+                ):
+                    messages.error(request, "Indica o valor final para a liquidação manual.")
+                    checkout_has_errors = True
+
+                settlement_data = build_appointment_settlement(
+                    appt,
+                    pricing_mode=settlement_pricing_mode,
+                    manual_final_price=manual_settlement_price or appt.final_price,
+                )
+                appt.settlement_pricing_mode = settlement_data["pricing_mode"]
+                appt.settlement_partner = settlement_data["partner"]
+                appt.settlement_discount_type = settlement_data["discount_type"]
+                appt.settlement_discount_value = settlement_data["discount_value"]
+                appt.settlement_final_price = settlement_data["final_price"]
+                appt.settlement_notes = settlement_notes
+                appt.settlement_locked_at = appt.settlement_locked_at or timezone.now()
+
+                debt_candidates = _appointment_debt_candidates(appt, request.user)
+                allowed_debt_ids = {item.id for item in debt_candidates}
+                selected_debt_ids = [
+                    int(value)
+                    for value in request.POST.getlist("settle_previous_appointments")
+                    if str(value).isdigit() and int(value) in allowed_debt_ids
+                ]
+                selected_debt_appointments = [
+                    item for item in debt_candidates if item.id in selected_debt_ids
+                ]
+
+                if payment_amount > 0 and not settle_current_appointment and not selected_debt_appointments:
+                    messages.error(
+                        request,
+                        "Seleciona a marcação atual ou pelo menos uma dívida anterior para afetar o pagamento.",
+                    )
+                    checkout_has_errors = True
+                if payment_amount > 0 and not client_profile:
+                    messages.error(request, "O cliente desta marcação não tem ficha associada para registar o pagamento.")
+                    checkout_has_errors = True
+
+                current_outstanding_after_payment = appt.get_outstanding_amount()
+                if settle_current_appointment and payment_amount > 0:
+                    current_outstanding_after_payment = max(
+                        appt.get_outstanding_amount() - min(appt.get_outstanding_amount(), payment_amount),
+                        Decimal("0.00"),
+                    )
+                effective_is_paid = current_outstanding_after_payment <= 0
+            else:
+                effective_is_paid = appt.get_outstanding_amount() <= 0
+
+            if checkout_has_errors:
+                params = {}
+                if week:
+                    params["week"] = week
+                if return_to:
+                    params["return_to"] = return_to
+                target = reverse("professional_appointment_detail", args=[appt.id])
+                if params:
+                    return redirect(f"{target}?{urlencode(params)}")
+                return redirect(target)
+
             if new_status == Appointment.STATUS_IN_DEBT and not is_past_appointment:
                 messages.error(request, "Só podes marcar uma consulta como 'Em dívida' após a hora da marcação.")
                 params = {}
@@ -2148,23 +2530,25 @@ def professional_appointment_detail_view(request, appointment_id):
                     Appointment.STATUS_AWAITING_VALIDATION,
                     Appointment.STATUS_NO_SHOW,
                 }
-                and not is_paid
             ):
-                if not confirm_debt:
-                    messages.error(
-                        request,
-                        "Para guardar uma consulta sem pagamento, confirma primeiro a marcação como 'Em dívida'.",
-                    )
-                    params = {}
-                    if week:
-                        params["week"] = week
-                    if return_to:
-                        params["return_to"] = return_to
-                    target = reverse("professional_appointment_detail", args=[appt.id])
-                    if params:
-                        return redirect(f"{target}?{urlencode(params)}")
-                    return redirect(target)
-                new_status = Appointment.STATUS_IN_DEBT
+                if effective_is_paid:
+                    new_status = Appointment.STATUS_COMPLETED
+                else:
+                    if not confirm_debt:
+                        messages.error(
+                            request,
+                            "Para guardar uma consulta sem liquidação total, confirma primeiro a marcação como 'Em dívida'.",
+                        )
+                        params = {}
+                        if week:
+                            params["week"] = week
+                        if return_to:
+                            params["return_to"] = return_to
+                        target = reverse("professional_appointment_detail", args=[appt.id])
+                        if params:
+                            return redirect(f"{target}?{urlencode(params)}")
+                        return redirect(target)
+                    new_status = Appointment.STATUS_IN_DEBT
 
             if consumption_items or existing_totals:
                 if new_status not in {Appointment.STATUS_COMPLETED, Appointment.STATUS_IN_DEBT}:
@@ -2185,92 +2569,174 @@ def professional_appointment_detail_view(request, appointment_id):
                     return redirect(f"{target}?{urlencode(params)}")
                 return redirect(target)
 
-            updated_fields = []
-            old_status = appt.status
-            status_changed = False
-            if appt.status != new_status:
-                appt.status = new_status
-                status_changed = True
-                updated_fields.append("status")
-                if appt.status in {Appointment.STATUS_COMPLETED, Appointment.STATUS_IN_DEBT}:
-                    appt.completed_at = timezone.now()
-                    appt.completed_by = request.user
-                    updated_fields.extend(["completed_at", "completed_by"])
-                elif appt.completed_at or appt.completed_by:
-                    appt.completed_at = None
-                    appt.completed_by = None
-                    updated_fields.extend(["completed_at", "completed_by"])
+            with transaction.atomic():
+                updated_fields = []
+                old_status = appt.status
+                status_changed = False
+                if appt.status != new_status:
+                    appt.status = new_status
+                    status_changed = True
+                    updated_fields.append("status")
+                    if appt.status in {Appointment.STATUS_COMPLETED, Appointment.STATUS_IN_DEBT}:
+                        appt.completed_at = timezone.now()
+                        appt.completed_by = request.user
+                        updated_fields.extend(["completed_at", "completed_by"])
+                    elif appt.completed_at or appt.completed_by:
+                        appt.completed_at = None
+                        appt.completed_by = None
+                        updated_fields.extend(["completed_at", "completed_by"])
 
-            if appt.is_paid != is_paid:
-                appt.is_paid = is_paid
-                appt.paid_at = timezone.now() if is_paid else None
-                updated_fields.extend(["is_paid", "paid_at"])
+                settlement_fields = [
+                    ("settlement_pricing_mode", appt.settlement_pricing_mode),
+                    ("settlement_partner", appt.settlement_partner_id),
+                    ("settlement_discount_type", appt.settlement_discount_type),
+                    ("settlement_discount_value", appt.settlement_discount_value),
+                    ("settlement_final_price", appt.settlement_final_price),
+                    ("settlement_locked_at", appt.settlement_locked_at),
+                    ("settlement_notes", appt.settlement_notes),
+                ]
+                for field_name, new_value in settlement_fields:
+                    compare_field = "settlement_partner_id" if field_name == "settlement_partner" else field_name
+                    if settlement_before_values.get(compare_field) != new_value:
+                        updated_fields.append(field_name)
 
-            if appt.summary != summary:
-                appt.summary = summary
-                updated_fields.append("summary")
+                if appt.summary != summary:
+                    appt.summary = summary
+                    updated_fields.append("summary")
 
-            if appt.treatment_done != treatment_done:
-                appt.treatment_done = treatment_done
-                updated_fields.append("treatment_done")
+                if appt.treatment_done != treatment_done:
+                    appt.treatment_done = treatment_done
+                    updated_fields.append("treatment_done")
 
-            if updated_fields:
-                appt.save(update_fields=updated_fields)
-                if status_changed:
-                    sync_subcontractor_payout(appt, actor=request.user)
-                    log_appt(
-                        AppointmentLog.ACTION_STATUS_UPDATED,
-                        appt,
-                        request.user,
-                        old_status=old_status,
-                        new_status=appt.status,
+                if updated_fields:
+                    appt.save(update_fields=list(dict.fromkeys(updated_fields)))
+                    if status_changed:
+                        sync_subcontractor_payout(appt, actor=request.user)
+                        log_appt(
+                            AppointmentLog.ACTION_STATUS_UPDATED,
+                            appt,
+                            request.user,
+                            old_status=old_status,
+                            new_status=appt.status,
+                            request=request,
+                        )
+                        settings_obj = clinic_settings()
+                        if settings_obj.notify_client_on_clinic_changes:
+                            client_email = (appt.client.email or "").strip()
+                            if client_email:
+                                if appt.status == Appointment.STATUS_SCHEDULED:
+                                    send_templated_email(
+                                        client_email,
+                                        f"Marcação confirmada — {appt.service.name} em {appt.date} {appt.time}",
+                                        "emails/appointment_confirmed.html",
+                                        "emails/appointment_confirmed.txt",
+                                        {
+                                            "client_name": appt.client.get_full_name() or appt.client.username,
+                                            "service_name": appt.service.name if appt.service else "-",
+                                            "professional_name": appt.professional.user.get_full_name() or appt.professional.user.username,
+                                            "date": appt.date,
+                                            "time": appt.time,
+                                            "symptomatology": appt.symptomatology,
+                                            "manage_url": request.build_absolute_uri(reverse("my_appointments")),
+                                        },
+                                        event="status_update",
+                                    )
+                                elif appt.status == Appointment.STATUS_CANCELLED:
+                                    send_templated_email(
+                                        client_email,
+                                        f"Marcação cancelada — {settings_obj.clinic_name}",
+                                        "emails/appointment_changed_by_clinic.html",
+                                        "emails/appointment_changed_by_clinic.txt",
+                                        {
+                                            "client_name": appt.client.get_full_name() or appt.client.username,
+                                            "change_type": "cancelled",
+                                            "old_date": appt.date,
+                                            "old_time": appt.time,
+                                            "new_date": "",
+                                            "new_time": "",
+                                            "service_name": appt.service.name if appt.service else "-",
+                                            "professional_name": appt.professional.user.get_full_name() or appt.professional.user.username,
+                                            "reason": "",
+                                            "manage_url": request.build_absolute_uri(reverse("my_appointments")),
+                                        },
+                                        event="status_update",
+                                    )
+                            else:
+                                log_email_skip("status_update", "Estado atualizado", "Cliente sem email", "")
+
+                if payment_amount > 0:
+                    payment_targets = []
+                    if settle_current_appointment and appt.get_outstanding_amount() > 0:
+                        payment_targets.append(appt)
+                    payment_targets.extend(selected_debt_appointments)
+                    payment_created, allocations, integration_state = create_client_payment(
+                        client_profile=client_profile,
+                        amount_received=payment_amount,
+                        payment_method=payment_method,
+                        created_by=request.user,
+                        reference=payment_reference,
+                        notes=payment_notes,
+                        appointment_targets=payment_targets,
+                    )
+                    log_audit_event(
+                        category="client_payment",
+                        action="create",
+                        request=request,
+                        actor=request.user,
+                        instance=payment_created,
+                        source="professional_appointment_detail",
+                        message="Pagamento de cliente registado a partir do detalhe da marcação.",
+                        after={
+                            "payment_id": payment_created.id,
+                            "amount_received": str(payment_created.amount_received),
+                            "allocated_amount": str(payment_created.allocated_amount),
+                            "unallocated_amount": str(payment_created.unallocated_amount),
+                            "payment_method": payment_created.payment_method,
+                            "appointment_ids": [alloc.appointment_id for alloc in allocations if alloc.appointment_id],
+                        },
+                    )
+                    if integration_state.get("cash_movement_created") and integration_state.get("cash_movement"):
+                        cash_movement = integration_state["cash_movement"]
+                        log_audit_event(
+                            category="cash_movement",
+                            action="client_payment_created",
+                            request=request,
+                            actor=request.user,
+                            instance=cash_movement,
+                            source="professional_appointment_detail",
+                            message="Pagamento de cliente lançado automaticamente em caixa.",
+                            after={
+                                "session_id": cash_movement.session_id,
+                                "client_payment_id": payment_created.id,
+                                "payment_method": cash_movement.payment_method,
+                                "amount": str(cash_movement.amount),
+                            },
+                        )
+                    if payment_created.unallocated_amount > 0:
+                        messages.warning(
+                            request,
+                            f"Ficaram {payment_created.unallocated_amount:.2f} € sem afetação neste pagamento.",
+                        )
+                    if integration_state.get("cash_message"):
+                        messages.warning(request, integration_state["cash_message"])
+                    if integration_state.get("moloni_note"):
+                        messages.info(request, f"Moloni: {integration_state['moloni_note']}")
+
+                payment_sync_fields, _, _ = sync_appointment_payment_flags(
+                    appt,
+                    paid_at_hint=(payment_created.received_at if payment_created else None),
+                )
+                if payment_sync_fields:
+                    appt.save(update_fields=payment_sync_fields)
+
+                for debt_appointment in selected_debt_appointments:
+                    _sync_financial_status_for_appointment(
+                        debt_appointment,
+                        actor=request.user,
                         request=request,
                     )
-                    settings_obj = clinic_settings()
-                    if settings_obj.notify_client_on_clinic_changes:
-                        client_email = (appt.client.email or "").strip()
-                        if client_email:
-                            if appt.status == Appointment.STATUS_SCHEDULED:
-                                send_templated_email(
-                                    client_email,
-                                    f"Marcação confirmada — {appt.service.name} em {appt.date} {appt.time}",
-                                    "emails/appointment_confirmed.html",
-                                    "emails/appointment_confirmed.txt",
-                                    {
-                                        "client_name": appt.client.get_full_name() or appt.client.username,
-                                        "service_name": appt.service.name if appt.service else "-",
-                                        "professional_name": appt.professional.user.get_full_name() or appt.professional.user.username,
-                                        "date": appt.date,
-                                        "time": appt.time,
-                                        "symptomatology": appt.symptomatology,
-                                        "manage_url": request.build_absolute_uri(reverse("my_appointments")),
-                                    },
-                                    event="status_update",
-                                )
-                            elif appt.status == Appointment.STATUS_CANCELLED:
-                                send_templated_email(
-                                    client_email,
-                                    f"Marcação cancelada — {settings_obj.clinic_name}",
-                                    "emails/appointment_changed_by_clinic.html",
-                                    "emails/appointment_changed_by_clinic.txt",
-                                    {
-                                        "client_name": appt.client.get_full_name() or appt.client.username,
-                                        "change_type": "cancelled",
-                                        "old_date": appt.date,
-                                        "old_time": appt.time,
-                                        "new_date": "",
-                                        "new_time": "",
-                                        "service_name": appt.service.name if appt.service else "-",
-                                        "professional_name": appt.professional.user.get_full_name() or appt.professional.user.username,
-                                        "reason": "",
-                                        "manage_url": request.build_absolute_uri(reverse("my_appointments")),
-                                    },
-                                    event="status_update",
-                                )
-                        else:
-                            log_email_skip("status_update", "Estado atualizado", "Cliente sem email", "")
-                non_status_fields = {"is_paid", "paid_at", "summary", "treatment_done"}
-                if any(field in non_status_fields for field in updated_fields):
+
+                if any(field in {"summary", "treatment_done"} for field in updated_fields) or checkout_enabled:
                     log_audit_event(
                         category="appointment_detail",
                         action="update",
@@ -2279,50 +2745,40 @@ def professional_appointment_detail_view(request, appointment_id):
                         source="professional_appointment_detail",
                         message="Detalhes da marcação atualizados.",
                         before=detail_before,
-                        after=snapshot_instance(
-                            appt,
-                            fields=[
-                                "status",
-                                "is_paid",
-                                "paid_at",
-                                "summary",
-                                "treatment_done",
-                                "final_price",
-                            ],
-                        ),
+                        after=snapshot_instance(appt, fields=detail_snapshot_fields),
                     )
                 messages.success(request, "Marcação atualizada.")
 
-            # reconciliar consumos (se aplicável)
-            if new_status in {Appointment.STATUS_COMPLETED, Appointment.STATUS_IN_DEBT}:
-                normalized = {}
-                product_map = {}
-                for product, qty in consumption_items:
-                    normalized[product.id] = normalized.get(product.id, Decimal("0.00")) + qty
-                    product_map[product.id] = product
-                if normalized != existing_totals:
-                    reconcile_appointment_consumptions(
-                        appt,
-                        [(product_map[pid], qty) for pid, qty in normalized.items()],
-                        user=request.user,
-                    )
-                    log_audit_event(
-                        category="appointment_consumption",
-                        action="reconcile",
-                        request=request,
-                        instance=appt,
-                        source="professional_appointment_detail",
-                        message="Consumos da marcação atualizados.",
-                        before={"consumptions": consumptions_before},
-                        after={"consumptions": _appointment_consumptions_snapshot(appt)},
-                        metadata={"status": new_status},
-                    )
+                # reconciliar consumos (se aplicável)
+                if new_status in {Appointment.STATUS_COMPLETED, Appointment.STATUS_IN_DEBT}:
+                    normalized = {}
+                    product_map = {}
+                    for product, qty in consumption_items:
+                        normalized[product.id] = normalized.get(product.id, Decimal("0.00")) + qty
+                        product_map[product.id] = product
+                    if normalized != existing_totals:
+                        reconcile_appointment_consumptions(
+                            appt,
+                            [(product_map[pid], qty) for pid, qty in normalized.items()],
+                            user=request.user,
+                        )
+                        log_audit_event(
+                            category="appointment_consumption",
+                            action="reconcile",
+                            request=request,
+                            instance=appt,
+                            source="professional_appointment_detail",
+                            message="Consumos da marcação atualizados.",
+                            before={"consumptions": consumptions_before},
+                            after={"consumptions": _appointment_consumptions_snapshot(appt)},
+                            metadata={"status": new_status},
+                        )
 
-        if return_to:
-            return redirect(return_to)
-        return redirect(
-            f"{reverse('professional_appointment_detail', args=[appt.id])}{'?week=' + week if week else ''}"
-        )
+            if return_to:
+                return redirect(return_to)
+            return redirect(
+                f"{reverse('professional_appointment_detail', args=[appt.id])}{'?week=' + week if week else ''}"
+            )
 
     can_confirm = (
         can_view_all_calendar(request.user)
@@ -2341,6 +2797,21 @@ def professional_appointment_detail_view(request, appointment_id):
         .order_by("id")
     )
     products = Product.objects.filter(is_active=True).order_by("name")
+    checkout_enabled = (
+        requires_review_completion
+        or appt.status in {Appointment.STATUS_COMPLETED, Appointment.STATUS_IN_DEBT}
+    )
+    settlement_preview = build_appointment_settlement(
+        appt,
+        pricing_mode=appt.settlement_pricing_mode or Appointment.SETTLEMENT_PRICING_MODE_AUTO,
+        manual_final_price=appt.settlement_final_price or appt.final_price,
+    )
+    settlement_without_partner_preview = build_appointment_settlement(
+        appt,
+        pricing_mode=Appointment.SETTLEMENT_PRICING_MODE_WITHOUT_PARTNER,
+        manual_final_price=appt.final_price,
+    )
+    debt_candidates = _appointment_debt_candidates(appt, request.user) if checkout_enabled else []
     latest_log = (
         AppointmentLog.objects
         .filter(appointment=appt)
@@ -2397,9 +2868,20 @@ def professional_appointment_detail_view(request, appointment_id):
             "can_view_professional_link": can_access_backoffice(request.user),
             "return_to": return_to,
             "requires_review_completion": requires_review_completion,
+            "checkout_enabled": checkout_enabled,
             "consumptions": consumptions,
             "products": products,
             "audit_data": audit_data,
+            "settlement_preview": settlement_preview,
+            "settlement_pricing_mode_choices": Appointment.SETTLEMENT_PRICING_MODE_CHOICES,
+            "settlement_auto_price": build_appointment_settlement(
+                appt,
+                pricing_mode=Appointment.SETTLEMENT_PRICING_MODE_AUTO,
+                manual_final_price=appt.final_price,
+            )["final_price"],
+            "settlement_without_partner_price": settlement_without_partner_preview["final_price"],
+            "payment_method_choices": ClientPayment.PAYMENT_METHOD_CHOICES,
+            "debt_candidates": debt_candidates,
         },
     )
 

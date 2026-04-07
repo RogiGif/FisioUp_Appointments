@@ -96,6 +96,8 @@ urlpatterns = [
 
     path("prof/cliente/<int:client_id>/", views.professional_customer_detail_view, name="prof_customer_detail"),
     path("prof/cliente/<int:client_id>/editar/", views.professional_customer_form_view, name="prof_customer_edit"),
+    path("prof/cliente/<int:client_id>/moloni-audit/<int:log_id>/", views.professional_customer_moloni_audit_detail_view, name="prof_customer_moloni_audit_detail"),
+    path("prof/cliente/<int:client_id>/moloni-sync/", views.professional_customer_moloni_sync_view, name="prof_customer_moloni_sync"),
     path("prof/cliente/<int:client_id>/apagar/", views.professional_customer_delete_view, name="prof_customer_delete"),
 
     # BACKOFFICE TURMAS
@@ -140,6 +142,9 @@ urlpatterns = [
     path("backoffice/settings/moloni/select-company/", views.backoffice_moloni_select_company_view, name="backoffice_moloni_select_company"),
     path("backoffice/settings/moloni/test/", views.backoffice_moloni_test_view, name="backoffice_moloni_test"),
     path("backoffice/settings/moloni/sync-customers/", views.backoffice_moloni_sync_customers_view, name="backoffice_moloni_sync_customers"),
+    path("backoffice/settings/moloni/reconciliation/", views.backoffice_moloni_reconciliation_view, name="backoffice_moloni_reconciliation"),
+    path("backoffice/settings/moloni/reconciliation/run/", views.backoffice_moloni_run_reconciliation_view, name="backoffice_moloni_run_reconciliation"),
+    path("backoffice/settings/moloni/reconciliation/<int:client_id>/apply-remote/", views.backoffice_moloni_apply_remote_view, name="backoffice_moloni_apply_remote"),
     path("backoffice/settings/moloni/disconnect/", views.backoffice_moloni_disconnect_view, name="backoffice_moloni_disconnect"),
     path("backoffice/settings/auditoria/", views.backoffice_audit_logs_view, name="backoffice_audit_logs"),
     path("backoffice/settings/auditoria/<int:log_id>/", views.backoffice_audit_log_detail_view, name="backoffice_audit_log_detail"),

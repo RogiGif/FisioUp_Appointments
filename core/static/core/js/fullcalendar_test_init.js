@@ -1892,6 +1892,10 @@
             setQuickError(payload.message || "Erro ao criar marcação.");
             return;
           }
+          if (payload.message) {
+            setQuickSuccess(payload.message);
+            showCalendarFlash(payload.message, "success");
+          }
           if (quickModal) {
             quickModal.hide();
           }

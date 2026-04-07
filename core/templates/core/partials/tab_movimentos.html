@@ -100,9 +100,11 @@
                     <label class="form-check-label" for="movementsSelectAll">Selecionar tudo</label>
                 </div>
                 <div class="d-flex gap-2">
-                    <button type="submit" name="movements_bulk_action" value="mark_paid_selected" class="btn btn-sm btn-success">Marcar como paga</button>
                     <button type="submit" name="movements_bulk_action" value="mark_in_debt_selected" class="btn btn-sm btn-outline-warning">Marcar em dívida</button>
                 </div>
+            </div>
+            <div class="text-muted small mb-3">
+                A liquidação com valor e método de pagamento é feita no detalhe da própria marcação.
             </div>
         <div class="table-responsive">
             <table class="table mb-0">
@@ -111,7 +113,9 @@
                         <th style="width: 42px;"></th>
                         <th>Data</th>
                         <th>Descrição</th>
-                        <th>Valor</th>
+                        <th>Total</th>
+                        <th>Pago</th>
+                        <th>Em aberto</th>
                         <th>Estado</th>
                     </tr>
                 </thead>
@@ -131,6 +135,10 @@
                                     <small class="text-muted">{{ movement.professional }}</small>
                                 </td>
                                 <td>{{ movement.amount|default:0|floatformat:2 }} €</td>
+                                <td>{{ movement.paid_amount|default:0|floatformat:2 }} €</td>
+                                <td class="{% if movement.outstanding_amount > 0 %}text-warning fw-semibold{% endif %}">
+                                    {{ movement.outstanding_amount|default:0|floatformat:2 }} €
+                                </td>
                                 <td>
                                     {% if movement.can_settle_debt %}
                                         <span class="badge bg-soft-warning text-warning">{{ movement.status }}</span>
@@ -142,7 +150,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="5" class="text-center text-muted">Sem dados.</td>
+                            <td colspan="7" class="text-center text-muted">Sem dados.</td>
                         </tr>
                     {% endif %}
                 </tbody>
@@ -214,7 +222,6 @@
 
       const action = event.submitter ? event.submitter.value : "";
       const confirmMessages = {
-        mark_paid_selected: "Marcar as marcações selecionadas como pagas?",
         mark_in_debt_selected: "Marcar as marcações selecionadas como em dívida?",
       };
       const confirmText = confirmMessages[action];

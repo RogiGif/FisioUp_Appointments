@@ -32,6 +32,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods, require_GET
+from django.contrib.contenttypes.models import ContentType
 
 from core.decorators import professional_required, backoffice_required
 from core.permissions import (
@@ -43,6 +44,7 @@ from core.permissions import (
 from core.ratelimit import check_rate_limit, rate_limited_response, is_json_request, rate_limit
 from core.emails import send_templated_email, clinic_email, clinic_settings, log_email_skip
 from core.services.audit import log_audit_event
+from core.services import moloni as moloni_service
 from core.forms import (
     RegisterForm,
     ClientProfileForm,
@@ -66,6 +68,7 @@ from core.models import (
     Appointment,
     Service,
     ClientProfile,
+    AuditLog,
     ClinicalRecord,
     TreatmentRecord,
     AppointmentLog,
@@ -114,6 +117,80 @@ def _treatment_record_audit_snapshot(record):
         "created_by_id": record.created_by_id,
         "updated_by_id": record.updated_by_id,
     }
+
+
+def _sync_client_profile_with_moloni(profile, request, *, source, manual=False):
+    try:
+        result = moloni_service.sync_client_profile(profile)
+    except moloni_service.MoloniError as exc:
+        if manual:
+            messages.error(request, f"Moloni: {exc}")
+        else:
+            messages.warning(request, f"Cliente guardado na app, mas a sincronização com a Moloni falhou: {exc}")
+        return None
+
+    log_audit_event(
+        category="integrations",
+        action="moloni_customer_synced",
+        request=request,
+        actor=request.user,
+        instance=profile,
+        source=source,
+        message="Cliente sincronizado com a Moloni.",
+        after=result,
+    )
+    if manual:
+        verb = "atualizado" if result.get("action") == "updated" else "criado"
+        messages.success(request, f"Cliente {verb} na Moloni com sucesso.")
+    return result
+
+
+def _moloni_auto_sync_is_ready():
+    if not moloni_service.is_configured():
+        return False
+    integ = MoloniIntegration.get_solo()
+    return bool(integ.refresh_token and moloni_service.get_company_id())
+
+
+def _moloni_audit_label(log: AuditLog) -> str:
+    labels = {
+        "moloni_customer_synced": "Sincronizado com a Moloni",
+        "moloni_apply_remote_to_app": "Dados da Moloni aplicados à app",
+    }
+    return labels.get(log.action, log.message or log.action.replace("_", " ").capitalize())
+
+
+def _moloni_audit_detail(log: AuditLog) -> str:
+    after = log.after or {}
+    if log.action == "moloni_customer_synced":
+        sync_action = (after.get("action") or "").strip()
+        remote_id = str(after.get("customer_id") or after.get("remote_customer_id") or "").strip()
+        verb_map = {
+            "created": "Criado na Moloni",
+            "updated": "Atualizado na Moloni",
+            "linked": "Ligado a cliente existente na Moloni",
+        }
+        verb = verb_map.get(sync_action, "")
+        if verb and remote_id:
+            return f"{verb} · Cliente Moloni #{remote_id}"
+        if verb:
+            return verb
+        if remote_id:
+            return f"Cliente Moloni #{remote_id}"
+    elif log.action == "moloni_apply_remote_to_app":
+        changed_fields = after.get("changed_fields") or []
+        if changed_fields:
+            return "Campos atualizados: " + ", ".join(str(field) for field in changed_fields[:4])
+    return (log.message or "").strip() or "Sem detalhe adicional."
+
+
+def _audit_log_pretty_payload(value):
+    if value in (None, "", [], {}):
+        return "-"
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
+    except TypeError:
+        return str(value)
 
 
 def professional_clients_view(request):
@@ -274,6 +351,41 @@ def professional_customer_detail_view(request, client_id):
 
     can_edit_clients = can_access_backoffice(request.user)
     can_delete_clients = is_admin_role(request.user)
+    moloni_connected = moloni_service.is_configured() and bool(MoloniIntegration.get_solo().refresh_token)
+    moloni_company_id = moloni_service.get_company_id()
+    moloni_can_sync = bool(moloni_connected and moloni_company_id and (profile.nif or "").strip())
+    if not moloni_connected:
+        moloni_status_text = "Integração Moloni não ligada."
+    elif not moloni_company_id:
+        moloni_status_text = "Falta escolher a empresa Moloni."
+    elif not (profile.nif or "").strip():
+        moloni_status_text = "É necessário NIF para criar ou atualizar este cliente na Moloni."
+    elif profile.moloni_customer_id:
+        moloni_status_text = f"Cliente Moloni ligado: #{profile.moloni_customer_id}"
+    else:
+        moloni_status_text = "Cliente ainda não sincronizado com a Moloni."
+    moloni_sync_history = [
+        {
+            "id": log.id,
+            "created_at": log.created_at,
+            "label": _moloni_audit_label(log),
+            "detail": _moloni_audit_detail(log),
+            "source": log.source or "-",
+            "actor_display": log.actor_display or ("Sistema" if not log.actor_id else "Utilizador"),
+        }
+        for log in (
+            AuditLog.objects
+            .filter(
+                category="integrations",
+                action__startswith="moloni_",
+                content_type__app_label=ClientProfile._meta.app_label,
+                content_type__model=ClientProfile._meta.model_name,
+                object_id=profile.id,
+            )
+            .select_related("actor")
+            .order_by("-created_at")[:6]
+        )
+    ]
     allowed_tabs = {"profile", "movements", "notifications", "clinical", "partners_discounts"}
     active_tab = (request.GET.get("tab") or "profile").strip().lower()
     if active_tab not in allowed_tabs:
@@ -468,32 +580,33 @@ def professional_customer_detail_view(request, client_id):
                 }
             )
 
-    financial_qs = scoped_appts_qs
-    paid_qs = financial_qs.filter(
-        status=Appointment.STATUS_COMPLETED,
-        is_paid=True,
+    financial_qs = scoped_appts_qs.prefetch_related("payment_allocations__payment")
+    financial_appts = list(financial_qs)
+    financial_group_charges = list(
+        scoped_group_charges_qs.prefetch_related("payment_allocations__payment")
     )
-    paid_group_qs = scoped_group_charges_qs.filter(status=GroupMonthlyCharge.STATUS_PAID)
-    total_spent = (
-        (paid_qs.aggregate(total=Coalesce(Sum("final_price"), Decimal("0.00")))["total"] or Decimal("0.00"))
-        + (paid_group_qs.aggregate(total=Coalesce(Sum("final_price"), Decimal("0.00")))["total"] or Decimal("0.00"))
+    total_spent = sum((appt.paid_amount for appt in financial_appts), Decimal("0.00")) + sum(
+        (charge.paid_amount for charge in financial_group_charges),
+        Decimal("0.00"),
     )
-    current_month_total = (
-        (paid_qs.filter(
-            date__year=today.year,
-            date__month=today.month,
-        ).aggregate(total=Coalesce(Sum("final_price"), Decimal("0.00")))["total"] or Decimal("0.00"))
-        + (paid_group_qs.filter(
-            month=today.replace(day=1),
-        ).aggregate(total=Coalesce(Sum("final_price"), Decimal("0.00")))["total"] or Decimal("0.00"))
+    current_month_total = sum(
+        (
+            appt.paid_amount
+            for appt in financial_appts
+            if appt.date and appt.date.year == today.year and appt.date.month == today.month
+        ),
+        Decimal("0.00"),
+    ) + sum(
+        (
+            charge.paid_amount
+            for charge in financial_group_charges
+            if charge.month == today.replace(day=1)
+        ),
+        Decimal("0.00"),
     )
-    debt_total = (
-        (financial_qs.filter(
-            status=Appointment.STATUS_IN_DEBT,
-        ).aggregate(total=Coalesce(Sum("final_price"), Decimal("0.00")))["total"] or Decimal("0.00"))
-        + (scoped_group_charges_qs.filter(
-            status=GroupMonthlyCharge.STATUS_UNPAID,
-        ).aggregate(total=Coalesce(Sum("final_price"), Decimal("0.00")))["total"] or Decimal("0.00"))
+    debt_total = sum((appt.outstanding_amount for appt in financial_appts), Decimal("0.00")) + sum(
+        (charge.outstanding_amount for charge in financial_group_charges),
+        Decimal("0.00"),
     )
     balance = total_spent - debt_total
 
@@ -562,9 +675,11 @@ def professional_customer_detail_view(request, client_id):
                 "time": appt.time,
                 "description": appt.service.name if appt.service else "Serviço",
                 "professional": professional_name,
-                "amount": appt.final_price or Decimal("0.00"),
-                "status": _status_label(appt.status),
-                "can_settle_debt": appt.status == Appointment.STATUS_IN_DEBT and is_past,
+                "amount": appt.charge_amount,
+                "paid_amount": appt.paid_amount,
+                "outstanding_amount": appt.outstanding_amount,
+                "status": "Liquidada" if appt.outstanding_amount <= 0 else _status_label(appt.status),
+                "can_settle_debt": appt.outstanding_amount > 0 and is_past,
             }
         )
 
@@ -583,6 +698,9 @@ def professional_customer_detail_view(request, client_id):
             "upcoming_appts": upcoming_appts,
             "can_edit_clients": can_edit_clients,
             "can_delete_clients": can_delete_clients,
+            "moloni_can_sync": moloni_can_sync,
+            "moloni_status_text": moloni_status_text,
+            "moloni_sync_history": moloni_sync_history,
             "active_tab": active_tab,
             "total_spent": total_spent,
             "current_month_total": current_month_total,
@@ -606,6 +724,52 @@ def professional_customer_detail_view(request, client_id):
                 else ""
             ),
         },
+    )
+
+
+@require_POST
+def professional_customer_moloni_sync_view(request, client_id):
+    prof = _get_professional_or_403(request.user)
+    if not can_view_all_calendar(request.user) and prof is None:
+        return HttpResponseForbidden("Acesso restrito a profissionais.")
+    if not can_access_backoffice(request.user):
+        return HttpResponseForbidden("Sem permissão para sincronizar clientes.")
+
+    profile = get_object_or_404(ClientProfile.objects.select_related("user"), id=client_id)
+    _sync_client_profile_with_moloni(
+        profile,
+        request,
+        source="professional_customer_detail",
+        manual=True,
+    )
+    return redirect("prof_customer_detail", client_id=profile.id)
+
+
+@require_GET
+def professional_customer_moloni_audit_detail_view(request, client_id, log_id):
+    prof = _get_professional_or_403(request.user)
+    if not can_view_all_calendar(request.user) and prof is None:
+        return HttpResponseForbidden("Acesso restrito a profissionais.")
+
+    profile = get_object_or_404(ClientProfile, id=client_id)
+    client_ct = ContentType.objects.get_for_model(ClientProfile, for_concrete_model=False)
+    log = get_object_or_404(
+        AuditLog.objects.select_related("actor"),
+        pk=log_id,
+        category="integrations",
+        action__startswith="moloni_",
+        content_type=client_ct,
+        object_id=profile.id,
+    )
+    return JsonResponse(
+        {
+            "ok": True,
+            "created_at": timezone.localtime(log.created_at).strftime("%d/%m/%Y %H:%M:%S"),
+            "request_line": f"{log.request_method or '-'} {log.request_path or '-'}",
+            "before": _audit_log_pretty_payload(log.before),
+            "after": _audit_log_pretty_payload(log.after),
+            "metadata": _audit_log_pretty_payload(log.metadata),
+        }
     )
 
 
@@ -1054,6 +1218,30 @@ def professional_customer_form_view(request, client_id=None):
                     target_profile = ClientProfile.objects.filter(nif=nif).first()
                     if target_profile and target_profile.user_id:
                         form.add_error("nif", "Já existe uma conta associada a este NIF.")
+                else:
+                    duplicate_candidates = find_potential_duplicate_clients(
+                        full_name,
+                        phone=phone,
+                        email=email,
+                        exclude_profile_id=prefill_profile.pk if prefill_profile else None,
+                        limit=3,
+                    )
+                    if duplicate_candidates:
+                        items = []
+                        for item in duplicate_candidates:
+                            profile = item["profile"]
+                            reason_text = ", ".join(item["reasons"])
+                            items.append(
+                                f"#{profile.id} {profile.full_name or '—'}"
+                                f"{f' ({profile.phone})' if profile.phone else ''}"
+                                f"{f' [{reason_text}]' if reason_text else ''}"
+                            )
+                        form.add_error(
+                            None,
+                            "Encontrámos possíveis clientes já existentes sem NIF: "
+                            + "; ".join(items)
+                            + ". Verifica antes de criar um novo registo.",
+                        )
                 if (
                     (selected_date or selected_time or selected_service_id or selected_professional_id or week)
                     and not password
@@ -1145,6 +1333,13 @@ def professional_customer_form_view(request, client_id=None):
                 target_profile.require_complete_profile = True
                 target_profile.updated_by = request.user
                 target_profile.save()
+                if target_profile.nif and _moloni_auto_sync_is_ready():
+                    _sync_client_profile_with_moloni(
+                        target_profile,
+                        request,
+                        source="professional_customer_form",
+                        manual=False,
+                    )
                 if pricing_fields_changed:
                     recalculate_upcoming_appointment_prices(target_profile)
 
@@ -1398,7 +1593,7 @@ def client_record_view(request, client_id):
         try:
             service_obj = get_object_or_404(Service, id=selected_service_id)
             date_obj = datetime.strptime(selected_date, "%Y-%m-%d").date()
-            slots = _get_slots(active_prof, date_obj, step_minutes=service_obj.duration_minutes)
+            slots = _get_slots(active_prof, date_obj, service=service_obj)
         except Exception:
             message = "Erro a calcular horários. Confirma serviço e data."
 
@@ -1435,13 +1630,13 @@ def client_record_view(request, client_id):
                         message = "Este horário já passou."
 
                 if message:
-                    valid_slots = _get_slots(active_prof, date_obj, step_minutes=service_obj.duration_minutes)
+                    valid_slots = _get_slots(active_prof, date_obj, service=service_obj)
                     selected_service_id = service_id
                     selected_date = date_str
                     selected_professional_id = str(active_prof.id)
                     slots = valid_slots
                 else:
-                    valid_slots = _get_slots(active_prof, date_obj, step_minutes=service_obj.duration_minutes)
+                    valid_slots = _get_slots(active_prof, date_obj, service=service_obj)
                     if time_str not in valid_slots:
                         message = "Hora inválida ou já ocupada. Escolhe uma das horas disponíveis."
                         selected_service_id = service_id

@@ -78,7 +78,7 @@
                             </div>
                         </div>
                         <div class="row g-3">
-                            <div class="col-12 col-md-6">
+                            <div class="col-12 col-md-6 col-xl-3">
                                 <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
                                     <div class="text-muted small">Utente</div>
                                     <div class="fw-semibold">
@@ -92,7 +92,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12 col-md-6">
+                            <div class="col-12 col-md-6 col-xl-3">
                                 <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
                                     <div class="text-muted small">Profissional</div>
                                     <div class="fw-semibold">
@@ -106,16 +106,76 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12 col-md-6">
+                            <div class="col-12 col-md-6 col-xl-3">
                                 <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
-                                    <div class="text-muted small">Preço final</div>
-                                    <div class="fw-semibold">{{ appointment.final_price|floatformat:2 }} €</div>
+                                    <div class="text-muted small mb-2">Resumo financeiro</div>
+                                    <div class="d-flex justify-content-between gap-3 small mb-1">
+                                        <span class="text-muted">Previsto</span>
+                                        <span class="fw-semibold">{{ appointment.final_price|floatformat:2 }} €</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between gap-3 small mb-1">
+                                        <span class="text-muted">Liquidação</span>
+                                        <span class="fw-semibold">{{ appointment.charge_amount|floatformat:2 }} €</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between gap-3 small mb-1">
+                                        <span class="text-muted">Total pago</span>
+                                        <span class="fw-semibold">{{ appointment.paid_amount|floatformat:2 }} €</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between gap-3 small">
+                                        <span class="text-muted">Em aberto</span>
+                                        <span class="fw-semibold {% if appointment.outstanding_amount > 0 %}text-warning{% endif %}">
+                                            {{ appointment.outstanding_amount|floatformat:2 }} €
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-12 col-md-6">
+                            <div class="col-12 col-md-6 col-xl-3">
                                 <div class="p-3 border border-dashed border-gray-3 rounded-1 h-100">
-                                    <div class="text-muted small">Parceria</div>
-                                    <div class="fw-semibold">{% if appointment.partner %}{{ appointment.partner.name }}{% else %}—{% endif %}</div>
+                                    <div class="text-muted small mb-2">Parceria</div>
+                                    {% if appointment.partner or appointment.settlement_partner or settlement_preview.partner %}
+                                        {% if appointment.partner and appointment.settlement_partner and appointment.partner.id != appointment.settlement_partner.id %}
+                                            <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                <span class="text-muted">Prevista</span>
+                                                <span class="fw-semibold">{{ appointment.partner.name }}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between gap-3 small">
+                                                <span class="text-muted">Liquidada</span>
+                                                <span class="fw-semibold">{{ appointment.settlement_partner.name }}</span>
+                                            </div>
+                                        {% elif appointment.partner and settlement_preview.partner and appointment.partner.id != settlement_preview.partner.id %}
+                                            <div class="d-flex justify-content-between gap-3 small mb-1">
+                                                <span class="text-muted">Prevista</span>
+                                                <span class="fw-semibold">{{ appointment.partner.name }}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between gap-3 small">
+                                                <span class="text-muted">Liquidada</span>
+                                                <span class="fw-semibold">
+                                                    {% if appointment.settlement_partner %}
+                                                        {{ appointment.settlement_partner.name }}
+                                                    {% else %}
+                                                        {{ settlement_preview.partner.name }}
+                                                    {% endif %}
+                                                </span>
+                                            </div>
+                                        {% else %}
+                                            <div class="fw-semibold">
+                                                {% if appointment.settlement_partner %}
+                                                    {{ appointment.settlement_partner.name }}
+                                                {% elif settlement_preview.partner %}
+                                                    {{ settlement_preview.partner.name }}
+                                                {% elif appointment.partner %}
+                                                    {{ appointment.partner.name }}
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="fw-semibold">—</div>
+                                    {% endif %}
+                                    {% if appointment.settlement_notes %}
+                                        <div class="text-muted small mt-2">{{ appointment.settlement_notes }}</div>
+                                    {% endif %}
                                 </div>
                             </div>
                             {% if appointment.symptomatology %}
@@ -149,13 +209,93 @@
                                             {% endfor %}
                                         </select>
                                     </div>
-                                    <div class="form-check form-switch mb-3">
-                                        <input class="form-check-input" type="checkbox" id="paidSwitch" name="is_paid" {% if appointment.is_paid %}checked{% endif %}>
-                                        <label class="form-check-label" for="paidSwitch">Pago pelo cliente</label>
-                                        {% if appointment.is_paid and appointment.paid_at %}
-                                            <div class="text-muted small mt-1">Pago em {{ appointment.paid_at|date:"d/m/Y H:i" }}</div>
-                                        {% endif %}
-                                    </div>
+                                    {% if checkout_enabled %}
+                                        <div class="border rounded-3 p-3 mb-3" id="settlementBox"
+                                             data-auto-price="{{ settlement_auto_price|floatformat:2 }}"
+                                             data-without-partner-price="{{ settlement_without_partner_price|floatformat:2 }}"
+                                             data-paid-amount="{{ appointment.paid_amount|floatformat:2 }}">
+                                            <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                                                <div>
+                                                    <div class="fw-semibold">Liquidação</div>
+                                                    <div class="text-muted small">Define o valor final e o que o cliente está a pagar agora.</div>
+                                                </div>
+                                                <span class="badge {% if appointment.outstanding_amount > 0 %}bg-soft-warning text-warning{% else %}bg-soft-success text-success{% endif %}">
+                                                    Em aberto: {{ appointment.outstanding_amount|floatformat:2 }} €
+                                                </span>
+                                            </div>
+                                            <div class="row g-2">
+                                                <div class="col-12">
+                                                    <label class="form-label">Modo de liquidação</label>
+                                                    <select name="settlement_pricing_mode" id="settlementPricingMode" class="form-select form-select-sm">
+                                                        {% for value, label in settlement_pricing_mode_choices %}
+                                                            <option value="{{ value }}" {% if appointment.settlement_pricing_mode == value or settlement_preview.pricing_mode == value %}selected{% endif %}>{{ label }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-12" id="manualSettlementWrap">
+                                                    <label class="form-label">Valor final liquidado</label>
+                                                    <input type="text" name="manual_settlement_final_price" id="manualSettlementPrice" class="form-control form-control-sm" value="{% if appointment.settlement_pricing_mode == 'manual' %}{{ appointment.settlement_final_price|floatformat:2 }}{% endif %}" placeholder="0,00">
+                                                    <div class="form-text">Usado apenas no modo manual.</div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <div class="small text-muted">Valor final em liquidação</div>
+                                                    <div class="fw-semibold" id="settlementFinalPreview">{{ settlement_preview.final_price|floatformat:2 }} €</div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="settleCurrentAppointment" name="settle_current_appointment" {% if appointment.outstanding_amount > 0 %}checked{% endif %}>
+                                                        <label class="form-check-label" for="settleCurrentAppointment">
+                                                            Aplicar este pagamento à marcação atual
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-12 col-md-6">
+                                                    <label class="form-label">Valor recebido agora</label>
+                                                    <input type="text" name="payment_amount" id="paymentAmountInput" class="form-control form-control-sm" placeholder="0,00">
+                                                    <div class="form-text">
+                                                        O valor pode ser preenchido automaticamente com a soma da marcação atual e das dívidas selecionadas.
+                                                    </div>
+                                                </div>
+                                                <div class="col-12 col-md-6">
+                                                    <label class="form-label">Método de pagamento</label>
+                                                    <select name="payment_method" class="form-select form-select-sm">
+                                                        {% for value, label in payment_method_choices %}
+                                                            <option value="{{ value }}">{{ label }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-12">
+                                                    <div class="border rounded-3 bg-light p-2">
+                                                        <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                                            <div>
+                                                                <div class="small text-muted">Total sugerido para este recebimento</div>
+                                                                <div class="fw-semibold" id="paymentSuggestedTotal">0,00 €</div>
+                                                            </div>
+                                                            <button type="button" class="btn btn-sm btn-outline-primary" id="applySuggestedPayment">
+                                                                Usar total sugerido
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label class="form-label">Referência do pagamento</label>
+                                                    <input type="text" name="payment_reference" class="form-control form-control-sm" placeholder="Recibo, MB Way, transferência, etc.">
+                                                </div>
+                                                <div class="col-12">
+                                                    <label class="form-label">Notas da liquidação</label>
+                                                    <textarea name="settlement_notes" class="form-control" rows="2" placeholder="Ex.: cliente optou por não usar parceria nesta sessão.">{{ appointment.settlement_notes }}</textarea>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label class="form-label">Notas do pagamento</label>
+                                                    <textarea name="payment_notes" class="form-control" rows="2" placeholder="Observações do recebimento"></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <div class="alert alert-light border mb-3">
+                                            A liquidação fica disponível após a hora da marcação ou quando a marcação já estiver concluída/em dívida.
+                                        </div>
+                                    {% endif %}
                                     <div class="mb-3">
                                         <label class="form-label">Resumo</label>
                                         <textarea name="summary" id="summaryField" class="form-control" rows="3" placeholder="Resumo clínico da marcação">{{ appointment.summary }}</textarea>
@@ -165,7 +305,7 @@
                                         <textarea name="treatment_done" id="treatmentField" class="form-control" rows="3" placeholder="Descrição do tratamento">{{ appointment.treatment_done }}</textarea>
                                         {% if requires_review_completion %}
                                             <div class="form-text text-warning mt-1">
-                                                Resumo e tratamento são opcionais. Se guardares sem pagamento, a marcação ficará em estado "Em dívida".
+                                                Resumo e tratamento são opcionais. Se guardares sem liquidação total, a marcação ficará em estado "Em dívida".
                                             </div>
                                         {% endif %}
                                     </div>
@@ -216,6 +356,43 @@
                                         <button class="btn btn-link px-0 mt-2" type="button" id="add-consumable-row">+ adicionar consumíveis</button>
                                         <div class="text-muted small">As quantidades são sempre na unidade base do produto.</div>
                                     </div>
+                                    {% if checkout_enabled %}
+                                        <div class="border rounded-3 p-3 mb-3">
+                                            <div class="fw-semibold mb-2">Dívidas anteriores do cliente</div>
+                                            {% if debt_candidates %}
+                                                <div class="text-muted small mb-2">Seleciona as marcações antigas que este recebimento também vai liquidar.</div>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm align-middle mb-0">
+                                                        <thead>
+                                                            <tr>
+                                                                <th style="width: 42px;"></th>
+                                                                <th>Data</th>
+                                                                <th>Serviço</th>
+                                                                <th>Em aberto</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for debt in debt_candidates %}
+                                                                <tr>
+                                                                    <td>
+                                                                        <input class="form-check-input debt-checkbox" type="checkbox" name="settle_previous_appointments" value="{{ debt.id }}" data-outstanding="{{ debt.outstanding_amount|floatformat:2 }}">
+                                                                    </td>
+                                                                    <td>{{ debt.date|date:"d/m/Y" }}{% if debt.time %}<div class="text-muted small">{{ debt.time|time:"H:i" }}</div>{% endif %}</td>
+                                                                    <td>
+                                                                        <div class="fw-semibold">{{ debt.service.name }}</div>
+                                                                        <div class="text-muted small">{{ debt.professional.user.get_full_name|default:debt.professional.user.username }}</div>
+                                                                    </td>
+                                                                    <td>{{ debt.outstanding_amount|floatformat:2 }} €</td>
+                                                                </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            {% else %}
+                                                <div class="text-muted small">Não existem dívidas anteriores em aberto para este cliente neste âmbito.</div>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
                                 </div>
                                 <div class="col-12">
                                     <button class="btn btn-primary w-100" type="submit">Guardar alterações</button>
@@ -378,16 +555,120 @@
   }
 
   (function () {
+    const settlementBox = document.getElementById("settlementBox");
+    const pricingMode = document.getElementById("settlementPricingMode");
+    const manualWrap = document.getElementById("manualSettlementWrap");
+    const manualInput = document.getElementById("manualSettlementPrice");
+    const settlementPreview = document.getElementById("settlementFinalPreview");
+    const paymentAmountInput = document.getElementById("paymentAmountInput");
+    const settleCurrentCheckbox = document.getElementById("settleCurrentAppointment");
+    const suggestedPaymentTotal = document.getElementById("paymentSuggestedTotal");
+    const applySuggestedPaymentBtn = document.getElementById("applySuggestedPayment");
+    const debtCheckboxes = Array.from(document.querySelectorAll(".debt-checkbox"));
+    let paymentAmountTouched = false;
+
+    function parseMoney(value) {
+      if (!value) return 0;
+      const normalized = String(value).replace(/[€\s]/g, "").replace(",", ".");
+      const parsed = Number.parseFloat(normalized);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function formatMoney(value) {
+      return `${value.toFixed(2).replace(".", ",")} €`;
+    }
+
+    function currentSettlementValue() {
+      if (!settlementBox || !pricingMode) return 0;
+      if (pricingMode.value === "manual") {
+        return parseMoney(manualInput ? manualInput.value : 0);
+      }
+      if (pricingMode.value === "without_partner") {
+        return parseMoney(settlementBox.dataset.withoutPartnerPrice);
+      }
+      return parseMoney(settlementBox.dataset.autoPrice);
+    }
+
+    function currentAppointmentOutstanding() {
+      if (!settlementBox) return 0;
+      const paidAlready = parseMoney(settlementBox.dataset.paidAmount);
+      return Math.max(currentSettlementValue() - paidAlready, 0);
+    }
+
+    function selectedDebtTotal() {
+      return debtCheckboxes.reduce(function (sum, checkbox) {
+        if (!checkbox.checked) return sum;
+        return sum + parseMoney(checkbox.dataset.outstanding);
+      }, 0);
+    }
+
+    function suggestedPaymentValue() {
+      const currentAmount = settleCurrentCheckbox && settleCurrentCheckbox.checked ? currentAppointmentOutstanding() : 0;
+      return currentAmount + selectedDebtTotal();
+    }
+
+    function applySuggestedPayment(force) {
+      if (!paymentAmountInput) return;
+      const suggested = suggestedPaymentValue();
+      if (force || !paymentAmountTouched || !paymentAmountInput.value.trim()) {
+        paymentAmountInput.value = suggested > 0 ? suggested.toFixed(2).replace(".", ",") : "";
+        paymentAmountInput.dataset.autofilled = suggested.toFixed(2);
+      }
+      if (suggestedPaymentTotal) {
+        suggestedPaymentTotal.textContent = formatMoney(suggested);
+      }
+    }
+
+    function refreshSettlementUi() {
+      if (!settlementBox || !pricingMode) return;
+      const manualMode = pricingMode.value === "manual";
+      if (manualWrap) {
+        manualWrap.style.display = manualMode ? "" : "none";
+      }
+      if (settlementPreview) {
+        settlementPreview.textContent = formatMoney(currentSettlementValue());
+      }
+      applySuggestedPayment(false);
+    }
+
+    if (pricingMode) {
+      pricingMode.addEventListener("change", refreshSettlementUi);
+    }
+    if (manualInput) {
+      manualInput.addEventListener("input", refreshSettlementUi);
+    }
+    if (settleCurrentCheckbox) {
+      settleCurrentCheckbox.addEventListener("change", function () {
+        applySuggestedPayment(false);
+      });
+    }
+    debtCheckboxes.forEach(function (checkbox) {
+      checkbox.addEventListener("change", function () {
+        applySuggestedPayment(false);
+      });
+    });
+    if (paymentAmountInput) {
+      paymentAmountInput.addEventListener("input", function () {
+        paymentAmountTouched = true;
+      });
+    }
+    if (applySuggestedPaymentBtn) {
+      applySuggestedPaymentBtn.addEventListener("click", function () {
+        paymentAmountTouched = false;
+        applySuggestedPayment(true);
+      });
+    }
+    refreshSettlementUi();
+
     const requiresReviewCompletion = {{ requires_review_completion|yesno:"true,false" }};
     if (!requiresReviewCompletion) return;
 
     const form = document.getElementById("appointment-form");
     const status = document.getElementById("statusSelect");
-    const paid = document.getElementById("paidSwitch");
     const summary = document.getElementById("summaryField");
     const treatment = document.getElementById("treatmentField");
     const confirmDebtInput = document.getElementById("confirmDebtInput");
-    if (!form || !status || !paid || !summary || !treatment || !confirmDebtInput) return;
+    if (!form || !status || !summary || !treatment || !confirmDebtInput) return;
 
     form.addEventListener("submit", function (event) {
       if (status.value === "cancelled" || status.value === "awaiting_validation" || status.value === "no_show") {
@@ -395,8 +676,13 @@
         return;
       }
 
-      const missingPaid = !paid.checked;
-      const shouldMarkDebt = missingPaid;
+      let shouldMarkDebt = false;
+      if (settlementBox) {
+        const paidAlready = parseMoney(settlementBox.dataset.paidAmount);
+        const paymentNow = settleCurrentCheckbox && settleCurrentCheckbox.checked ? parseMoney(paymentAmountInput ? paymentAmountInput.value : 0) : 0;
+        const currentOutstanding = Math.max(currentSettlementValue() - paidAlready - paymentNow, 0);
+        shouldMarkDebt = currentOutstanding > 0.009;
+      }
 
       if (!shouldMarkDebt) {
         confirmDebtInput.value = "0";

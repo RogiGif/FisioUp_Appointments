@@ -61,9 +61,10 @@ from core.forms import (
     CashSessionCloseForm,
     CashManualMovementForm,
     CashAppointmentMovementForm,
+    CashClientPaymentMovementForm,
     CashGroupMonthlyMovementForm,
-    CashStockSaleForm,
     CashVoidMovementForm,
+    MoloniCustomerDefaultsForm,
 )
 from core.utils.pricing import (
     compute_pricing,
@@ -71,9 +72,15 @@ from core.utils.pricing import (
     recalculate_partner_upcoming_appointments,
 )
 from core.services.subcontracting import sync_subcontractor_payout
+from core.services.payments import ensure_client_payment_cash_movement
 from core.services.audit import log_audit_event, snapshot_instance, cleanup_old_audit_logs_if_needed
 from core.services import moloni as moloni_service
-from core.services.moloni_sync import sync_customers as moloni_sync_customers
+from core.services.moloni_sync import (
+    apply_remote_customer_to_profile as moloni_apply_remote_customer_to_profile,
+    build_reconciliation_report as moloni_build_reconciliation_report,
+    run_bidirectional_reconciliation as moloni_run_bidirectional_reconciliation,
+    sync_customers as moloni_sync_customers,
+)
 from core.utils.revenue import (
     get_revenue_queryset,
     compute_trend,
@@ -82,7 +89,7 @@ from core.utils.revenue import (
     day_range,
     month_start,
 )
-from core.utils.stock import get_default_location, get_stock
+from core.views.common import _find_matching_cancelled_appointment, log_appt
 from core.models import (
     Professional,
     WeeklySchedule,
@@ -112,6 +119,7 @@ from core.models import (
     AuditLog,
     CashSession,
     CashMovement,
+    ClientPayment,
 )
 
 from core.views.common import *
@@ -316,8 +324,12 @@ def _can_access_cash_area(user):
     return is_admin_role(user) or is_receptionist(user)
 
 
+def _cash_summary_movements_queryset(qs):
+    return qs.exclude(source_type=CashMovement.SOURCE_STOCK_SALE)
+
+
 def _cash_session_totals(session):
-    movements = session.movements.filter(is_void=False)
+    movements = _cash_summary_movements_queryset(session.movements.filter(is_void=False))
     all_movements = session.movements.all()
     total_in = (
         movements.filter(movement_type=CashMovement.TYPE_IN)
@@ -398,8 +410,7 @@ def _cash_dashboard_querystring(request, selected_session, session_status, sessi
 
 def _cash_origin_breakdown(session):
     movements = (
-        session.movements
-        .filter(is_void=False)
+        _cash_summary_movements_queryset(session.movements.filter(is_void=False))
         .values("source_type")
         .annotate(total=Coalesce(Sum("amount"), Decimal("0.00")), count=Count("id"))
         .order_by("source_type")
@@ -416,6 +427,173 @@ def _cash_origin_breakdown(session):
     return rows
 
 
+def _cash_month_bounds(reference_date):
+    month_start = reference_date.replace(day=1)
+    next_month = (month_start + timedelta(days=32)).replace(day=1)
+    month_end = next_month - timedelta(days=1)
+    return month_start, month_end
+
+
+def _appointment_charge_amount_for_report(appointment):
+    if appointment.settlement_locked_at:
+        return appointment.settlement_final_price or Decimal("0.00")
+    return appointment.final_price or Decimal("0.00")
+
+
+def _cash_month_summary(reference_date):
+    month_start, month_end = _cash_month_bounds(reference_date)
+    movement_qs = _cash_summary_movements_queryset(
+        CashMovement.objects.filter(
+            session__session_date__gte=month_start,
+            session__session_date__lte=month_end,
+            is_void=False,
+        )
+    )
+    received_total = (
+        movement_qs.filter(movement_type=CashMovement.TYPE_IN)
+        .aggregate(total=Coalesce(Sum("amount"), Decimal("0.00")))
+        .get("total")
+        or Decimal("0.00")
+    )
+    expense_total = (
+        movement_qs.filter(movement_type=CashMovement.TYPE_OUT)
+        .aggregate(total=Coalesce(Sum("amount"), Decimal("0.00")))
+        .get("total")
+        or Decimal("0.00")
+    )
+
+    appointment_debts = []
+    appointment_qs = (
+        Appointment.objects
+        .select_related("client", "client__client_profile", "service")
+        .annotate(
+            allocated_total=Coalesce(
+                Sum(
+                    "payment_allocations__allocated_amount",
+                    filter=Q(payment_allocations__payment__status=ClientPayment.STATUS_POSTED),
+                ),
+                Decimal("0.00"),
+            )
+        )
+        .filter(date__gte=month_start, date__lte=month_end)
+        .exclude(status=Appointment.STATUS_CANCELLED)
+        .order_by("date", "time", "id")
+    )
+    for appointment in appointment_qs:
+        charge_amount = _appointment_charge_amount_for_report(appointment)
+        paid_amount = appointment.allocated_total or Decimal("0.00")
+        if not paid_amount and appointment.is_paid:
+            paid_amount = charge_amount
+        outstanding_amount = charge_amount - paid_amount
+        if outstanding_amount <= 0:
+            continue
+        client_label = (
+            getattr(getattr(appointment.client, "client_profile", None), "full_name", "")
+            or appointment.client.get_full_name()
+            or appointment.client.username
+        )
+        appointment_debts.append({
+            "kind": "Marcação",
+            "date": appointment.date,
+            "time": appointment.time,
+            "client_label": client_label,
+            "description": getattr(appointment.service, "name", "") or "Serviço",
+            "amount": outstanding_amount,
+        })
+
+    monthly_charge_debts = []
+    monthly_charge_qs = (
+        GroupMonthlyCharge.objects
+        .select_related("client", "client__client_profile", "service")
+        .annotate(
+            allocated_total=Coalesce(
+                Sum(
+                    "payment_allocations__allocated_amount",
+                    filter=Q(payment_allocations__payment__status=ClientPayment.STATUS_POSTED),
+                ),
+                Decimal("0.00"),
+            )
+        )
+        .filter(month__gte=month_start, month__lte=month_end)
+        .exclude(status=GroupMonthlyCharge.STATUS_VOID)
+        .order_by("month", "id")
+    )
+    for charge in monthly_charge_qs:
+        charge_amount = charge.final_price or Decimal("0.00")
+        paid_amount = charge.allocated_total or Decimal("0.00")
+        if not paid_amount and charge.status == GroupMonthlyCharge.STATUS_PAID:
+            paid_amount = charge_amount
+        outstanding_amount = charge_amount - paid_amount
+        if outstanding_amount <= 0:
+            continue
+        client_label = (
+            getattr(getattr(charge.client, "client_profile", None), "full_name", "")
+            or charge.client.get_full_name()
+            or charge.client.username
+        )
+        monthly_charge_debts.append({
+            "kind": "Turma",
+            "date": charge.month,
+            "time": None,
+            "client_label": client_label,
+            "description": charge.class_name or getattr(charge.service, "name", "") or "Turma",
+            "amount": outstanding_amount,
+        })
+
+    debt_rows = sorted(
+        appointment_debts + monthly_charge_debts,
+        key=lambda item: (item["date"], item["time"] or dtime.min, item["client_label"]),
+    )
+    debt_total = sum((row["amount"] for row in debt_rows), Decimal("0.00"))
+
+    subcontract_qs = (
+        SubcontractorPaymentLine.objects
+        .select_related("professional", "professional__user", "client", "service")
+        .filter(appointment_date__gte=month_start, appointment_date__lte=month_end)
+        .exclude(status=SubcontractorPaymentLine.STATUS_VOID)
+        .order_by("appointment_date", "appointment_time", "id")
+    )
+    subcontract_paid_total = (
+        subcontract_qs.filter(status=SubcontractorPaymentLine.STATUS_PAID)
+        .aggregate(total=Coalesce(Sum("payable_amount"), Decimal("0.00")))
+        .get("total")
+        or Decimal("0.00")
+    )
+    subcontract_open_total = (
+        subcontract_qs.filter(status=SubcontractorPaymentLine.STATUS_UNPAID)
+        .aggregate(total=Coalesce(Sum("payable_amount"), Decimal("0.00")))
+        .get("total")
+        or Decimal("0.00")
+    )
+    subcontract_preview = []
+    for line in subcontract_qs.filter(status=SubcontractorPaymentLine.STATUS_UNPAID)[:8]:
+        professional_label = line.professional.display_name if hasattr(line.professional, "display_name") else str(line.professional)
+        subcontract_preview.append({
+            "date": line.appointment_date,
+            "time": line.appointment_time,
+            "professional_label": professional_label,
+            "client_label": line.client.full_name if line.client else "Utente",
+            "description": getattr(line.service, "name", "") or "Serviço",
+            "amount": line.payable_amount or Decimal("0.00"),
+        })
+
+    return {
+        "month_start": month_start,
+        "month_end": month_end,
+        "session_count": CashSession.objects.filter(session_date__gte=month_start, session_date__lte=month_end).count(),
+        "received_total": received_total,
+        "expense_total": expense_total,
+        "balance": received_total - expense_total,
+        "debt_total": debt_total,
+        "debt_count": len(debt_rows),
+        "debt_preview": debt_rows[:8],
+        "subcontract_paid_total": subcontract_paid_total,
+        "subcontract_open_total": subcontract_open_total,
+        "subcontract_open_count": subcontract_qs.filter(status=SubcontractorPaymentLine.STATUS_UNPAID).count(),
+        "subcontract_preview": subcontract_preview,
+    }
+
+
 def _pending_cash_appointments_for_session(session):
     return (
         Appointment.objects.select_related("client", "client__client_profile", "service", "professional", "professional__user")
@@ -426,8 +604,24 @@ def _pending_cash_appointments_for_session(session):
         )
         .exclude(status=Appointment.STATUS_CANCELLED)
         .exclude(final_price__lte=Decimal("0.00"))
+        .filter(payment_allocations__isnull=True)
         .filter(cash_movement__isnull=True)
+        .distinct()
         .order_by("time", "id")
+    )
+
+
+def _pending_cash_client_payments_for_session(session):
+    return (
+        ClientPayment.objects
+        .select_related("client_profile", "created_by", "cash_movement")
+        .filter(
+            status=ClientPayment.STATUS_POSTED,
+            received_at__date=session.session_date,
+            cash_movement__isnull=True,
+            amount_received__gt=Decimal("0.00"),
+        )
+        .order_by("received_at", "id")
     )
 
 
@@ -440,7 +634,9 @@ def _pending_cash_group_monthly_for_session(session):
             | Q(paid_at__isnull=True, month=session.session_date.replace(day=1))
         )
         .exclude(final_price__lte=Decimal("0.00"))
+        .filter(payment_allocations__isnull=True)
         .filter(cash_movement__isnull=True)
+        .distinct()
         .order_by("month", "id")
     )
 
@@ -1277,7 +1473,7 @@ def backoffice_agenda_view(request):
                 )
 
         if service and prof and date_obj:
-            quick_slots = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+            quick_slots = _get_slots(prof, date_obj, service=service)
 
         if service and prof and date_obj and time_obj and not quick_errors:
             if _is_slot_blocked(prof, date_obj, time_obj):
@@ -1291,27 +1487,93 @@ def backoffice_agenda_view(request):
             try:
                 with transaction.atomic():
                     pricing = compute_pricing(service, client_profile)
-                    appt = Appointment.objects.create(
-                        client=client_user,
+                    reactivated_cancelled = _find_matching_cancelled_appointment(
+                        client_user=client_user,
                         professional=prof,
                         service=service,
-                        date=date_obj,
-                        time=time_obj,
-                        symptomatology=quick_form["symptomatology"],
-                        base_price=pricing["base_price_applied"],
-                        partner=pricing["partner"],
-                        partner_price=pricing["partner_price_applied"],
-                        discount_type=pricing["discount_type"],
-                        discount_value=pricing["discount_value"],
-                        final_price=pricing["final_price"],
-                        session_index=pricing["session_index"],
-                        pricing_tier=pricing["pricing_tier"],
-                        base_price_applied=pricing["base_price_applied"],
-                        partner_price_applied=pricing["partner_price_applied"],
-                        discount_applied=pricing["discount_applied"],
+                        date_obj=date_obj,
+                        time_obj=time_obj,
                     )
-                log_appt(AppointmentLog.ACTION_CREATED, appt, request.user, note="Criada no backoffice", request=request)
-                messages.success(request, "Marcação criada com sucesso.")
+                    if reactivated_cancelled:
+                        old_status = reactivated_cancelled.status
+                        reactivated_cancelled.symptomatology = quick_form["symptomatology"]
+                        reactivated_cancelled.status = Appointment.STATUS_SCHEDULED
+                        reactivated_cancelled.base_price = pricing["base_price_applied"]
+                        reactivated_cancelled.partner = pricing["partner"]
+                        reactivated_cancelled.partner_price = pricing["partner_price_applied"]
+                        reactivated_cancelled.discount_type = pricing["discount_type"]
+                        reactivated_cancelled.discount_value = pricing["discount_value"]
+                        reactivated_cancelled.final_price = pricing["final_price"]
+                        reactivated_cancelled.session_index = pricing["session_index"]
+                        reactivated_cancelled.pricing_tier = pricing["pricing_tier"]
+                        reactivated_cancelled.base_price_applied = pricing["base_price_applied"]
+                        reactivated_cancelled.partner_price_applied = pricing["partner_price_applied"]
+                        reactivated_cancelled.discount_applied = pricing["discount_applied"]
+                        reactivated_cancelled.is_paid = False
+                        reactivated_cancelled.paid_at = None
+                        reactivated_cancelled.completed_by = None
+                        reactivated_cancelled.completed_at = None
+                        reactivated_cancelled.save(
+                            update_fields=[
+                                "symptomatology",
+                                "status",
+                                "base_price",
+                                "partner",
+                                "partner_price",
+                                "discount_type",
+                                "discount_value",
+                                "final_price",
+                                "session_index",
+                                "pricing_tier",
+                                "base_price_applied",
+                                "partner_price_applied",
+                                "discount_applied",
+                                "is_paid",
+                                "paid_at",
+                                "completed_by",
+                                "completed_at",
+                            ]
+                        )
+                        appt = reactivated_cancelled
+                        log_appt(
+                            AppointmentLog.ACTION_STATUS_UPDATED,
+                            appt,
+                            request.user,
+                            old_status=old_status,
+                            new_status=appt.status,
+                            note="Reativada no backoffice a partir de uma marcação cancelada do mesmo slot.",
+                            request=request,
+                        )
+                        success_message = "Marcação cancelada anterior reativada com sucesso."
+                    else:
+                        appt = Appointment.objects.create(
+                            client=client_user,
+                            professional=prof,
+                            service=service,
+                            date=date_obj,
+                            time=time_obj,
+                            symptomatology=quick_form["symptomatology"],
+                            base_price=pricing["base_price_applied"],
+                            partner=pricing["partner"],
+                            partner_price=pricing["partner_price_applied"],
+                            discount_type=pricing["discount_type"],
+                            discount_value=pricing["discount_value"],
+                            final_price=pricing["final_price"],
+                            session_index=pricing["session_index"],
+                            pricing_tier=pricing["pricing_tier"],
+                            base_price_applied=pricing["base_price_applied"],
+                            partner_price_applied=pricing["partner_price_applied"],
+                            discount_applied=pricing["discount_applied"],
+                        )
+                        log_appt(
+                            AppointmentLog.ACTION_CREATED,
+                            appt,
+                            request.user,
+                            note="Criada no backoffice",
+                            request=request,
+                        )
+                        success_message = "Marcação criada com sucesso."
+                messages.success(request, success_message)
                 return redirect(return_to)
             except IntegrityError:
                 quick_errors.append("Esse horário já não está disponível.")
@@ -1826,7 +2088,9 @@ def backoffice_cash_dashboard_view(request):
     else:
         selected_session = open_session if open_session and (session_status in {"all", CashSession.STATUS_OPEN}) and (not session_date or open_session.session_date == session_date) else sessions_qs.first()
     active_tab = (request.GET.get("tab") or request.POST.get("tab") or "overview").strip().lower()
-    if active_tab not in {"overview", "receipts", "history", "closings"}:
+    if active_tab == "receipts":
+        active_tab = "overview"
+    if active_tab not in {"overview", "history", "closings"}:
         active_tab = "overview"
 
     selected_totals = _cash_session_totals(selected_session) if selected_session else {
@@ -1842,9 +2106,8 @@ def backoffice_cash_dashboard_view(request):
     }
     source_breakdown = selected_totals["source_breakdown"] if selected_session else []
     pending_appointments_qs = _pending_cash_appointments_for_session(selected_session) if selected_session else Appointment.objects.none()
+    pending_client_payments_qs = _pending_cash_client_payments_for_session(selected_session) if selected_session else ClientPayment.objects.none()
     pending_group_monthly_qs = _pending_cash_group_monthly_for_session(selected_session) if selected_session else GroupMonthlyCharge.objects.none()
-    stock_product_qs = Product.objects.filter(is_active=True).order_by("name")
-    client_profile_qs = ClientProfile.objects.order_by("full_name", "id")
     void_status = (request.GET.get("void_status") or "active").strip().lower()
     if void_status not in {"active", "voided", "all"}:
         void_status = "active"
@@ -1860,12 +2123,8 @@ def backoffice_cash_dashboard_view(request):
         "happened_at": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
     })
     appointment_form = CashAppointmentMovementForm(appointment_queryset=pending_appointments_qs)
+    client_payment_form = CashClientPaymentMovementForm(payment_queryset=pending_client_payments_qs)
     group_monthly_form = CashGroupMonthlyMovementForm(monthly_charge_queryset=pending_group_monthly_qs)
-    stock_sale_form = CashStockSaleForm(
-        product_queryset=stock_product_qs,
-        client_queryset=client_profile_qs,
-        initial={"happened_at": timezone.localtime().strftime("%Y-%m-%dT%H:%M")},
-    )
     void_form = CashVoidMovementForm()
     edit_movement_id = (request.GET.get("edit_movement_id") or "").strip()
     void_movement_id = (request.GET.get("void_movement_id") or "").strip()
@@ -2252,6 +2511,44 @@ def backoffice_cash_dashboard_view(request):
                     messages.success(request, "Recebimento de marcação lançado com sucesso.")
                     return redirect(f"{reverse('backoffice_cash_dashboard')}?{current_base_qs}")
 
+        elif action == "add_client_payment":
+            if not selected_session or selected_session.status != CashSession.STATUS_OPEN:
+                messages.error(request, "Seleciona uma sessão de caixa aberta.")
+            else:
+                client_payment_form = CashClientPaymentMovementForm(
+                    request.POST,
+                    payment_queryset=pending_client_payments_qs,
+                )
+                if client_payment_form.is_valid():
+                    payment = client_payment_form.cleaned_data["client_payment"]
+                    movement, movement_created, movement_error = ensure_client_payment_cash_movement(
+                        payment,
+                        session=selected_session,
+                        notes_append=client_payment_form.cleaned_data.get("notes") or "",
+                    )
+                    if movement_created and movement:
+                        log_audit_event(
+                            category="cash_movement",
+                            action="client_payment_created",
+                            request=request,
+                            actor=request.user,
+                            instance=movement,
+                            source="backoffice_cash",
+                            message="Pagamento de cliente lançado em caixa.",
+                            after={
+                                "session_id": selected_session.id,
+                                "client_payment_id": payment.id,
+                                "payment_method": movement.payment_method,
+                                "amount": str(movement.amount),
+                            },
+                        )
+                        messages.success(request, "Pagamento de cliente lançado em caixa com sucesso.")
+                        return redirect(f"{reverse('backoffice_cash_dashboard')}?{current_base_qs}")
+                    if movement and not movement_created:
+                        messages.info(request, "Este pagamento já estava lançado em caixa.")
+                        return redirect(f"{reverse('backoffice_cash_dashboard')}?{current_base_qs}")
+                    messages.error(request, movement_error or "Não foi possível lançar o pagamento em caixa.")
+
         elif action == "add_paid_group_monthly":
             if not selected_session or selected_session.status != CashSession.STATUS_OPEN:
                 messages.error(request, "Seleciona uma sessão de caixa aberta.")
@@ -2297,71 +2594,6 @@ def backoffice_cash_dashboard_view(request):
                     )
                     messages.success(request, "Recebimento de turma lançado com sucesso.")
                     return redirect(f"{reverse('backoffice_cash_dashboard')}?{current_base_qs}")
-
-        elif action == "add_stock_sale":
-            if not selected_session or selected_session.status != CashSession.STATUS_OPEN:
-                messages.error(request, "Seleciona uma sessão de caixa aberta.")
-            else:
-                stock_sale_form = CashStockSaleForm(
-                    request.POST,
-                    product_queryset=stock_product_qs,
-                    client_queryset=client_profile_qs,
-                )
-                if stock_sale_form.is_valid():
-                    product = stock_sale_form.cleaned_data["product"]
-                    client_profile = stock_sale_form.cleaned_data.get("client_profile")
-                    quantity_base = stock_sale_form.cleaned_data["quantity_base"]
-                    available_stock = get_stock(product)
-                    if quantity_base <= 0:
-                        stock_sale_form.add_error("quantity_base", "Indica uma quantidade positiva.")
-                    elif available_stock < quantity_base:
-                        stock_sale_form.add_error(
-                            "quantity_base",
-                            f"Stock insuficiente. Disponível: {available_stock:.2f}.",
-                        )
-                    else:
-                        location = get_default_location()
-                        stock_movement = StockMovement.objects.create(
-                            product=product,
-                            location=location,
-                            movement_type=StockMovement.TYPE_CONSUMPTION,
-                            quantity_base=quantity_base * Decimal("-1"),
-                            created_by=request.user,
-                            note=stock_sale_form.cleaned_data.get("notes") or "Venda rápida em caixa.",
-                        )
-                        movement = CashMovement.objects.create(
-                            session=selected_session,
-                            movement_type=CashMovement.TYPE_IN,
-                            source_type=CashMovement.SOURCE_STOCK_SALE,
-                            payment_method=stock_sale_form.cleaned_data["payment_method"],
-                            amount=stock_sale_form.cleaned_data["amount"],
-                            description=f"Stock · {product.name}",
-                            notes=stock_sale_form.cleaned_data.get("notes") or "",
-                            client_profile=client_profile,
-                            stock_movement=stock_movement,
-                            created_by=request.user,
-                            happened_at=stock_sale_form.cleaned_data["happened_at"],
-                        )
-                        log_audit_event(
-                            category="cash_movement",
-                            action="stock_sale_created",
-                            request=request,
-                            actor=request.user,
-                            instance=movement,
-                            source="backoffice_cash",
-                            message="Venda rápida de stock lançada em caixa.",
-                            after={
-                                "session_id": selected_session.id,
-                                "stock_movement_id": stock_movement.id,
-                                "product_id": product.id,
-                                "client_profile_id": client_profile.id if client_profile else "",
-                                "quantity_base": str(quantity_base),
-                                "payment_method": movement.payment_method,
-                                "amount": str(movement.amount),
-                            },
-                        )
-                        messages.success(request, "Venda de stock lançada com sucesso.")
-                        return redirect(f"{reverse('backoffice_cash_dashboard')}?{current_base_qs}")
 
         else:
             messages.error(request, "Ação inválida.")
@@ -2530,6 +2762,10 @@ def backoffice_cash_dashboard_view(request):
             or appt.client.get_full_name()
             or appt.client.username
         )
+    pending_client_payments_preview = list(pending_client_payments_qs[:8]) if selected_session else []
+    for payment in pending_client_payments_preview:
+        payment.client_label = payment.client_profile.full_name if payment.client_profile else "Cliente"
+        payment.method_label = dict(ClientPayment.PAYMENT_METHOD_CHOICES).get(payment.payment_method, payment.payment_method)
     pending_group_monthly_preview = list(pending_group_monthly_qs[:8]) if selected_session else []
     for charge in pending_group_monthly_preview:
         charge.client_label = (
@@ -2538,6 +2774,19 @@ def backoffice_cash_dashboard_view(request):
             or charge.client.username
         )
         charge.class_label = charge.class_name or getattr(charge.service, "name", "") or "Turma"
+    monthly_summary = _cash_month_summary(selected_session.session_date if selected_session else timezone.localdate())
+    session_recent_movements = list(
+        movement_qs.select_related(
+            "created_by",
+            "client_profile",
+            "appointment",
+            "appointment__client",
+            "appointment__client__client_profile",
+            "group_monthly_charge",
+            "group_monthly_charge__client",
+            "group_monthly_charge__client__client_profile",
+        )[:8]
+    ) if selected_session else []
 
     return render(
         request,
@@ -2565,15 +2814,19 @@ def backoffice_cash_dashboard_view(request):
             "recent_sessions": recent_sessions,
             "pending_appointments_count": pending_appointments_qs.count() if selected_session else 0,
             "pending_appointments_preview": pending_appointments_preview,
+            "pending_client_payments_count": pending_client_payments_qs.count() if selected_session else 0,
+            "pending_client_payments_preview": pending_client_payments_preview,
             "pending_group_monthly_count": pending_group_monthly_qs.count() if selected_session else 0,
             "pending_group_monthly_preview": pending_group_monthly_preview,
             "source_breakdown": source_breakdown,
+            "monthly_summary": monthly_summary,
+            "session_recent_movements": session_recent_movements,
             "open_form": open_form,
             "close_form": close_form,
             "manual_form": manual_form,
             "appointment_form": appointment_form,
+            "client_payment_form": client_payment_form,
             "group_monthly_form": group_monthly_form,
-            "stock_sale_form": stock_sale_form,
             "void_form": void_form,
             "editing_movement": editing_movement,
             "voiding_movement": voiding_movement,
@@ -2583,6 +2836,7 @@ def backoffice_cash_dashboard_view(request):
             "cash_movement_type_choices": CashMovement.TYPE_CHOICES,
             "cash_payment_method_choices": CashMovement.PAYMENT_METHOD_CHOICES,
             "cash_source_type_choices": CashMovement.SOURCE_CHOICES,
+            "can_reopen_session": is_admin_role(request.user),
         },
     )
 
@@ -3013,7 +3267,7 @@ def backoffice_api_slots(request):
             }
         )
 
-    slots = _get_slots(prof, date_obj, step_minutes=service.duration_minutes)
+    slots = _get_slots(prof, date_obj, service=service)
     if not slots:
         return JsonResponse({"ok": False, "slots": [], "message": "Sem horários disponíveis."})
     return JsonResponse({"ok": True, "slots": slots, "message": "", "days": professional_weekdays_labels(prof)})
@@ -3790,20 +4044,93 @@ def backoffice_settings_moloni_view(request):
         return HttpResponseForbidden("Acesso reservado a administradores.")
 
     integ = MoloniIntegration.get_solo()
+    defaults_initial = {
+        "payment_method_id": integ.customer_payment_method_id,
+        "document_type_id": integ.customer_document_type_id,
+        "language_id": integ.customer_language_id,
+        "maturity_date_id": integ.customer_maturity_date_id,
+        "country_id": integ.customer_country_id,
+        "delivery_method_id": integ.customer_delivery_method_id,
+    }
+    defaults_form = MoloniCustomerDefaultsForm(initial=defaults_initial)
+    if request.method == "POST" and (request.POST.get("action") or "").strip() == "save_customer_defaults":
+        defaults_form = MoloniCustomerDefaultsForm(request.POST)
+        if defaults_form.is_valid():
+            before = snapshot_instance(
+                integ,
+                fields=[
+                    "customer_payment_method_id",
+                    "customer_document_type_id",
+                    "customer_language_id",
+                    "customer_maturity_date_id",
+                    "customer_country_id",
+                    "customer_delivery_method_id",
+                ],
+            )
+            integ.customer_payment_method_id = defaults_form.cleaned_data["payment_method_id"]
+            integ.customer_document_type_id = defaults_form.cleaned_data["document_type_id"]
+            integ.customer_language_id = defaults_form.cleaned_data["language_id"]
+            integ.customer_maturity_date_id = defaults_form.cleaned_data["maturity_date_id"]
+            integ.customer_country_id = defaults_form.cleaned_data["country_id"]
+            integ.customer_delivery_method_id = defaults_form.cleaned_data.get("delivery_method_id")
+            integ.save(
+                update_fields=[
+                    "customer_payment_method_id",
+                    "customer_document_type_id",
+                    "customer_language_id",
+                    "customer_maturity_date_id",
+                    "customer_country_id",
+                    "customer_delivery_method_id",
+                    "updated_at",
+                ]
+            )
+            log_audit_event(
+                category="integrations",
+                action="moloni_customer_defaults_saved",
+                request=request,
+                actor=request.user,
+                instance=integ,
+                source="backoffice_settings_moloni",
+                message="Defaults de clientes Moloni guardados.",
+                before=before,
+                after=snapshot_instance(
+                    integ,
+                    fields=[
+                        "customer_payment_method_id",
+                        "customer_document_type_id",
+                        "customer_language_id",
+                        "customer_maturity_date_id",
+                        "customer_country_id",
+                        "customer_delivery_method_id",
+                    ],
+                ),
+            )
+            messages.success(request, "Defaults de clientes Moloni guardados com sucesso.")
+            return redirect("backoffice_settings_moloni")
+
     configured = moloni_service.is_configured()
     connected = bool(integ.refresh_token)
     callback_url = _moloni_redirect_uri(request)
     companies = []
     companies_error = ""
+    defaults_suggestions = None
+    defaults_suggestions_error = ""
     if connected and not moloni_service.get_company_id():
         try:
             companies = moloni_service.list_companies()
         except moloni_service.MoloniError as exc:
             companies_error = str(exc)
+    elif connected and moloni_service.get_company_id():
+        try:
+            defaults_suggestions = moloni_service.get_customer_defaults_suggestions()
+        except moloni_service.MoloniError as exc:
+            defaults_suggestions_error = str(exc)
+    defaults_status = moloni_service.get_customer_defaults_status()
     context = {
         "moloni_integration": integ,
         "moloni_configured": configured,
         "moloni_connected": connected,
+        "moloni_ready": bool(connected and moloni_service.get_company_id()),
         "moloni_callback_url": callback_url,
         "moloni_client_id": getattr(settings, "MOLONI_CLIENT_ID", ""),
         "moloni_company_id": moloni_service.get_company_id(),
@@ -3812,6 +4139,11 @@ def backoffice_settings_moloni_view(request):
         "moloni_base_url": getattr(settings, "MOLONI_BASE_URL", ""),
         "moloni_companies": companies,
         "moloni_companies_error": companies_error,
+        "moloni_defaults_form": defaults_form,
+        "moloni_defaults_ready": defaults_status["ready"],
+        "moloni_defaults_missing": defaults_status["missing"],
+        "moloni_defaults_suggestions": defaults_suggestions,
+        "moloni_defaults_suggestions_error": defaults_suggestions_error,
     }
     return render(request, "backoffice/settings_moloni.html", context)
 
@@ -3951,8 +4283,10 @@ def backoffice_moloni_sync_customers_view(request):
     if not is_admin_role(request.user):
         return HttpResponseForbidden("Acesso reservado a administradores.")
 
+    sync_mode = (request.POST.get("sync_mode") or "incremental").strip().lower()
+    full = sync_mode == "full"
     try:
-        result = moloni_sync_customers(full=True)
+        result = moloni_sync_customers(full=full)
     except moloni_service.MoloniError as exc:
         messages.error(request, f"Sincronização Moloni falhou: {exc}")
         return redirect("backoffice_settings_moloni")
@@ -3969,9 +4303,92 @@ def backoffice_moloni_sync_customers_view(request):
     )
     messages.success(
         request,
-        f"Sincronização concluída. Criados: {result['created']}, atualizados: {result['updated']}, ignorados: {result['skipped']}, erros: {result['errors']}.",
+        f"Sincronização {result['mode']} concluída. Criados: {result['created']}, atualizados: {result['updated']}, ignorados: {result['skipped']}, erros: {result['errors']}.",
     )
     return redirect("backoffice_settings_moloni")
+
+
+@require_POST
+@backoffice_required
+def backoffice_moloni_run_reconciliation_view(request):
+    if not is_admin_role(request.user):
+        return HttpResponseForbidden("Acesso reservado a administradores.")
+
+    sync_mode = (request.POST.get("sync_mode") or "incremental").strip().lower()
+    full = sync_mode == "full"
+    try:
+        result = moloni_run_bidirectional_reconciliation(full=full)
+    except moloni_service.MoloniError as exc:
+        messages.error(request, f"Reconciliação Moloni falhou: {exc}")
+        return redirect("backoffice_moloni_reconciliation")
+
+    log_audit_event(
+        category="integrations",
+        action="moloni_reconciliation_run",
+        request=request,
+        actor=request.user,
+        instance=MoloniIntegration.get_solo(),
+        source="backoffice_moloni_reconciliation",
+        message="Reconciliação Moloni executada.",
+        after=result,
+    )
+    messages.success(request, "Reconciliação Moloni executada com sucesso.")
+    return redirect("backoffice_moloni_reconciliation")
+
+
+@backoffice_required
+def backoffice_moloni_reconciliation_view(request):
+    if not is_admin_role(request.user):
+        return HttpResponseForbidden("Acesso reservado a administradores.")
+
+    integ = MoloniIntegration.get_solo()
+    report = None
+    report_error = ""
+    if moloni_service.is_configured() and integ.refresh_token and moloni_service.get_company_id():
+        try:
+            report = moloni_build_reconciliation_report(limit=50)
+        except moloni_service.MoloniError as exc:
+            report_error = str(exc)
+
+    return render(
+        request,
+        "backoffice/settings_moloni_reconciliation.html",
+        {
+            "moloni_integration": integ,
+            "moloni_ready": bool(integ.refresh_token and moloni_service.get_company_id()),
+            "moloni_company_id": moloni_service.get_company_id(),
+            "moloni_company_name": moloni_service.get_company_name(),
+            "report": report,
+            "report_error": report_error,
+        },
+    )
+
+
+@require_POST
+@backoffice_required
+def backoffice_moloni_apply_remote_view(request, client_id):
+    if not is_admin_role(request.user):
+        return HttpResponseForbidden("Acesso reservado a administradores.")
+
+    profile = get_object_or_404(ClientProfile.objects.select_related("user"), id=client_id)
+    try:
+        result = moloni_apply_remote_customer_to_profile(profile)
+    except moloni_service.MoloniError as exc:
+        messages.error(request, f"Não foi possível atualizar a app com dados da Moloni: {exc}")
+        return redirect("backoffice_moloni_reconciliation")
+
+    log_audit_event(
+        category="integrations",
+        action="moloni_apply_remote_to_app",
+        request=request,
+        actor=request.user,
+        instance=profile,
+        source="backoffice_moloni_reconciliation",
+        message="Dados do cliente atualizados na app a partir da Moloni.",
+        after=result,
+    )
+    messages.success(request, "Dados do cliente atualizados na app a partir da Moloni.")
+    return redirect("backoffice_moloni_reconciliation")
 
 
 @require_POST

@@ -579,6 +579,10 @@ def normalize_client_name(value):
     return " ".join(text.lower().strip().split())
 
 
+def normalize_email_address(value):
+    return str(value or "").strip().lower()
+
+
 def build_client_name_phone_key(full_name, phone):
     name_key = normalize_client_name(full_name)
     phone_key = normalize_phone_number(phone)
@@ -587,20 +591,100 @@ def build_client_name_phone_key(full_name, phone):
     return f"{name_key}|{phone_key}"
 
 
-def find_existing_client_by_name_phone(full_name, phone, *, exclude_profile_id=None):
-    lookup_key = build_client_name_phone_key(full_name, phone)
-    if not lookup_key:
-        return None
-    qs = ClientProfile.objects.all()
+def find_potential_duplicate_clients(full_name, phone="", email="", *, exclude_profile_id=None, limit=5):
+    name_key = normalize_client_name(full_name)
+    phone_key = normalize_phone_number(phone)
+    phone_tail = phone_key[-9:] if len(phone_key) >= 9 else phone_key
+    email_key = normalize_email_address(email)
+    name_tokens = [token for token in name_key.split() if len(token) >= 3]
+
+    if not any([name_key, phone_key, email_key]):
+        return []
+
+    qs = ClientProfile.objects.select_related("user").all()
     if exclude_profile_id:
         qs = qs.exclude(pk=exclude_profile_id)
-    candidate_name = str(full_name or "").strip()
-    if candidate_name:
-        qs = qs.filter(full_name__iexact=candidate_name)
-    for profile in qs.only("id", "full_name", "phone"):
-        if build_client_name_phone_key(profile.full_name, profile.phone) == lookup_key:
-            return profile
-    return None
+
+    search_q = Q()
+    if phone_key:
+        search_q |= Q(phone__icontains=phone_key)
+        if phone_tail and phone_tail != phone_key:
+            search_q |= Q(phone__endswith=phone_tail)
+    if email_key:
+        search_q |= Q(user__email__iexact=email_key)
+    if name_tokens:
+        token_q = Q()
+        for token in name_tokens[:3]:
+            token_q &= Q(full_name__icontains=token)
+        search_q |= token_q
+    elif name_key:
+        search_q |= Q(full_name__icontains=str(full_name or "").strip())
+
+    candidates = []
+    for profile in qs.filter(search_q).distinct():
+        profile_name_key = normalize_client_name(profile.full_name)
+        profile_phone_key = normalize_phone_number(profile.phone)
+        profile_phone_tail = profile_phone_key[-9:] if len(profile_phone_key) >= 9 else profile_phone_key
+        profile_email_key = normalize_email_address(profile.user.email if getattr(profile, "user_id", None) else "")
+
+        name_exact = bool(name_key and profile_name_key == name_key)
+        name_close = bool(
+            name_key
+            and profile_name_key
+            and (
+                profile_name_key in name_key
+                or name_key in profile_name_key
+                or all(token in profile_name_key for token in name_tokens[:2])
+            )
+        )
+        phone_match = bool(
+            phone_key
+            and profile_phone_key
+            and (
+                profile_phone_key == phone_key
+                or (phone_tail and profile_phone_tail == phone_tail)
+            )
+        )
+        email_match = bool(email_key and profile_email_key and profile_email_key == email_key)
+
+        if not (email_match or (phone_match and (name_exact or name_close))):
+            continue
+
+        reasons = []
+        score = 0
+        if email_match:
+            reasons.append("email")
+            score += 6
+        if phone_match:
+            reasons.append("telefone")
+            score += 4
+        if name_exact:
+            reasons.append("nome")
+            score += 4
+        elif name_close:
+            reasons.append("nome semelhante")
+            score += 2
+
+        candidates.append(
+            {
+                "profile": profile,
+                "reasons": reasons,
+                "score": score,
+            }
+        )
+
+    candidates.sort(key=lambda item: (-item["score"], item["profile"].full_name.lower(), item["profile"].id))
+    return candidates[:limit]
+
+
+def find_existing_client_by_name_phone(full_name, phone, *, exclude_profile_id=None):
+    matches = find_potential_duplicate_clients(
+        full_name,
+        phone=phone,
+        exclude_profile_id=exclude_profile_id,
+        limit=1,
+    )
+    return matches[0]["profile"] if matches else None
 
 
 def promote_group_waitlist(session):
@@ -747,20 +831,37 @@ def _time_range(start: dtime, end: dtime, step_minutes: int):
         current += step
 
 
-def _occupied_intervals_for_professional_day(prof: Professional, date_obj):
-    intervals = []
+def _service_slot_step_minutes(service, fallback_duration=None):
+    duration = getattr(service, "duration_minutes", None) or fallback_duration or 30
+    slot_interval = getattr(service, "slot_interval_minutes", None) or duration
+    return max(min(slot_interval, duration), 1)
 
+
+def _service_simultaneous_capacity(service):
+    if not service or getattr(service, "service_type", None) == "group":
+        return 1
+    return max(getattr(service, "capacity", None) or 1, 1)
+
+
+def _appointment_intervals_for_professional_day(prof: Professional, date_obj, *, exclude_appointment_id=None):
+    intervals = []
     appointments = (
         Appointment.objects
         .filter(professional=prof, date=date_obj)
         .exclude(status=Appointment.STATUS_CANCELLED)
         .select_related("service")
     )
+    if exclude_appointment_id:
+        appointments = appointments.exclude(id=exclude_appointment_id)
     for appointment in appointments:
         duration = getattr(appointment.service, "duration_minutes", None) or 30
         start_dt = datetime.combine(date_obj, appointment.time)
         intervals.append((start_dt.time(), (start_dt + timedelta(minutes=duration)).time()))
+    return intervals
 
+
+def _group_session_intervals_for_professional_day(prof: Professional, date_obj):
+    intervals = []
     group_sessions = (
         GroupSession.objects
         .filter(professional=prof, date=date_obj, status=GroupSession.STATUS_SCHEDULED)
@@ -770,13 +871,20 @@ def _occupied_intervals_for_professional_day(prof: Professional, date_obj):
         duration = session.duration_minutes or getattr(session.service, "duration_minutes", None) or 60
         start_dt = datetime.combine(date_obj, session.time)
         intervals.append((start_dt.time(), (start_dt + timedelta(minutes=duration)).time()))
-
     return intervals
 
 
-def _get_slots(prof: Professional, date_obj, step_minutes: int):
+def _occupied_intervals_for_professional_day(prof: Professional, date_obj):
+    return (
+        _appointment_intervals_for_professional_day(prof, date_obj)
+        + _group_session_intervals_for_professional_day(prof, date_obj)
+    )
+
+
+def _get_slots(prof: Professional, date_obj, step_minutes: int = None, *, service=None, exclude_appointment_id=None):
     if is_portuguese_holiday(date_obj):
         return []
+    duration_minutes = getattr(service, "duration_minutes", None) or step_minutes or 30
     blocked = (
         BlockedSlot.objects
         .filter(professional=prof, date=date_obj)
@@ -785,13 +893,43 @@ def _get_slots(prof: Professional, date_obj, step_minutes: int):
     return build_slots(
         prof,
         date_obj,
-        service_duration_minutes=step_minutes,
+        service_duration_minutes=duration_minutes,
         blocked_slots=blocked,
-        occupied_intervals=_occupied_intervals_for_professional_day(prof, date_obj),
+        occupied_intervals=_appointment_intervals_for_professional_day(
+            prof,
+            date_obj,
+            exclude_appointment_id=exclude_appointment_id,
+        ),
+        hard_blocked_intervals=_group_session_intervals_for_professional_day(prof, date_obj),
+        slot_step_minutes=_service_slot_step_minutes(service, duration_minutes),
+        simultaneous_capacity=_service_simultaneous_capacity(service),
     )
 
 
-def _is_slot_occupied(prof: Professional, date_obj, time_obj) -> bool:
+def _is_slot_occupied(prof: Professional, date_obj, time_obj, *, service=None, exclude_appointment_id=None) -> bool:
+    if service is not None:
+        duration = getattr(service, "duration_minutes", None) or 30
+        capacity = _service_simultaneous_capacity(service)
+        slot_start = datetime.combine(date_obj, time_obj)
+        slot_end = slot_start + timedelta(minutes=duration)
+        for group_start, group_end in _group_session_intervals_for_professional_day(prof, date_obj):
+            group_start_dt = datetime.combine(date_obj, group_start)
+            group_end_dt = datetime.combine(date_obj, group_end)
+            if slot_start < group_end_dt and group_start_dt < slot_end:
+                return True
+        overlap_count = 0
+        for appt_start, appt_end in _appointment_intervals_for_professional_day(
+            prof,
+            date_obj,
+            exclude_appointment_id=exclude_appointment_id,
+        ):
+            appt_start_dt = datetime.combine(date_obj, appt_start)
+            appt_end_dt = datetime.combine(date_obj, appt_end)
+            if slot_start < appt_end_dt and appt_start_dt < slot_end:
+                overlap_count += 1
+                if overlap_count >= capacity:
+                    return True
+        return False
     if Appointment.objects.filter(
         professional=prof,
         date=date_obj,
@@ -804,6 +942,24 @@ def _is_slot_occupied(prof: Professional, date_obj, time_obj) -> bool:
         time=time_obj,
         status=GroupSession.STATUS_SCHEDULED,
     ).exists()
+
+
+def _find_matching_cancelled_appointment(*, client_user, professional, service, date_obj, time_obj):
+    if not all([client_user, professional, service, date_obj, time_obj]):
+        return None
+    return (
+        Appointment.objects
+        .filter(
+            client=client_user,
+            professional=professional,
+            service=service,
+            date=date_obj,
+            time=time_obj,
+            status=Appointment.STATUS_CANCELLED,
+        )
+        .order_by("-created_at", "-id")
+        .first()
+    )
 
 
 def _is_slot_blocked(prof: Professional, date_obj, time_obj) -> bool:
