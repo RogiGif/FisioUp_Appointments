@@ -394,142 +394,100 @@
       <div class="col-12 col-xl-8">
         <div class="card h-100">
           <div class="card-body">
-            <div class="fw-semibold mb-3">Recebimentos por lançar</div>
-            <div class="text-muted small mb-3">O objetivo é fechar aqui o que já foi recebido na operação e ainda não entrou na sessão de caixa.</div>
+            <div class="fw-semibold mb-2">Recebimentos por lançar</div>
+            <div class="text-muted small mb-3">Lista do que já foi recebido na operação e ainda não entrou na sessão de caixa. Podes lançar diretamente em cada linha.</div>
             {% if selected_session and selected_session.status == "open" %}
-              <div class="row g-3">
-                <div class="col-12 col-lg-4">
-                  <div class="border rounded p-3 h-100">
-                    <div class="fw-semibold mb-2">Pagamentos do checkout</div>
-                    <div class="text-muted small mb-3">Pendentes do dia: {{ pending_client_payments_count }}</div>
-                    <form method="post" class="vstack gap-3">
-                      {% csrf_token %}
-                      <input type="hidden" name="action" value="add_client_payment">
-                      <input type="hidden" name="session_id" value="{{ selected_session.id }}">
-                      <input type="hidden" name="tab" value="overview">
-                      {% if client_payment_form.errors %}
-                        <div class="alert alert-danger py-2 mb-0">{{ client_payment_form.errors }}</div>
-                      {% endif %}
-                      <div>
-                        <label class="form-label">Pagamento</label>
-                        {{ client_payment_form.client_payment }}
-                      </div>
-                      <div>
-                        <label class="form-label">Notas adicionais</label>
-                        {{ client_payment_form.notes }}
-                      </div>
-                      <button type="submit" class="btn btn-outline-primary">Lançar pagamento</button>
-                    </form>
-                  </div>
+              {% if client_payment_form.errors or appointment_form.errors or group_monthly_form.errors %}
+                <div class="alert alert-danger py-2 mb-3">
+                  {% if client_payment_form.errors %}{{ client_payment_form.errors }}{% endif %}
+                  {% if appointment_form.errors %}{{ appointment_form.errors }}{% endif %}
+                  {% if group_monthly_form.errors %}{{ group_monthly_form.errors }}{% endif %}
                 </div>
+              {% endif %}
 
-                <div class="col-12 col-lg-4">
-                  <div class="border rounded p-3 h-100">
-                    <div class="fw-semibold mb-2">Marcações antigas</div>
-                    <div class="text-muted small mb-3">Compatibilidade para marcações pagas sem checkout financeiro.</div>
-                    <form method="post" class="vstack gap-3">
-                      {% csrf_token %}
-                      <input type="hidden" name="action" value="add_paid_appointment">
-                      <input type="hidden" name="session_id" value="{{ selected_session.id }}">
-                      <input type="hidden" name="tab" value="overview">
-                      {% if appointment_form.errors %}
-                        <div class="alert alert-danger py-2 mb-0">{{ appointment_form.errors }}</div>
-                      {% endif %}
-                      <div>
-                        <label class="form-label">Marcação paga</label>
-                        {{ appointment_form.appointment }}
-                      </div>
-                      <div>
-                        <label class="form-label">Método</label>
-                        {{ appointment_form.payment_method }}
-                      </div>
-                      <div>
-                        <label class="form-label">Notas</label>
-                        {{ appointment_form.notes }}
-                      </div>
-                      <button type="submit" class="btn btn-outline-primary">Lançar marcação</button>
-                    </form>
-                  </div>
+              {% if pending_client_payments_preview or pending_appointments_preview or pending_group_monthly_preview %}
+                <div class="table-responsive">
+                  <table class="table align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th>Origem</th>
+                        <th>Quando</th>
+                        <th>Descrição</th>
+                        <th class="text-end">Valor</th>
+                        <th style="width: 260px;">Lançar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for payment in pending_client_payments_preview %}
+                        <tr>
+                          <td>Checkout</td>
+                          <td>{{ payment.received_at|date:"d/m H:i" }}</td>
+                          <td>{{ payment.client_label }} · {{ payment.method_label }}</td>
+                          <td class="text-end">{{ payment.amount_received|floatformat:2 }} €</td>
+                          <td>
+                            <form method="post" class="d-flex justify-content-end">
+                              {% csrf_token %}
+                              <input type="hidden" name="action" value="add_client_payment">
+                              <input type="hidden" name="session_id" value="{{ selected_session.id }}">
+                              <input type="hidden" name="tab" value="overview">
+                              <input type="hidden" name="client_payment" value="{{ payment.id }}">
+                              <button type="submit" class="btn btn-sm btn-outline-primary">Lançar</button>
+                            </form>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                      {% for appt in pending_appointments_preview %}
+                        <tr>
+                          <td>Marcação</td>
+                          <td>{{ appt.date|date:"d/m" }} {{ appt.time|time:"H:i" }}</td>
+                          <td>{{ appt.client_label }} · {{ appt.service.name }}</td>
+                          <td class="text-end">{{ appt.final_price|floatformat:2 }} €</td>
+                          <td>
+                            <form method="post" class="d-flex justify-content-end gap-2">
+                              {% csrf_token %}
+                              <input type="hidden" name="action" value="add_paid_appointment">
+                              <input type="hidden" name="session_id" value="{{ selected_session.id }}">
+                              <input type="hidden" name="tab" value="overview">
+                              <input type="hidden" name="appointment" value="{{ appt.id }}">
+                              <select name="payment_method" class="form-select form-select-sm" style="max-width: 150px;">
+                                {% for value,label in cash_payment_method_choices %}
+                                  <option value="{{ value }}" {% if value == "cash" %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                              </select>
+                              <button type="submit" class="btn btn-sm btn-outline-primary">Lançar</button>
+                            </form>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                      {% for charge in pending_group_monthly_preview %}
+                        <tr>
+                          <td>Turma</td>
+                          <td>{{ charge.month|date:"m/Y" }}</td>
+                          <td>{{ charge.client_label }} · {{ charge.class_label }}</td>
+                          <td class="text-end">{{ charge.final_price|floatformat:2 }} €</td>
+                          <td>
+                            <form method="post" class="d-flex justify-content-end gap-2">
+                              {% csrf_token %}
+                              <input type="hidden" name="action" value="add_paid_group_monthly">
+                              <input type="hidden" name="session_id" value="{{ selected_session.id }}">
+                              <input type="hidden" name="tab" value="overview">
+                              <input type="hidden" name="group_monthly_charge" value="{{ charge.id }}">
+                              <select name="payment_method" class="form-select form-select-sm" style="max-width: 150px;">
+                                {% for value,label in cash_payment_method_choices %}
+                                  <option value="{{ value }}" {% if value == "cash" %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                              </select>
+                              <button type="submit" class="btn btn-sm btn-outline-primary">Lançar</button>
+                            </form>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
                 </div>
-
-                <div class="col-12 col-lg-4">
-                  <div class="border rounded p-3 h-100">
-                    <div class="fw-semibold mb-2">Mensalidades de turma</div>
-                    <div class="text-muted small mb-3">Pendentes do dia: {{ pending_group_monthly_count }}</div>
-                    <form method="post" class="vstack gap-3">
-                      {% csrf_token %}
-                      <input type="hidden" name="action" value="add_paid_group_monthly">
-                      <input type="hidden" name="session_id" value="{{ selected_session.id }}">
-                      <input type="hidden" name="tab" value="overview">
-                      {% if group_monthly_form.errors %}
-                        <div class="alert alert-danger py-2 mb-0">{{ group_monthly_form.errors }}</div>
-                      {% endif %}
-                      <div>
-                        <label class="form-label">Mensalidade paga</label>
-                        {{ group_monthly_form.group_monthly_charge }}
-                      </div>
-                      <div>
-                        <label class="form-label">Método</label>
-                        {{ group_monthly_form.payment_method }}
-                      </div>
-                      <div>
-                        <label class="form-label">Notas</label>
-                        {{ group_monthly_form.notes }}
-                      </div>
-                      <button type="submit" class="btn btn-outline-primary">Lançar turma</button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-
-              <div class="border-top pt-3 mt-3">
-                <div class="row g-3">
-                  <div class="col-12">
-                    {% if pending_client_payments_preview or pending_appointments_preview or pending_group_monthly_preview %}
-                      <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0">
-                          <thead>
-                            <tr>
-                              <th>Origem</th>
-                              <th>Quando</th>
-                              <th>Descrição</th>
-                              <th class="text-end">Valor</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {% for payment in pending_client_payments_preview %}
-                              <tr>
-                                <td>Checkout</td>
-                                <td>{{ payment.received_at|date:"d/m H:i" }}</td>
-                                <td>{{ payment.client_label }} · {{ payment.method_label }}</td>
-                                <td class="text-end">{{ payment.amount_received|floatformat:2 }} €</td>
-                              </tr>
-                            {% endfor %}
-                            {% for appt in pending_appointments_preview %}
-                              <tr>
-                                <td>Marcação</td>
-                                <td>{{ appt.date|date:"d/m" }} {{ appt.time|time:"H:i" }}</td>
-                                <td>{{ appt.client_label }} · {{ appt.service.name }}</td>
-                                <td class="text-end">{{ appt.final_price|floatformat:2 }} €</td>
-                              </tr>
-                            {% endfor %}
-                            {% for charge in pending_group_monthly_preview %}
-                              <tr>
-                                <td>Turma</td>
-                                <td>{{ charge.month|date:"m/Y" }}</td>
-                                <td>{{ charge.client_label }} · {{ charge.class_label }}</td>
-                                <td class="text-end">{{ charge.final_price|floatformat:2 }} €</td>
-                              </tr>
-                            {% endfor %}
-                          </tbody>
-                        </table>
-                      </div>
-                    {% else %}
-                      <div class="text-muted small">Sem recebimentos pendentes para esta sessão.</div>
-                    {% endif %}
-                  </div>
-                </div>
-              </div>
+              {% else %}
+                <div class="text-muted small">Sem recebimentos pendentes para esta sessão.</div>
+              {% endif %}
             {% else %}
               <div class="text-muted">Abre uma sessão de caixa para lançares recebimentos e saídas.</div>
             {% endif %}
@@ -907,5 +865,5 @@
         {% endif %}
       </div>
     </div>
-  {% endif %}
+{% endif %}
 {% endblock %}

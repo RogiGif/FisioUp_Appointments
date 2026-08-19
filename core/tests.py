@@ -14,6 +14,7 @@ from core.models import (
     WeeklyWorkingBlock,
     WeeklyBreakBlock,
 )
+from core.utils.pricing import compute_pricing
 from core.views.common import _get_slots
 from core.session_timeout import get_session_timeout_config
 
@@ -200,6 +201,152 @@ class SeriesBookingStatusTests(TestCase):
         self.assertEqual(response.status_code, 302)
         appt = Appointment.objects.get(client=client_user, service=self.service)
         self.assertEqual(appt.status, Appointment.STATUS_SCHEDULED)
+
+
+class FirstFollowupPricingTests(TestCase):
+    def setUp(self):
+        self.client_user = User.objects.create_user(username="pricing_client", password="pass")
+        self.client_profile = ClientProfile.objects.create(
+            user=self.client_user,
+            full_name="Cliente Pricing",
+            phone="+351934567890",
+            address_line1="Rua C",
+            postal_code="3000-300",
+            city="Coimbra",
+        )
+        self.prof_user = User.objects.create_user(username="pricing_prof", password="pass")
+        self.prof = Professional.objects.create(user=self.prof_user)
+        self.service = Service.objects.create(
+            name="Avaliacao",
+            duration_minutes=60,
+            service_type="one_to_one",
+            pricing_mode="first_followup",
+            price_first="60.00",
+            price_followup="45.00",
+        )
+        self.prof.services.add(self.service)
+        self.today = timezone.localdate()
+
+    def test_first_consultation_uses_first_price(self):
+        pricing = compute_pricing(
+            self.service,
+            self.client_profile,
+            date_obj=self.today + timedelta(days=1),
+            time_obj=time(10, 0),
+        )
+
+        self.assertEqual(pricing["session_index"], 1)
+        self.assertEqual(pricing["pricing_tier"], "first")
+        self.assertEqual(str(pricing["final_price"]), "60.00")
+
+    def test_followup_price_is_used_when_prior_appointment_exists(self):
+        Appointment.objects.create(
+            client=self.client_user,
+            professional=self.prof,
+            service=self.service,
+            date=self.today + timedelta(days=1),
+            time=time(10, 0),
+            final_price="60.00",
+            pricing_tier="first",
+            session_index=1,
+            base_price="60.00",
+            base_price_applied="60.00",
+        )
+
+        pricing = compute_pricing(
+            self.service,
+            self.client_profile,
+            date_obj=self.today + timedelta(days=8),
+            time_obj=time(10, 0),
+        )
+
+        self.assertEqual(pricing["session_index"], 2)
+        self.assertEqual(pricing["pricing_tier"], "followup")
+        self.assertEqual(str(pricing["final_price"]), "45.00")
+
+    def test_appointment_context_uses_chronological_position(self):
+        first_appt = Appointment.objects.create(
+            client=self.client_user,
+            professional=self.prof,
+            service=self.service,
+            date=self.today + timedelta(days=8),
+            time=time(10, 0),
+            final_price="45.00",
+            pricing_tier="followup",
+            session_index=2,
+            base_price="45.00",
+            base_price_applied="45.00",
+        )
+        Appointment.objects.create(
+            client=self.client_user,
+            professional=self.prof,
+            service=self.service,
+            date=self.today + timedelta(days=15),
+            time=time(10, 0),
+            final_price="45.00",
+            pricing_tier="followup",
+            session_index=3,
+            base_price="45.00",
+            base_price_applied="45.00",
+        )
+
+        pricing = compute_pricing(
+            self.service,
+            self.client_profile,
+            appointment=first_appt,
+            date_obj=self.today + timedelta(days=1),
+            time_obj=time(10, 0),
+        )
+
+        self.assertEqual(pricing["session_index"], 1)
+        self.assertEqual(pricing["pricing_tier"], "first")
+        self.assertEqual(str(pricing["final_price"]), "60.00")
+
+    def test_manual_followup_override_uses_followup_price_even_without_history(self):
+        pricing = compute_pricing(
+            self.service,
+            self.client_profile,
+            date_obj=self.today + timedelta(days=1),
+            time_obj=time(10, 0),
+            pricing_tier_override="followup",
+        )
+
+        self.assertEqual(pricing["session_index"], 2)
+        self.assertEqual(pricing["pricing_tier"], "followup")
+        self.assertEqual(str(pricing["final_price"]), "45.00")
+
+    def test_manual_first_override_on_existing_appointment_uses_first_price(self):
+        appointment = Appointment.objects.create(
+            client=self.client_user,
+            professional=self.prof,
+            service=self.service,
+            date=self.today + timedelta(days=10),
+            time=time(10, 0),
+            pricing_tier_override="first",
+            final_price="60.00",
+            pricing_tier="first",
+            session_index=1,
+            base_price="60.00",
+            base_price_applied="60.00",
+        )
+        Appointment.objects.create(
+            client=self.client_user,
+            professional=self.prof,
+            service=self.service,
+            date=self.today + timedelta(days=20),
+            time=time(10, 0),
+            final_price="45.00",
+            pricing_tier="followup",
+            session_index=2,
+            base_price="45.00",
+            base_price_applied="45.00",
+        )
+
+        pricing = compute_pricing(self.service, self.client_profile, appointment=appointment)
+
+        self.assertEqual(pricing["session_index"], 1)
+        self.assertEqual(pricing["pricing_tier"], "first")
+        self.assertEqual(str(pricing["final_price"]), "60.00")
 
 
 @override_settings(

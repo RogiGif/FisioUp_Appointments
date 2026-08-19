@@ -177,6 +177,15 @@
                 <h6 class="fw-bold mb-1">Defaults de clientes</h6>
                 <div class="text-muted small">Configuração explícita usada quando a app cria ou atualiza clientes na Moloni.</div>
               </div>
+              {% if moloni_defaults_suggestions and moloni_defaults_suggestions.customer_count %}
+                <form method="post" class="d-flex align-items-center">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="use_customer_defaults_recommendations">
+                  <button type="submit" class="btn btn-outline-primary">
+                    <i class="feather-magic me-2"></i>Preencher automaticamente
+                  </button>
+                </form>
+              {% endif %}
             </div>
 
             {% if moloni_defaults_form.errors %}
@@ -187,7 +196,7 @@
 
             {% if not moloni_defaults_ready %}
               <div class="alert alert-warning">
-                A sincronização de clientes da app para a Moloni precisa destes IDs preenchidos. Sem isto, clientes novos ficam guardados na app mas falham na criação remota.
+                A sincronização de clientes da app para a Moloni precisa destes campos preenchidos. Se já existem clientes corretos na Moloni, podes usar o botão <strong>Preencher automaticamente</strong>.
               </div>
             {% endif %}
 
@@ -195,29 +204,34 @@
               {% csrf_token %}
               <input type="hidden" name="action" value="save_customer_defaults">
               <div class="col-12 col-md-4">
-                <label class="form-label">`payment_method_id`</label>
+                <label class="form-label">{{ moloni_defaults_form.payment_method_id.label }}</label>
                 {{ moloni_defaults_form.payment_method_id }}
+                <div class="form-text">{{ moloni_defaults_form.payment_method_id.help_text }}</div>
               </div>
               <div class="col-12 col-md-4">
-                <label class="form-label">`document_type_id`</label>
+                <label class="form-label">{{ moloni_defaults_form.document_type_id.label }}</label>
                 {{ moloni_defaults_form.document_type_id }}
+                <div class="form-text">{{ moloni_defaults_form.document_type_id.help_text }}</div>
               </div>
               <div class="col-12 col-md-4">
-                <label class="form-label">`language_id`</label>
+                <label class="form-label">{{ moloni_defaults_form.language_id.label }}</label>
                 {{ moloni_defaults_form.language_id }}
+                <div class="form-text">{{ moloni_defaults_form.language_id.help_text }}</div>
               </div>
               <div class="col-12 col-md-4">
-                <label class="form-label">`maturity_date_id`</label>
+                <label class="form-label">{{ moloni_defaults_form.maturity_date_id.label }}</label>
                 {{ moloni_defaults_form.maturity_date_id }}
+                <div class="form-text">{{ moloni_defaults_form.maturity_date_id.help_text }}</div>
               </div>
               <div class="col-12 col-md-4">
-                <label class="form-label">`country_id`</label>
+                <label class="form-label">{{ moloni_defaults_form.country_id.label }}</label>
                 {{ moloni_defaults_form.country_id }}
+                <div class="form-text">{{ moloni_defaults_form.country_id.help_text }}</div>
               </div>
               <div class="col-12 col-md-4">
-                <label class="form-label">`delivery_method_id`</label>
+                <label class="form-label">{{ moloni_defaults_form.delivery_method_id.label }}</label>
                 {{ moloni_defaults_form.delivery_method_id }}
-                <div class="form-text">Opcional.</div>
+                <div class="form-text">{{ moloni_defaults_form.delivery_method_id.help_text }}</div>
               </div>
               <div class="col-12 d-flex justify-content-end">
                 <button type="submit" class="btn btn-outline-primary">
@@ -233,15 +247,13 @@
                 <div class="border rounded p-3 h-100">
                   <div class="fw-semibold mb-2">Como preencher</div>
                   <div class="text-muted small mb-2">
-                    Estes campos são IDs internos da Moloni. O objetivo é dizer à app quais são os valores base a usar quando cria um cliente novo.
+                    A página já tenta transformar estes IDs em escolhas simples. O caminho mais fácil é este:
                   </div>
                   <ul class="text-muted small mb-0 ps-3">
-                    <li>`payment_method_id`: método de pagamento por defeito.</li>
-                    <li>`document_type_id`: tipo de documento associado ao cliente.</li>
-                    <li>`language_id`: idioma por defeito.</li>
-                    <li>`maturity_date_id`: condição/prazo de vencimento.</li>
-                    <li>`country_id`: país por defeito.</li>
-                    <li>`delivery_method_id`: opcional, método de envio.</li>
+                    <li>Se a tua conta Moloni já tem clientes bem configurados, clica em <strong>Preencher automaticamente</strong>.</li>
+                    <li>Se quiseres validar antes, usa as listas de cada campo e escolhe o valor mais usado nos clientes existentes.</li>
+                    <li>O texto “usado em X clientes” ajuda a perceber qual é o valor normal da conta.</li>
+                    <li>O método de envio é opcional e pode ficar vazio.</li>
                   </ul>
                 </div>
               </div>
@@ -250,26 +262,34 @@
                   <div class="fw-semibold mb-2">Sugestões encontradas na tua conta Moloni</div>
                   {% if moloni_defaults_suggestions %}
                     <div class="text-muted small mb-3">
-                      Valores detetados em {{ moloni_defaults_suggestions.customer_count }} clientes existentes. Podes usar estes IDs como referência.
+                      Valores detetados em {{ moloni_defaults_suggestions.customer_count }} clientes existentes. A primeira opção de cada lista é a mais usada.
                     </div>
                     <div class="table-responsive">
                       <table class="table table-sm align-middle mb-0">
                         <thead>
                           <tr>
                             <th>Campo</th>
-                            <th>IDs encontrados</th>
+                            <th>Valores encontrados</th>
                           </tr>
                         </thead>
                         <tbody>
                           {% for row in moloni_defaults_suggestions.fields %}
                             <tr>
-                              <td><code>{{ row.field }}</code></td>
+                              <td>
+                                {{ row.label }}
+                                {% if row.required %}
+                                  <span class="badge bg-warning-subtle text-dark border ms-2">Obrigatório</span>
+                                {% endif %}
+                              </td>
                               <td>
                                 {% if row.options %}
                                   <div class="d-flex flex-wrap gap-2">
                                     {% for option in row.options %}
-                                      <span class="badge bg-light text-dark border">
+                                      <span class="badge {% if row.recommended_value == option.value %}bg-primary-subtle text-primary border-primary{% else %}bg-light text-dark border{% endif %}">
                                         {{ option.value }}
+                                        {% if option.count %}
+                                          · {{ option.count }} cliente{{ option.count|pluralize:"s" }}
+                                        {% endif %}
                                         {% if option.sample_names %}
                                           · {{ option.sample_names|join:", " }}
                                         {% endif %}

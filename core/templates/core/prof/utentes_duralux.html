@@ -25,7 +25,7 @@
                             <span class="input-group-text"><i class="feather-search"></i></span>
                             <input type="text" class="form-control" name="q" placeholder="Pesquisar por nome, username, NIF ou telefone" value="{{ q }}" autofocus />
                             {% if q %}
-                                <a class="btn btn-outline-secondary" href="{% url 'professional_clients' %}?per_page={{ per_page }}&order={{ sort_order }}&date={{ selected_date }}&time={{ selected_time }}&service_id={{ selected_service_id }}&professional_id={{ selected_professional_id }}&week={{ week }}">Limpar</a>
+                                <a class="btn btn-outline-secondary" href="{% url 'professional_clients' %}?per_page={{ per_page }}&order={{ sort_order }}&moloni_status={{ moloni_status }}&date={{ selected_date }}&time={{ selected_time }}&service_id={{ selected_service_id }}&professional_id={{ selected_professional_id }}&week={{ week }}">Limpar</a>
                             {% endif %}
                         </div>
                     </div>
@@ -34,6 +34,11 @@
                             <a class="btn btn-outline-secondary" href="?{{ sort_toggle_qs }}" title="Ordenar alfabeticamente">
                                 {% if sort_order == "asc" %}A-Z{% else %}Z-A{% endif %}
                             </a>
+                            <select name="moloni_status" class="form-select" onchange="this.form.submit();">
+                                {% for value, label in moloni_status_options %}
+                                    <option value="{{ value }}" {% if moloni_status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
                             <select name="per_page" class="form-select" onchange="this.form.submit();">
                                 {% for opt in per_page_options %}
                                     <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }} por página</option>
@@ -106,6 +111,14 @@
                                             {% endif %}
                                         {% else %}
                                             <span class="badge bg-soft-secondary text-muted">Sem conta</span>
+                                        {% endif %}
+                                        {% if c.moloni_status %}
+                                            <div class="mt-2">
+                                                <span class="badge bg-soft-{{ c.moloni_status.badge }} text-{{ c.moloni_status.badge }}" title="{{ c.moloni_status.detail }}">
+                                                    {{ c.moloni_status.label }}
+                                                </span>
+                                                <div class="fs-12 text-muted mt-1">{{ c.moloni_status.detail }}</div>
+                                            </div>
                                         {% endif %}
                                     </td>
                                     <td>{{ c.phone|default:"-" }}</td>

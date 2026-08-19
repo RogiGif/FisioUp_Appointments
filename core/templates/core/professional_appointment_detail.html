@@ -566,6 +566,7 @@
     const applySuggestedPaymentBtn = document.getElementById("applySuggestedPayment");
     const debtCheckboxes = Array.from(document.querySelectorAll(".debt-checkbox"));
     let paymentAmountTouched = false;
+    let suggestedPaymentApplied = false;
 
     function parseMoney(value) {
       if (!value) return 0;
@@ -610,7 +611,10 @@
     function applySuggestedPayment(force) {
       if (!paymentAmountInput) return;
       const suggested = suggestedPaymentValue();
-      if (force || !paymentAmountTouched || !paymentAmountInput.value.trim()) {
+      if (force) {
+        suggestedPaymentApplied = true;
+      }
+      if (force || (suggestedPaymentApplied && !paymentAmountTouched)) {
         paymentAmountInput.value = suggested > 0 ? suggested.toFixed(2).replace(".", ",") : "";
         paymentAmountInput.dataset.autofilled = suggested.toFixed(2);
       }
@@ -650,6 +654,9 @@
     if (paymentAmountInput) {
       paymentAmountInput.addEventListener("input", function () {
         paymentAmountTouched = true;
+        if (!paymentAmountInput.value.trim()) {
+          suggestedPaymentApplied = false;
+        }
       });
     }
     if (applySuggestedPaymentBtn) {

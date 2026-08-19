@@ -42,11 +42,20 @@
   let allEvents = Array.isArray(data.events) ? data.events.slice() : [];
   let availabilityEvents = [];
   let showAvailability = false;
+  let showAllEvents = true;
   let activeServiceIds = new Set(allServiceIds);
   let activeProfessionalIds = new Set((data.professionals || []).map((professional) => String(professional.id)));
+  const manuallyHiddenProfessionalIds = new Set();
   let availabilityToggleBtn = null;
+  let toggleAllEventsBtn = null;
   let calendar = null;
   let resizeTimer = null;
+  const professionalServiceMap = new Map(
+    (data.professionals || []).map((professional) => [
+      String(professional.id),
+      new Set((professional.service_ids || []).map((serviceId) => String(serviceId))),
+    ])
+  );
 
   function getCookie(name) {
     const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -304,6 +313,10 @@
   }
 
   function renderFromPayload(payloadEvents) {
+    if (!showAllEvents) {
+      clearCalendarEvents();
+      return;
+    }
     const mapped = (payloadEvents || []).map(mapEventToFullCalendar);
     calendar.removeAllEvents();
     mapped.forEach((item) => {
@@ -319,6 +332,11 @@
 
   function refreshEventsForCurrentView() {
     if (!calendar) {
+      return Promise.resolve();
+    }
+
+    if (!showAllEvents) {
+      clearCalendarEvents();
       return Promise.resolve();
     }
 
@@ -390,6 +408,69 @@
     if (label) {
       label.textContent = showAvailability ? "Mostrar marcações" : "Mostrar disponibilidades";
     }
+  }
+
+  function updateShowAllToggleLabel() {
+    if (!toggleAllEventsBtn) {
+      return;
+    }
+    const label = toggleAllEventsBtn.querySelector("span");
+    if (label) {
+      label.textContent = showAllEvents ? "Esconder tudo" : "Mostrar tudo";
+    }
+    toggleAllEventsBtn.classList.toggle("btn-primary", !showAllEvents);
+    toggleAllEventsBtn.classList.toggle("btn-outline-primary", showAllEvents);
+  }
+
+  function syncServiceCheckboxes() {
+    document.querySelectorAll("#calendarList input[type='checkbox']").forEach((input) => {
+      const serviceId = String(input.value);
+      const checked = activeServiceIds.has(serviceId);
+      input.checked = checked;
+      const label = input.closest("label");
+      if (label) {
+        label.classList.toggle("is-checked", checked);
+      }
+    });
+  }
+
+  function professionalMatchesActiveServices(professionalId) {
+    const serviceIds = professionalServiceMap.get(String(professionalId)) || new Set();
+    if (!activeServiceIds.size) {
+      return false;
+    }
+    for (const serviceId of serviceIds) {
+      if (activeServiceIds.has(serviceId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function syncProfessionalFiltersVisibility() {
+    if (isClientMode || !filtersEnabled) {
+      return;
+    }
+    document.querySelectorAll(".schedule-item[data-professional-id]").forEach((item) => {
+      const professionalId = String(item.getAttribute("data-professional-id") || "");
+      if (!professionalId) {
+        return;
+      }
+      const shouldShow = professionalMatchesActiveServices(professionalId);
+      item.classList.toggle("d-none", !shouldShow);
+      if (!shouldShow) {
+        activeProfessionalIds.delete(professionalId);
+        item.classList.remove("opacity-50");
+        return;
+      }
+      if (manuallyHiddenProfessionalIds.has(professionalId)) {
+        activeProfessionalIds.delete(professionalId);
+        item.classList.add("opacity-50");
+      } else {
+        activeProfessionalIds.add(professionalId);
+        item.classList.remove("opacity-50");
+      }
+    });
   }
 
   function handleNav(action) {
@@ -2013,6 +2094,8 @@
       label.classList.add("is-checked");
     }
     input.addEventListener("change", () => {
+      showAllEvents = true;
+      updateShowAllToggleLabel();
       if (input.checked) {
         activeServiceIds.add(serviceId);
         if (label) {
@@ -2024,6 +2107,7 @@
           label.classList.remove("is-checked");
         }
       }
+      syncProfessionalFiltersVisibility();
       refreshEventsForCurrentView();
     });
   });
@@ -2035,11 +2119,16 @@
         if (!professionalId) {
           return;
         }
+        if (item.classList.contains("d-none")) {
+          return;
+        }
         if (activeProfessionalIds.has(professionalId)) {
           activeProfessionalIds.delete(professionalId);
+          manuallyHiddenProfessionalIds.add(professionalId);
           item.classList.add("opacity-50");
         } else {
           activeProfessionalIds.add(professionalId);
+          manuallyHiddenProfessionalIds.delete(professionalId);
           item.classList.remove("opacity-50");
         }
         refreshEventsForCurrentView();
@@ -2217,6 +2306,7 @@
   renderFromPayload(allEvents);
   updateCalendarTypeName();
   updateRenderRange();
+  syncProfessionalFiltersVisibility();
   maybeRestoreQuickModalFromUrl();
 
   availabilityToggleBtn = document.getElementById("availability-toggle-btn");
@@ -2225,6 +2315,23 @@
     availabilityToggleBtn.addEventListener("click", () => {
       showAvailability = !showAvailability;
       updateAvailabilityToggleLabel();
+      refreshEventsForCurrentView();
+    });
+  }
+
+  toggleAllEventsBtn = document.getElementById("toggle-all-events-btn");
+  if (toggleAllEventsBtn) {
+    updateShowAllToggleLabel();
+    toggleAllEventsBtn.addEventListener("click", () => {
+      showAllEvents = !showAllEvents;
+      if (!showAllEvents) {
+        activeServiceIds.clear();
+      } else {
+        activeServiceIds = new Set(allServiceIds);
+      }
+      syncServiceCheckboxes();
+      syncProfessionalFiltersVisibility();
+      updateShowAllToggleLabel();
       refreshEventsForCurrentView();
     });
   }

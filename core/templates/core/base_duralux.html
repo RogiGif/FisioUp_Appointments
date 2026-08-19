@@ -118,20 +118,6 @@
                         <span class="nxl-mtext">Clientes</span>
                     </a>
                 </li>
-                {% if is_professional and not can_access_backoffice %}
-                <li class="nxl-item nxl-hasmenu">
-                    <a href="javascript:void(0);" class="nxl-link">
-                        <span class="nxl-micon"><i class="feather-settings"></i></span>
-                        <span class="nxl-mtext">Definições</span>
-                        <span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
-                    </a>
-                    <ul class="nxl-submenu">
-                        <li class="nxl-item">
-                            <a href="{% url 'backoffice_post_designer' %}" class="nxl-link">Criador de posts</a>
-                        </li>
-                    </ul>
-                </li>
-                {% endif %}
                     {% if can_access_backoffice %}
                 <li class="nxl-item nxl-caption">
                     <label>Backoffice</label>
@@ -197,7 +183,7 @@
                         <li class="nxl-item">
                             <a href="{% url 'client_import' %}" class="nxl-link">Importar clientes</a>
                         </li>
-                        {% if is_admin_role or is_professional %}
+                        {% if is_admin_role %}
                         <li class="nxl-item">
                             <a href="{% url 'backoffice_post_designer' %}" class="nxl-link">Criador de posts</a>
                         </li>

@@ -81,18 +81,61 @@ def _resolve_discount(client_profile):
     return ("none", Decimal("0.00"))
 
 
-def compute_pricing(service, client_profile):
-    client = getattr(client_profile, "user", None) if client_profile else None
-    prior_count = 0
-    if client:
-        prior_count = (
-            Appointment.objects
-            .filter(client=client, service=service)
-            .exclude(status="cancelled")
-            .count()
-        )
-    session_index = prior_count + 1
-    is_first = session_index == 1
+def normalize_pricing_tier_override(raw_value, service=None):
+    value = (raw_value or "").strip()
+    if service and getattr(service, "pricing_mode", "") != "first_followup":
+        return ""
+    return value if value in {"first", "followup"} else ""
+
+
+def _resolve_session_index(service, client, *, appointment=None, date_obj=None, time_obj=None):
+    if not client:
+        return 1
+
+    queryset = (
+        Appointment.objects
+        .filter(client=client, service=service)
+        .exclude(status=Appointment.STATUS_CANCELLED)
+    )
+
+    appointment_id = getattr(appointment, "id", None)
+    if appointment_id:
+        queryset = queryset.exclude(id=appointment_id)
+
+    reference_date = date_obj or getattr(appointment, "date", None)
+    reference_time = time_obj or getattr(appointment, "time", None)
+    if reference_date and reference_time:
+        earlier_filter = Q(date__lt=reference_date) | Q(date=reference_date, time__lt=reference_time)
+        if appointment_id:
+            earlier_filter |= Q(date=reference_date, time=reference_time, id__lt=appointment_id)
+        prior_count = queryset.filter(earlier_filter).count()
+    else:
+        prior_count = queryset.count()
+
+    return prior_count + 1
+
+
+def compute_pricing(service, client_profile, *, appointment=None, date_obj=None, time_obj=None, pricing_tier_override=None):
+    client = getattr(client_profile, "user", None) if client_profile else getattr(appointment, "client", None)
+    session_index = _resolve_session_index(
+        service,
+        client,
+        appointment=appointment,
+        date_obj=date_obj,
+        time_obj=time_obj,
+    )
+    effective_override = normalize_pricing_tier_override(
+        pricing_tier_override if pricing_tier_override is not None else getattr(appointment, "pricing_tier_override", ""),
+        service,
+    )
+    if effective_override == "first":
+        session_index = 1
+        is_first = True
+    elif effective_override == "followup":
+        session_index = max(session_index, 2)
+        is_first = False
+    else:
+        is_first = session_index == 1
 
     base_price_raw, tier = _service_price_for_tier(service, is_first)
     base_price = _quantize(base_price_raw)
@@ -264,7 +307,7 @@ def recalculate_upcoming_appointment_prices(client_profile, *, service_ids=None)
 
     updated_count = 0
     for appt in appointments:
-        pricing = compute_pricing(appt.service, client_profile)
+        pricing = compute_pricing(appt.service, client_profile, appointment=appt)
         if _apply_pricing_to_appointment(appt, pricing):
             updated_count += 1
 
@@ -300,7 +343,7 @@ def recalculate_partner_upcoming_appointments(partner, *, service_ids=None):
     updated_count = 0
     for appt in appointments:
         client_profile = getattr(appt.client, "client_profile", None)
-        pricing = compute_pricing(appt.service, client_profile)
+        pricing = compute_pricing(appt.service, client_profile, appointment=appt)
         if _apply_pricing_to_appointment(appt, pricing):
             updated_count += 1
 

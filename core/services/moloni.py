@@ -16,6 +16,33 @@ from core.models import ClientProfile, MoloniIntegration
 
 BASE_URL = (getattr(settings, "MOLONI_BASE_URL", "https://api.moloni.pt/v1") or "").rstrip("/")
 
+CUSTOMER_DEFAULT_FIELDS: dict[str, dict[str, Any]] = {
+    "payment_method_id": {
+        "label": "Método de pagamento",
+        "required": True,
+    },
+    "document_type_id": {
+        "label": "Tipo de documento",
+        "required": True,
+    },
+    "language_id": {
+        "label": "Idioma",
+        "required": True,
+    },
+    "maturity_date_id": {
+        "label": "Condição de vencimento",
+        "required": True,
+    },
+    "country_id": {
+        "label": "País",
+        "required": True,
+    },
+    "delivery_method_id": {
+        "label": "Método de envio",
+        "required": False,
+    },
+}
+
 
 class MoloniError(Exception):
     pass
@@ -338,14 +365,7 @@ def get_customer_defaults_suggestions(*, qty: int = 25) -> Dict[str, Any]:
     data = customers_get_all(qty=qty, offset=0)
     customers = data.get("customers") if isinstance(data, dict) else data
     customers = customers or []
-    fields = {
-        "payment_method_id": {},
-        "document_type_id": {},
-        "language_id": {},
-        "maturity_date_id": {},
-        "country_id": {},
-        "delivery_method_id": {},
-    }
+    fields = {field_name: {} for field_name in CUSTOMER_DEFAULT_FIELDS}
 
     for customer in customers:
         customer = customer or {}
@@ -373,26 +393,59 @@ def get_customer_defaults_suggestions(*, qty: int = 25) -> Dict[str, Any]:
             value_key = str(value).strip()
             if not value_key:
                 continue
-            sample_names = fields[field_name].setdefault(value_key, [])
-            if customer_name not in sample_names and len(sample_names) < 3:
-                sample_names.append(customer_name)
+            bucket = fields[field_name].setdefault(value_key, {"count": 0, "sample_names": []})
+            bucket["count"] += 1
+            if customer_name not in bucket["sample_names"] and len(bucket["sample_names"]) < 3:
+                bucket["sample_names"].append(customer_name)
 
     field_rows = []
+    recommended_defaults: dict[str, str] = {}
     for field_name, values in fields.items():
         options = []
-        for value_key, sample_names in sorted(values.items(), key=lambda item: item[0]):
+        sorted_values = sorted(
+            values.items(),
+            key=lambda item: (-item[1]["count"], item[0]),
+        )
+        for value_key, meta in sorted_values:
             options.append({
                 "value": value_key,
-                "sample_names": sample_names,
+                "sample_names": meta["sample_names"],
+                "count": meta["count"],
             })
+        recommended_value = options[0]["value"] if options else ""
+        if recommended_value:
+            recommended_defaults[field_name] = recommended_value
         field_rows.append({
             "field": field_name,
+            "label": CUSTOMER_DEFAULT_FIELDS[field_name]["label"],
+            "required": CUSTOMER_DEFAULT_FIELDS[field_name]["required"],
             "options": options,
+            "recommended_value": recommended_value,
         })
 
     return {
         "customer_count": len(customers),
         "fields": field_rows,
+        "recommended_defaults": recommended_defaults,
+    }
+
+
+def get_recommended_customer_defaults(*, qty: int = 25) -> Dict[str, Any]:
+    suggestions = get_customer_defaults_suggestions(qty=qty)
+    defaults: dict[str, int] = {}
+    missing: list[str] = []
+
+    for row in suggestions["fields"]:
+        recommended_value = row.get("recommended_value")
+        if recommended_value not in (None, ""):
+            defaults[row["field"]] = int(recommended_value)
+        elif row.get("required"):
+            missing.append(row["field"])
+
+    return {
+        "customer_count": suggestions["customer_count"],
+        "defaults": defaults,
+        "missing": missing,
     }
 
 

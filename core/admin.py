@@ -315,7 +315,7 @@ class ClientPaymentAllocationInline(admin.TabularInline):
 
 @admin.register(Appointment)
 class AppointmentAdmin(admin.ModelAdmin):
-    list_display = ("date", "time", "client", "professional", "service", "status", "session_index", "pricing_tier", "final_price", "open_client_record")
+    list_display = ("date", "time", "client", "professional", "service", "status", "session_index", "pricing_tier_override", "pricing_tier", "final_price", "open_client_record")
     list_filter = ("status", "service", "professional", "date", "partner", "pricing_tier")
     search_fields = (
         "client__username",
@@ -333,7 +333,7 @@ class AppointmentAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (None, {"fields": ("client", "professional", "service", "date", "time", "status")}),
-        ("Financeiro", {"fields": ("base_price", "partner", "partner_price", "discount_type", "discount_value", "base_price_applied", "partner_price_applied", "discount_applied", "final_price", "session_index", "pricing_tier")}),
+        ("Financeiro", {"fields": ("base_price", "partner", "partner_price", "discount_type", "discount_value", "base_price_applied", "partner_price_applied", "discount_applied", "final_price", "session_index", "pricing_tier_override", "pricing_tier")}),
         ("Liquidação", {"fields": ("settlement_pricing_mode", "settlement_partner", "settlement_discount_type", "settlement_discount_value", "settlement_final_price", "settlement_locked_at", "settlement_notes")}),
         ("Ações rápidas", {"fields": ("open_client_record",)}),
     )

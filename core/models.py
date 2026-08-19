@@ -390,6 +390,16 @@ class Appointment(models.Model):
     discount_value = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     final_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     session_index = models.PositiveIntegerField(default=1)
+    PRICING_TIER_OVERRIDE_CHOICES = (
+        ("first", "Forçar 1ª consulta"),
+        ("followup", "Forçar seguintes"),
+    )
+    pricing_tier_override = models.CharField(
+        max_length=20,
+        choices=PRICING_TIER_OVERRIDE_CHOICES,
+        blank=True,
+        default="",
+    )
     pricing_tier = models.CharField(
         max_length=20,
         choices=(

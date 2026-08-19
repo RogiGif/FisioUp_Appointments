@@ -1127,6 +1127,8 @@ __all__ = [
     "_monday_of_week",
     "_safe_return_to",
     "_apply_profile_autofocus",
+    "find_potential_duplicate_clients",
+    "find_existing_client_by_name_phone",
     "update_group_sessions_statuses",
     "group_booked_statuses",
     "group_schedule_family_key",

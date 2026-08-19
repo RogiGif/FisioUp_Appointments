@@ -3,6 +3,7 @@ from decimal import Decimal
 from collections import defaultdict
 from dataclasses import dataclass
 from uuid import uuid4
+import logging
 import json
 import csv
 import io
@@ -82,6 +83,8 @@ from core.models import (
 
 from core.views.common import *
 
+logger = logging.getLogger(__name__)
+
 
 def _get_real_ip(request) -> str:
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
@@ -101,7 +104,42 @@ def _sync_client_profile_with_moloni(profile, request, *, source):
     try:
         result = moloni_service.sync_client_profile(profile)
     except moloni_service.MoloniError as exc:
+        log_audit_event(
+            category="integrations",
+            action="moloni_customer_sync_failed",
+            request=request,
+            actor=getattr(request, "user", None),
+            instance=profile,
+            source=source,
+            message="Falha na sincronização do cliente com a Moloni.",
+            after={"error": str(exc), "manual": False},
+        )
         messages.warning(request, f"Registo submetido, mas a sincronização com a Moloni falhou: {exc}")
+        return None
+    except Exception:
+        logger.exception(
+            "Unexpected error while syncing client profile %s with Moloni from %s",
+            getattr(profile, "pk", None),
+            source,
+        )
+        log_audit_event(
+            category="integrations",
+            action="moloni_customer_sync_failed",
+            request=request,
+            actor=getattr(request, "user", None),
+            instance=profile,
+            source=source,
+            message="Falha inesperada na sincronização do cliente com a Moloni.",
+            after={
+                "error": "Erro inesperado durante a sincronização Moloni.",
+                "exception_type": "unexpected",
+                "manual": False,
+            },
+        )
+        messages.warning(
+            request,
+            "Registo submetido, mas a sincronização com a Moloni falhou por erro inesperado.",
+        )
         return None
 
     log_audit_event(

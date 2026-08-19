@@ -52,7 +52,7 @@ from core.forms import (
     BackofficePartnerForm,
     BackofficeClientProfileForm,
 )
-from core.utils.pricing import compute_pricing
+from core.utils.pricing import compute_pricing, recalculate_upcoming_appointment_prices
 from core.utils.revenue import (
     get_revenue_queryset,
     compute_trend,
@@ -590,7 +590,7 @@ def professional_calendar_fullcalendar_test_view(request):
     past_qs.update(status=Appointment.STATUS_AWAITING_VALIDATION)
 
     services_with_colors, service_colors = _calendar_service_colors()
-    professionals = Professional.objects.select_related("user").order_by("user__username")
+    professionals = Professional.objects.select_related("user").prefetch_related("services").order_by("user__username")
 
     week_start = _monday_of_week(base_date)
     week_end = week_start + timedelta(days=6)
@@ -628,6 +628,7 @@ def professional_calendar_fullcalendar_test_view(request):
             {
                 "id": p.id,
                 "name": p.user.get_full_name() or p.user.username,
+                "service_ids": [service.id for service in p.services.all()],
             }
             for p in professionals
         ],
@@ -1190,13 +1191,16 @@ def client_calendar_availability_events_view(request):
 
 
 def professional_clients_search_view(request):
-    if not (can_view_all_calendar(request.user) or Professional.objects.filter(user=request.user).exists()):
+    prof = Professional.objects.filter(user=request.user).first()
+    if not (can_view_all_calendar(request.user) or prof):
         return HttpResponseForbidden("Acesso negado.")
     q = (request.GET.get("q") or "").strip()
     if len(q) < 2:
         return JsonResponse({"results": []})
 
     qs = ClientProfile.objects.select_related("user")
+    if not can_view_all_calendar(request.user):
+        qs = qs.filter(user__appointments__professional=prof).distinct()
     qs = apply_terms_filter(
         qs,
         q,
@@ -1408,6 +1412,7 @@ def professional_calendar_quick_create_view(request):
         if old_professional_id != selected_prof.id:
             update_fields.append("professional")
         appt_to_reschedule.save(update_fields=update_fields)
+        recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
 
         log_appt(
             AppointmentLog.ACTION_RESCHEDULED,
@@ -1449,7 +1454,7 @@ def professional_calendar_quick_create_view(request):
 
         return JsonResponse({"ok": True, "appointment_id": appt_to_reschedule.id, "rescheduled": True})
 
-    pricing = compute_pricing(service, client_profile)
+    pricing = compute_pricing(service, client_profile, date_obj=date_obj, time_obj=time_obj)
     reactivated_cancelled = _find_matching_cancelled_appointment(
         client_user=client_user,
         professional=selected_prof,
@@ -1497,6 +1502,7 @@ def professional_calendar_quick_create_view(request):
                 "completed_at",
             ]
         )
+        recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
         log_appt(
             AppointmentLog.ACTION_STATUS_UPDATED,
             reactivated_cancelled,
@@ -1534,6 +1540,7 @@ def professional_calendar_quick_create_view(request):
         partner_price_applied=pricing["partner_price_applied"],
         discount_applied=pricing["discount_applied"],
     )
+    recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
 
     log_appt(
         AppointmentLog.ACTION_CREATED,
@@ -1729,7 +1736,7 @@ def client_calendar_quick_create_view(request):
     if _is_slot_occupied(selected_prof, date_obj, time_obj, service=service):
         return JsonResponse({"ok": False, "message": "Este horário já está ocupado."}, status=400)
 
-    pricing = compute_pricing(service, client_profile)
+    pricing = compute_pricing(service, client_profile, date_obj=date_obj, time_obj=time_obj)
     reactivated_cancelled = _find_matching_cancelled_appointment(
         client_user=request.user,
         professional=selected_prof,
@@ -1777,6 +1784,7 @@ def client_calendar_quick_create_view(request):
                 "completed_at",
             ]
         )
+        recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
         log_appt(
             AppointmentLog.ACTION_STATUS_UPDATED,
             reactivated_cancelled,
@@ -1815,6 +1823,7 @@ def client_calendar_quick_create_view(request):
         partner_price_applied=pricing["partner_price_applied"],
         discount_applied=pricing["discount_applied"],
     )
+    recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
 
     log_appt(
         AppointmentLog.ACTION_CREATED,

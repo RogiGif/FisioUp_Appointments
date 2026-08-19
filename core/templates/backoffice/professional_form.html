@@ -124,6 +124,13 @@
                                             {% if form.speciality.errors %}<div class="text-danger small">{{ form.speciality.errors }}</div>{% endif %}
                                         </div>
                                         {% endif %}
+                                        {% if is_edit %}
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Email</label>
+                                            {{ form.user_email }}
+                                            {% if form.user_email.errors %}<div class="text-danger small">{{ form.user_email.errors }}</div>{% endif %}
+                                        </div>
+                                        {% endif %}
                                         {% if not is_edit %}
                                         <div class="col-12">
                                             <div class="border-top pt-3 mt-2">

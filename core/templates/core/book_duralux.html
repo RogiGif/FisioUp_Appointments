@@ -252,6 +252,20 @@
                             <textarea name="symptomatology_global" class="form-control" rows="3" placeholder="Opcional..."></textarea>
                         </div>
 
+                        {% if series_selected_service and series_selected_service.pricing_mode == "first_followup" %}
+                            <div class="mt-3">
+                                <label class="form-label">Tipo da 1ª sessão da série</label>
+                                <select name="pricing_tier_override" class="form-select">
+                                    <option value="" {% if not series_pricing_tier_override %}selected{% endif %}>Automático</option>
+                                    <option value="first" {% if series_pricing_tier_override == "first" %}selected{% endif %}>Tratar a 1ª sessão como 1ª consulta</option>
+                                    <option value="followup" {% if series_pricing_tier_override == "followup" %}selected{% endif %}>Tratar a 1ª sessão como consulta seguinte</option>
+                                </select>
+                                <div class="form-text">
+                                    Esta escolha afeta a primeira sessão da série; as seguintes são calculadas automaticamente.
+                                </div>
+                            </div>
+                        {% endif %}
+
                         <div class="mt-3 d-flex flex-wrap gap-2">
                             <button class="btn btn-primary" type="submit">Confirmar marcações</button>
                             <a class="btn btn-outline-secondary" href="{% url 'book' %}">Voltar</a>
@@ -290,6 +304,20 @@
                             <label class="form-label">Sintomatologia</label>
                             <textarea name="symptomatology" class="form-control" rows="3" placeholder="Opcional..."></textarea>
                         </div>
+
+                        {% if selected_service and selected_service.pricing_mode == "first_followup" %}
+                            <div class="mt-3">
+                                <label class="form-label">Tipo de consulta</label>
+                                <select name="pricing_tier_override" class="form-select">
+                                    <option value="" {% if not selected_pricing_tier_override %}selected{% endif %}>Automático</option>
+                                    <option value="first" {% if selected_pricing_tier_override == "first" %}selected{% endif %}>Tratar como 1ª consulta</option>
+                                    <option value="followup" {% if selected_pricing_tier_override == "followup" %}selected{% endif %}>Tratar como consulta seguinte</option>
+                                </select>
+                                <div class="form-text">
+                                    Usa esta opção quando o utente já teve consultas antes da app e queres corrigir o preço.
+                                </div>
+                            </div>
+                        {% endif %}
 
                         <div class="mt-3 d-flex flex-wrap gap-2">
                             <button class="btn btn-primary" type="submit">

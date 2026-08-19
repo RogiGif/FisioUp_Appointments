@@ -3,6 +3,7 @@ from decimal import Decimal
 from collections import defaultdict
 from dataclasses import dataclass
 from uuid import uuid4
+import logging
 import json
 import csv
 import io
@@ -18,6 +19,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.paginator import Paginator
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Count, Sum, Min
 from django.db.models.functions import Coalesce, TruncDate
@@ -87,6 +89,8 @@ from core.models import (
 
 from core.views.common import *
 
+logger = logging.getLogger(__name__)
+
 
 def _clinical_record_audit_snapshot(record):
     return {
@@ -123,10 +127,48 @@ def _sync_client_profile_with_moloni(profile, request, *, source, manual=False):
     try:
         result = moloni_service.sync_client_profile(profile)
     except moloni_service.MoloniError as exc:
+        log_audit_event(
+            category="integrations",
+            action="moloni_customer_sync_failed",
+            request=request,
+            actor=request.user,
+            instance=profile,
+            source=source,
+            message="Falha na sincronização do cliente com a Moloni.",
+            after={"error": str(exc), "manual": manual},
+        )
         if manual:
             messages.error(request, f"Moloni: {exc}")
         else:
             messages.warning(request, f"Cliente guardado na app, mas a sincronização com a Moloni falhou: {exc}")
+        return None
+    except Exception:
+        logger.exception(
+            "Unexpected error while syncing client profile %s with Moloni from %s",
+            getattr(profile, "pk", None),
+            source,
+        )
+        log_audit_event(
+            category="integrations",
+            action="moloni_customer_sync_failed",
+            request=request,
+            actor=request.user,
+            instance=profile,
+            source=source,
+            message="Falha inesperada na sincronização do cliente com a Moloni.",
+            after={
+                "error": "Erro inesperado durante a sincronização Moloni.",
+                "exception_type": "unexpected",
+                "manual": manual,
+            },
+        )
+        if manual:
+            messages.error(request, "Moloni: ocorreu um erro inesperado durante a sincronização.")
+        else:
+            messages.warning(
+                request,
+                "Cliente guardado na app, mas a sincronização com a Moloni falhou por erro inesperado.",
+            )
         return None
 
     log_audit_event(
@@ -155,6 +197,7 @@ def _moloni_auto_sync_is_ready():
 def _moloni_audit_label(log: AuditLog) -> str:
     labels = {
         "moloni_customer_synced": "Sincronizado com a Moloni",
+        "moloni_customer_sync_failed": "Falha de sincronização Moloni",
         "moloni_apply_remote_to_app": "Dados da Moloni aplicados à app",
     }
     return labels.get(log.action, log.message or log.action.replace("_", " ").capitalize())
@@ -177,11 +220,98 @@ def _moloni_audit_detail(log: AuditLog) -> str:
             return verb
         if remote_id:
             return f"Cliente Moloni #{remote_id}"
+    elif log.action == "moloni_customer_sync_failed":
+        error_text = str(after.get("error") or "").strip()
+        if error_text:
+            return error_text
     elif log.action == "moloni_apply_remote_to_app":
         changed_fields = after.get("changed_fields") or []
         if changed_fields:
             return "Campos atualizados: " + ", ".join(str(field) for field in changed_fields[:4])
     return (log.message or "").strip() or "Sem detalhe adicional."
+
+
+def _get_latest_moloni_failure_by_profile_ids(profile_ids):
+    profile_ids = [int(pid) for pid in profile_ids if pid]
+    if not profile_ids:
+        return {}
+
+    content_type = ContentType.objects.get_for_model(ClientProfile, for_concrete_model=False)
+    logs = (
+        AuditLog.objects
+        .filter(
+            category="integrations",
+            action="moloni_customer_sync_failed",
+            content_type=content_type,
+            object_id__in=profile_ids,
+        )
+        .order_by("-created_at")
+    )
+
+    latest_by_profile_id = {}
+    for log in logs:
+        if log.object_id not in latest_by_profile_id:
+            latest_by_profile_id[log.object_id] = log
+        if len(latest_by_profile_id) == len(profile_ids):
+            break
+    return latest_by_profile_id
+
+
+def _build_moloni_status(profile, *, moloni_connected, moloni_company_id, latest_failure=None):
+    latest_failure_text = _moloni_audit_detail(latest_failure) if latest_failure else ""
+
+    if profile.moloni_customer_id:
+        return {
+            "code": "synced",
+            "label": "Sincronizado",
+            "badge": "success",
+            "text": f"Cliente Moloni ligado: #{profile.moloni_customer_id}",
+            "detail": "Cliente já sincronizado com a Moloni.",
+        }
+
+    if latest_failure:
+        return {
+            "code": "failed",
+            "label": "Falhou",
+            "badge": "danger",
+            "text": "A última sincronização com a Moloni falhou.",
+            "detail": latest_failure_text or "Erro de sincronização Moloni.",
+        }
+
+    if not moloni_connected:
+        return {
+            "code": "integration_off",
+            "label": "Moloni desligado",
+            "badge": "secondary",
+            "text": "Integração Moloni não ligada.",
+            "detail": "A integração Moloni ainda não está ativa.",
+        }
+
+    if not moloni_company_id:
+        return {
+            "code": "missing_company",
+            "label": "Empresa em falta",
+            "badge": "warning",
+            "text": "Falta escolher a empresa Moloni.",
+            "detail": "É preciso definir a empresa Moloni antes de sincronizar clientes.",
+        }
+
+    if not (profile.nif or "").strip():
+        return {
+            "code": "missing_nif",
+            "label": "NIF em falta",
+            "badge": "warning",
+            "text": "É necessário NIF para criar ou atualizar este cliente na Moloni.",
+            "detail": "Preenche o NIF para permitir a sincronização com a Moloni.",
+        }
+
+    return {
+        "code": "pending",
+        "label": "Por sincronizar",
+        "badge": "info",
+        "text": "Cliente ainda não sincronizado com a Moloni.",
+        "detail": "Cliente criado manualmente e ainda sem ligação Moloni.",
+    }
 
 
 def _audit_log_pretty_payload(value):
@@ -191,6 +321,24 @@ def _audit_log_pretty_payload(value):
         return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
     except TypeError:
         return str(value)
+
+
+def _professional_can_access_client_profile(profile, professional) -> bool:
+    if not professional or not getattr(profile, "user_id", None):
+        return False
+    return Appointment.objects.filter(
+        client_id=profile.user_id,
+        professional=professional,
+    ).exists()
+
+
+def _get_allowed_client_profile_or_404(request, client_id, *, professional=None):
+    profile = get_object_or_404(ClientProfile.objects.select_related("user"), id=client_id)
+    if can_view_all_calendar(request.user):
+        return profile
+    if _professional_can_access_client_profile(profile, professional):
+        return profile
+    raise PermissionDenied("Só tens acesso a clientes com marcações associadas a ti.")
 
 
 def professional_clients_view(request):
@@ -212,32 +360,12 @@ def professional_clients_view(request):
         # Admin/receção vê todos os clientes (inclui importados sem user)
         qs = ClientProfile.objects.select_related("user").all()
     else:
-        # Profissionais devem ver todos os clientes (inclui importados sem user)
-        eligible_users = (
-            User.objects
-            .filter(is_staff=False, is_superuser=False, professional__isnull=True)
-            .exclude(groups__name__in=["TECHNICIAN", "ADMIN"])
-            .distinct()
-        )
-        missing_profiles = eligible_users.filter(client_profile__isnull=True)
-        for u in missing_profiles:
-            ClientProfile.objects.get_or_create(
-                user=u,
-                defaults={
-                    "full_name": (u.get_full_name() or u.username),
-                    "created_by": request.user,
-                    "updated_by": request.user,
-                    "registration_status": "approved",
-                },
-            )
-
+        # Profissionais só veem clientes com marcações associadas a eles.
         qs = (
             ClientProfile.objects
             .select_related("user")
-            .filter(
-                Q(user__isnull=True)
-                | Q(user__is_staff=False, user__is_superuser=False, user__professional__isnull=True)
-            )
+            .filter(user__appointments__professional=prof)
+            .distinct()
         )
 
     if q:
@@ -256,8 +384,33 @@ def professional_clients_view(request):
     sort_order = (request.GET.get("order") or "asc").lower()
     if sort_order not in {"asc", "desc"}:
         sort_order = "asc"
+    moloni_status = (request.GET.get("moloni_status") or "").strip()
+    moloni_status_options = [
+        ("", "Moloni: todos"),
+        ("synced", "Sincronizado"),
+        ("failed", "Falhou"),
+        ("pending", "Por sincronizar"),
+        ("missing_nif", "NIF em falta"),
+        ("missing_company", "Empresa em falta"),
+        ("integration_off", "Moloni desligado"),
+    ]
+    valid_moloni_statuses = {value for value, _ in moloni_status_options if value}
+    if moloni_status not in valid_moloni_statuses:
+        moloni_status = ""
     order_prefix = "-" if sort_order == "desc" else ""
-    clients_qs = qs.order_by(f"{order_prefix}full_name", f"{order_prefix}user__username")
+    moloni_connected = moloni_service.is_configured() and bool(MoloniIntegration.get_solo().refresh_token)
+    moloni_company_id = moloni_service.get_company_id()
+    clients_qs = list(qs.order_by(f"{order_prefix}full_name", f"{order_prefix}user__username"))
+    latest_moloni_failures = _get_latest_moloni_failure_by_profile_ids([client.id for client in clients_qs])
+    for client in clients_qs:
+        client.moloni_status = _build_moloni_status(
+            client,
+            moloni_connected=moloni_connected,
+            moloni_company_id=moloni_company_id,
+            latest_failure=latest_moloni_failures.get(client.id),
+        )
+    if moloni_status:
+        clients_qs = [client for client in clients_qs if client.moloni_status["code"] == moloni_status]
     per_page_options = [5, 10, 15]
     try:
         per_page = int(request.GET.get("per_page") or per_page_options[0])
@@ -324,6 +477,8 @@ def professional_clients_view(request):
             "sort_order": sort_order,
             "sort_toggle_qs": sort_toggle_qs,
             "q": q,
+            "moloni_status": moloni_status,
+            "moloni_status_options": moloni_status_options,
             "is_admin": can_view_all_calendar(request.user),
             "can_edit_clients": can_edit_clients,
             "selected_date": selected_date,
@@ -344,7 +499,7 @@ def professional_customer_detail_view(request, client_id):
     if not can_view_all_calendar(request.user) and prof is None:
         return HttpResponseForbidden("Acesso restrito a profissionais.")
 
-    profile = get_object_or_404(ClientProfile.objects.select_related("user"), id=client_id)
+    profile = _get_allowed_client_profile_or_404(request, client_id, professional=prof)
     is_admin_or_reception = can_view_all_calendar(request.user)
     today = timezone.localdate()
     now_t = timezone.localtime().time()
@@ -353,17 +508,15 @@ def professional_customer_detail_view(request, client_id):
     can_delete_clients = is_admin_role(request.user)
     moloni_connected = moloni_service.is_configured() and bool(MoloniIntegration.get_solo().refresh_token)
     moloni_company_id = moloni_service.get_company_id()
+    latest_moloni_failure = _get_latest_moloni_failure_by_profile_ids([profile.id]).get(profile.id)
+    moloni_status = _build_moloni_status(
+        profile,
+        moloni_connected=moloni_connected,
+        moloni_company_id=moloni_company_id,
+        latest_failure=latest_moloni_failure,
+    )
     moloni_can_sync = bool(moloni_connected and moloni_company_id and (profile.nif or "").strip())
-    if not moloni_connected:
-        moloni_status_text = "Integração Moloni não ligada."
-    elif not moloni_company_id:
-        moloni_status_text = "Falta escolher a empresa Moloni."
-    elif not (profile.nif or "").strip():
-        moloni_status_text = "É necessário NIF para criar ou atualizar este cliente na Moloni."
-    elif profile.moloni_customer_id:
-        moloni_status_text = f"Cliente Moloni ligado: #{profile.moloni_customer_id}"
-    else:
-        moloni_status_text = "Cliente ainda não sincronizado com a Moloni."
+    moloni_status_text = moloni_status["text"]
     moloni_sync_history = [
         {
             "id": log.id,
@@ -397,19 +550,14 @@ def professional_customer_detail_view(request, client_id):
     )
 
     client_user = profile.user
-    total_appts = 0
-    upcoming_appts = 0
-    if profile.user_id:
-        appt_qs = Appointment.objects.filter(client_id=profile.user_id)
-        total_appts = appt_qs.count()
-        upcoming_appts = appt_qs.filter(date__gte=today).count()
-
     scoped_appts_qs = (
         Appointment.objects
         .filter(client_id=profile.user_id) if profile.user_id else Appointment.objects.none()
     )
     if not is_admin_or_reception:
         scoped_appts_qs = scoped_appts_qs.filter(professional=prof)
+    total_appts = scoped_appts_qs.count()
+    upcoming_appts = scoped_appts_qs.filter(date__gte=today).count()
     scoped_group_charges_qs = GroupMonthlyCharge.objects.none()
     if profile.user_id:
         first_group_date = (
@@ -699,6 +847,7 @@ def professional_customer_detail_view(request, client_id):
             "can_edit_clients": can_edit_clients,
             "can_delete_clients": can_delete_clients,
             "moloni_can_sync": moloni_can_sync,
+            "moloni_status": moloni_status,
             "moloni_status_text": moloni_status_text,
             "moloni_sync_history": moloni_sync_history,
             "active_tab": active_tab,
@@ -735,7 +884,7 @@ def professional_customer_moloni_sync_view(request, client_id):
     if not can_access_backoffice(request.user):
         return HttpResponseForbidden("Sem permissão para sincronizar clientes.")
 
-    profile = get_object_or_404(ClientProfile.objects.select_related("user"), id=client_id)
+    profile = _get_allowed_client_profile_or_404(request, client_id, professional=prof)
     _sync_client_profile_with_moloni(
         profile,
         request,
@@ -751,7 +900,7 @@ def professional_customer_moloni_audit_detail_view(request, client_id, log_id):
     if not can_view_all_calendar(request.user) and prof is None:
         return HttpResponseForbidden("Acesso restrito a profissionais.")
 
-    profile = get_object_or_404(ClientProfile, id=client_id)
+    profile = _get_allowed_client_profile_or_404(request, client_id, professional=prof)
     client_ct = ContentType.objects.get_for_model(ClientProfile, for_concrete_model=False)
     log = get_object_or_404(
         AuditLog.objects.select_related("actor"),
@@ -781,7 +930,7 @@ def professional_customer_delete_view(request, client_id):
     if not is_admin_role(request.user):
         return HttpResponseForbidden("Sem permissão para apagar clientes.")
 
-    profile = get_object_or_404(ClientProfile.objects.select_related("user"), id=client_id)
+    profile = _get_allowed_client_profile_or_404(request, client_id, professional=prof)
     client_user = profile.user
 
     if client_user and (
@@ -814,7 +963,7 @@ def professional_client_record_view(request, client_id):
     if not can_view_all_calendar(request.user) and prof is None:
         return HttpResponseForbidden("Acesso restrito a profissionais.")
 
-    profile = get_object_or_404(ClientProfile.objects.select_related("user"), id=client_id)
+    profile = _get_allowed_client_profile_or_404(request, client_id, professional=prof)
 
     # Registo clínico (assumindo 1 por cliente)
     record, _ = ClinicalRecord.objects.get_or_create(
@@ -942,7 +1091,7 @@ def professional_edit_client_profile_view(request, client_id):
     if not can_access_backoffice(request.user):
         return HttpResponseForbidden("Sem permissão para editar clientes.")
 
-    profile = get_object_or_404(ClientProfile.objects.select_related("user"), id=client_id)
+    profile = _get_allowed_client_profile_or_404(request, client_id, professional=prof)
 
     client_user = profile.user
     if request.method == "POST":
@@ -1560,15 +1709,15 @@ def client_record_view(request, client_id):
     Ficha do cliente (apenas profissionais).
     URL usa o ID do ClientProfile (não é o User id).
     """
-    client = get_object_or_404(ClientProfile, id=client_id)
+    logged_prof = Professional.objects.filter(user=request.user).first()
+    client = get_object_or_404(ClientProfile.objects.select_related("user"), id=client_id)
+    if not can_view_all_calendar(request.user) and not _professional_can_access_client_profile(client, logged_prof):
+        raise PermissionDenied("Só tens acesso a clientes com marcações associadas a ti.")
 
     clinical, _ = ClinicalRecord.objects.get_or_create(
         client=client,
         defaults={"updated_by": request.user},
     )
-
-    # tenta descobrir o profissional pelo user logado
-    logged_prof = Professional.objects.filter(user=request.user).first()
 
     professionals = Professional.objects.select_related("user").all().order_by("user__username")
     services = Service.objects.all().order_by("name")

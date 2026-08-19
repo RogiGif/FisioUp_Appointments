@@ -49,7 +49,11 @@ from core.forms import (
     BackofficePartnerForm,
     BackofficeClientProfileForm,
 )
-from core.utils.pricing import compute_pricing
+from core.utils.pricing import (
+    compute_pricing,
+    normalize_pricing_tier_override,
+    recalculate_upcoming_appointment_prices,
+)
 from core.services.subcontracting import sync_subcontractor_payout
 from core.utils.holidays import is_portuguese_holiday
 from core.utils.revenue import (
@@ -89,6 +93,16 @@ SERIES_WEEKDAY_OPTIONS = [
     ("3", "Quinta-feira"),
     ("4", "Sexta-feira"),
 ]
+
+
+def _raw_pricing_tier_override(request, *, field_name="pricing_tier_override", default=""):
+    if request.method == "POST":
+        value = request.POST.get(field_name)
+    else:
+        value = request.GET.get(field_name)
+    if value is None:
+        value = default
+    return (value or "").strip()
 
 
 def _parse_series_weekdays(payload):
@@ -138,6 +152,7 @@ def _book_series_client_view(request, profile):
     freq = normalize_series_frequency(request.GET.get("freq") or request.POST.get("freq") or "")
     preferred_professional_id = (request.GET.get("professional_id") or request.POST.get("professional_id") or "").strip()
     selected_weekdays = _parse_series_weekdays(request.POST if request.method == "POST" else request.GET)
+    series_pricing_tier_override = _raw_pricing_tier_override(request, field_name="pricing_tier_override")
 
     professionals_qs = Professional.objects.select_related("user").all().order_by("user__username")
     if service_id:
@@ -169,6 +184,7 @@ def _book_series_client_view(request, profile):
             general_errors.append("Serviço inválido.")
 
         service = Service.objects.filter(id=service_id).first()
+        series_pricing_tier_override = normalize_pricing_tier_override(series_pricing_tier_override, service)
         if service and service.service_type == "group":
             general_errors.append("Este serviço é de turma. Usa a gestão de turmas.")
         weekdays_error = _validate_series_weekdays(freq, selected_weekdays)
@@ -232,12 +248,23 @@ def _book_series_client_view(request, profile):
             created = 0
             client_user = profile.user
             client_profile = profile
-            pricing = compute_pricing(service, client_profile)
+            sessions_to_create = sorted(
+                zip(dates, prof_ids, times),
+                key=lambda row: (row[0], row[2], row[1]),
+            )
             with transaction.atomic():
-                for d, p, t in zip(dates, prof_ids, times):
+                for idx, (d, p, t) in enumerate(sessions_to_create):
                     date_obj = datetime.strptime(d, "%Y-%m-%d").date()
                     time_obj = datetime.strptime(t, "%H:%M").time()
                     prof = Professional.objects.get(id=p)
+                    pricing_override = series_pricing_tier_override if idx == 0 else ""
+                    pricing = compute_pricing(
+                        service,
+                        client_profile,
+                        date_obj=date_obj,
+                        time_obj=time_obj,
+                        pricing_tier_override=pricing_override,
+                    )
                     Appointment.objects.create(
                         client=client_user,
                         professional=prof,
@@ -254,12 +281,14 @@ def _book_series_client_view(request, profile):
                         discount_value=pricing["discount_value"],
                         final_price=pricing["final_price"],
                         session_index=pricing["session_index"],
+                        pricing_tier_override=pricing_override,
                         pricing_tier=pricing["pricing_tier"],
                         base_price_applied=pricing["base_price_applied"],
                         partner_price_applied=pricing["partner_price_applied"],
                         discount_applied=pricing["discount_applied"],
                     )
                     created += 1
+                recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
 
             messages.success(request, f"Foram enviadas {created} marcações para confirmação.")
             return redirect("my_appointments")
@@ -280,6 +309,7 @@ def _book_series_client_view(request, profile):
             general_errors.append("Data inicial inválida.")
 
         service = Service.objects.filter(id=service_id).first()
+        series_pricing_tier_override = normalize_pricing_tier_override(series_pricing_tier_override, service)
         if service and service.service_type == "group":
             general_errors.append("Este serviço é de turma. Usa a gestão de turmas.")
         weekdays_error = _validate_series_weekdays(freq, selected_weekdays)
@@ -392,6 +422,8 @@ def _book_series_client_view(request, profile):
             "series_sessions": sessions,
             "series_general_errors": general_errors,
             "series_professionals": professionals_qs,
+            "series_selected_service": Service.objects.filter(id=service_id).first() if service_id else None,
+            "series_pricing_tier_override": series_pricing_tier_override,
             "series_weekday_options": SERIES_WEEKDAY_OPTIONS,
             "series_weekdays": selected_weekdays,
             "upcoming_appointments": upcoming_appointments,
@@ -465,6 +497,7 @@ def book_view(request):
     selected_professional_id = (request.GET.get("professional_id") or "").strip()
     selected_date = (request.GET.get("date") or "").strip()
     selected_time = (request.GET.get("time") or "").strip()
+    selected_pricing_tier_override = _raw_pricing_tier_override(request)
 
     if reschedule_appt:
         if not selected_service_id and reschedule_appt.service_id:
@@ -475,6 +508,8 @@ def book_view(request):
             selected_date = reschedule_appt.date.strftime("%Y-%m-%d")
         if not selected_time and reschedule_appt.time:
             selected_time = reschedule_appt.time.strftime("%H:%M")
+        if not selected_pricing_tier_override:
+            selected_pricing_tier_override = reschedule_appt.pricing_tier_override or ""
     rate_status = 200
     retry_after = 0
 
@@ -523,6 +558,7 @@ def book_view(request):
             return redirect("group_sessions_list", service_id=service_obj.id)
 
     selected_service = services.filter(id=selected_service_id).first() if selected_service_id else None
+    selected_pricing_tier_override = normalize_pricing_tier_override(selected_pricing_tier_override, selected_service)
 
     # Filtrar profissionais por serviço e (quando existe) pela data escolhida
     if selected_service:
@@ -638,9 +674,15 @@ def book_view(request):
                     message = "Profissional inválido para este serviço."
                 else:
                     service = get_object_or_404(Service, id=service_id)
+                    selected_service = service
                     if service.service_type == "group":
                         return redirect("group_sessions_list", service_id=service.id)
                     prof = get_object_or_404(Professional, id=professional_id)
+                    pricing_tier_override = normalize_pricing_tier_override(
+                        request.POST.get("pricing_tier_override"),
+                        service,
+                    )
+                    selected_pricing_tier_override = pricing_tier_override
 
                     prof_days = professional_weekdays_labels(prof)
                     if prof_days:
@@ -680,7 +722,13 @@ def book_view(request):
                         try:
                             with transaction.atomic():
                                 client_profile = getattr(request.user, "client_profile", None)
-                                pricing = compute_pricing(service, client_profile)
+                                pricing = compute_pricing(
+                                    service,
+                                    client_profile,
+                                    date_obj=date_obj,
+                                    time_obj=time_obj,
+                                    pricing_tier_override=pricing_tier_override,
+                                )
                                 if reschedule_appt:
                                     appt = reschedule_appt
                                     old_date, old_time = appt.date, appt.time
@@ -702,11 +750,13 @@ def book_view(request):
                                     appt.discount_value = pricing["discount_value"]
                                     appt.final_price = pricing["final_price"]
                                     appt.session_index = pricing["session_index"]
+                                    appt.pricing_tier_override = pricing_tier_override
                                     appt.pricing_tier = pricing["pricing_tier"]
                                     appt.base_price_applied = pricing["base_price_applied"]
                                     appt.partner_price_applied = pricing["partner_price_applied"]
                                     appt.discount_applied = pricing["discount_applied"]
                                     appt.save()
+                                    recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
 
                                     note_parts = []
                                     if old_service and old_service.id != service.id:
@@ -744,11 +794,13 @@ def book_view(request):
                                         discount_value=pricing["discount_value"],
                                         final_price=pricing["final_price"],
                                         session_index=pricing["session_index"],
+                                        pricing_tier_override=pricing_tier_override,
                                         pricing_tier=pricing["pricing_tier"],
                                         base_price_applied=pricing["base_price_applied"],
                                         partner_price_applied=pricing["partner_price_applied"],
                                         discount_applied=pricing["discount_applied"],
                                     )
+                                    recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
 
                                     log_appt(
                                         AppointmentLog.ACTION_CREATED,
@@ -972,7 +1024,23 @@ def book_view(request):
         service_for_price = Service.objects.filter(id=selected_service_id).first()
         if service_for_price:
             client_profile = getattr(request.user, "client_profile", None)
-            price_preview = compute_pricing(service_for_price, client_profile)
+            preview_date_obj = None
+            preview_time_obj = None
+            try:
+                if selected_date:
+                    preview_date_obj = datetime.strptime(selected_date, "%Y-%m-%d").date()
+                if selected_time:
+                    preview_time_obj = datetime.strptime(selected_time, "%H:%M").time()
+            except Exception:
+                preview_date_obj = None
+                preview_time_obj = None
+            price_preview = compute_pricing(
+                service_for_price,
+                client_profile,
+                date_obj=preview_date_obj,
+                time_obj=preview_time_obj,
+                pricing_tier_override=selected_pricing_tier_override,
+            )
 
     response = render(
         request,
@@ -993,6 +1061,8 @@ def book_view(request):
             "today": today,
             "prof_days": prof_days,
             "price_preview": price_preview,
+            "selected_service": selected_service,
+            "selected_pricing_tier_override": selected_pricing_tier_override,
             "back_to_appointments_url": reverse("my_appointments"),
             "reschedule_id": reschedule_id,
             "reschedule_appointment": reschedule_appt,
@@ -1290,13 +1360,17 @@ def bulk_book_view(request):
         created = 0
         client_user = profile.user if profile else request.user
         client_profile = profile or getattr(client_user, "client_profile", None)
-        pricing = compute_pricing(service, client_profile)
         initial_status = Appointment.STATUS_SCHEDULED if is_staff_flow else Appointment.STATUS_PENDING
+        sessions_to_create = sorted(
+            zip(dates, prof_ids, times),
+            key=lambda row: (row[0], row[2], row[1]),
+        )
         with transaction.atomic():
-            for d, p, t in zip(dates, prof_ids, times):
+            for d, p, t in sessions_to_create:
                 date_obj = datetime.strptime(d, "%Y-%m-%d").date()
                 time_obj = datetime.strptime(t, "%H:%M").time()
                 prof = Professional.objects.get(id=p)
+                pricing = compute_pricing(service, client_profile, date_obj=date_obj, time_obj=time_obj)
                 Appointment.objects.create(
                     client=client_user,
                     professional=prof,
@@ -1319,6 +1393,7 @@ def bulk_book_view(request):
                     discount_applied=pricing["discount_applied"],
                 )
                 created += 1
+            recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
 
         if initial_status == Appointment.STATUS_SCHEDULED:
             messages.success(request, f"Foram criadas {created} marcações em série já confirmadas.")
@@ -1422,6 +1497,7 @@ def _professional_book_series_view(
     freq = normalize_series_frequency(request.GET.get("freq") or request.POST.get("freq") or "")
     preferred_professional_id = (request.GET.get("professional_id") or request.POST.get("professional_id") or "").strip()
     selected_weekdays = _parse_series_weekdays(request.POST if request.method == "POST" else request.GET)
+    series_pricing_tier_override = _raw_pricing_tier_override(request, field_name="pricing_tier_override")
     send_client_email_raw = (
         request.POST.get("send_client_email")
         if request.method == "POST"
@@ -1535,12 +1611,23 @@ def _professional_book_series_view(
             series_id = uuid4()
             created = 0
             created_appointments = []
-            pricing = compute_pricing(service, client_profile)
+            sessions_to_create = sorted(
+                zip(dates, prof_ids, times),
+                key=lambda row: (row[0], row[2], row[1]),
+            )
             with transaction.atomic():
-                for d, p, t in zip(dates, prof_ids, times):
+                for idx, (d, p, t) in enumerate(sessions_to_create):
                     date_obj = datetime.strptime(d, "%Y-%m-%d").date()
                     time_obj = datetime.strptime(t, "%H:%M").time()
                     prof_row = prof if not can_book_any else Professional.objects.get(id=p)
+                    pricing_override = series_pricing_tier_override if idx == 0 else ""
+                    pricing = compute_pricing(
+                        service,
+                        client_profile,
+                        date_obj=date_obj,
+                        time_obj=time_obj,
+                        pricing_tier_override=pricing_override,
+                    )
                     appt = Appointment.objects.create(
                         client=client_user,
                         professional=prof_row,
@@ -1557,6 +1644,7 @@ def _professional_book_series_view(
                         discount_value=pricing["discount_value"],
                         final_price=pricing["final_price"],
                         session_index=pricing["session_index"],
+                        pricing_tier_override=pricing_override,
                         pricing_tier=pricing["pricing_tier"],
                         base_price_applied=pricing["base_price_applied"],
                         partner_price_applied=pricing["partner_price_applied"],
@@ -1564,6 +1652,7 @@ def _professional_book_series_view(
                     )
                     created_appointments.append(appt)
                     created += 1
+                recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
 
             if send_client_email_on_create:
                 settings_obj = clinic_settings()
@@ -1708,6 +1797,8 @@ def _professional_book_series_view(
             "series_sessions": sessions,
             "series_general_errors": general_errors,
             "series_professionals": professionals_qs,
+            "series_selected_service": Service.objects.filter(id=service_id).first() if service_id else None,
+            "series_pricing_tier_override": series_pricing_tier_override,
             "series_weekday_options": SERIES_WEEKDAY_OPTIONS,
             "series_weekdays": selected_weekdays,
             "is_admin": can_book_any,
@@ -1857,6 +1948,7 @@ def professional_book_view(request):
     selected_service_id = request.GET.get("service_id") or request.POST.get("service_id") or ""
     selected_date = request.GET.get("date") or request.POST.get("date") or ""
     selected_time = request.GET.get("time") or request.POST.get("time") or ""
+    selected_pricing_tier_override = _raw_pricing_tier_override(request)
     week = request.GET.get("week") or request.POST.get("week") or ""
     status = request.GET.get("status") or request.POST.get("status") or ""
     q = request.GET.get("q") or request.POST.get("q") or ""
@@ -1929,6 +2021,7 @@ def professional_book_view(request):
             selected_prof = None
 
     selected_service = services.filter(id=selected_service_id).first() if selected_service_id else None
+    selected_pricing_tier_override = normalize_pricing_tier_override(selected_pricing_tier_override, selected_service)
     if can_book_any and selected_service and filter_date_obj:
         available_prof_ids = []
         for prof_option in professionals:
@@ -1993,11 +2086,13 @@ def professional_book_view(request):
                     "message": message,
                     "week": week,
                     "is_admin": can_book_any,
+                    "selected_service": selected_service,
                     "service_map_json": json.dumps(service_map, ensure_ascii=True),
                     "back_to_calendar_url": back_to_calendar_url,
                     "single_mode_url": single_mode_url,
                     "series_mode_url": series_mode_url,
                     "send_client_email_on_create": send_client_email_on_create,
+                    "selected_pricing_tier_override": selected_pricing_tier_override,
                 },
                 status=429,
             )
@@ -2013,6 +2108,7 @@ def professional_book_view(request):
             message = "Dados incompletos."
         else:
             service = get_object_or_404(Service, id=service_id)
+            selected_service = service
             date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
             if can_book_any:
                 selected_prof = get_object_or_404(Professional, id=professional_id)
@@ -2030,6 +2126,11 @@ def professional_book_view(request):
                 message = "Este profissional já tem marcação neste horário."
             if selected_prof and not selected_prof.services.filter(id=service.id).exists():
                 message = "Este profissional não realiza este serviço."
+            pricing_tier_override = normalize_pricing_tier_override(
+                request.POST.get("pricing_tier_override"),
+                service,
+            )
+            selected_pricing_tier_override = pricing_tier_override
             today = timezone.localdate()
             now_t = timezone.localtime().time()
 
@@ -2073,6 +2174,7 @@ def professional_book_view(request):
                         "message": message,
                         "week": week,
                         "is_admin": can_book_any,
+                        "selected_service": selected_service,
                         "service_map_json": json.dumps(service_map, ensure_ascii=True),
                         "back_to_calendar_url": back_to_calendar_url,
                         "single_mode_url": single_mode_url,
@@ -2080,6 +2182,7 @@ def professional_book_view(request):
                         "status": status,
                         "q": q,
                         "send_client_email_on_create": send_client_email_on_create,
+                        "selected_pricing_tier_override": selected_pricing_tier_override,
                     },
                 )
 
@@ -2118,6 +2221,7 @@ def professional_book_view(request):
                         "message": message,
                         "week": week,
                         "is_admin": can_book_any,
+                        "selected_service": selected_service,
                         "service_map_json": json.dumps(service_map, ensure_ascii=True),
                         "back_to_calendar_url": back_to_calendar_url,
                         "single_mode_url": single_mode_url,
@@ -2125,6 +2229,7 @@ def professional_book_view(request):
                         "status": status,
                         "q": q,
                         "send_client_email_on_create": send_client_email_on_create,
+                        "selected_pricing_tier_override": selected_pricing_tier_override,
                     },
                 )
 
@@ -2136,7 +2241,13 @@ def professional_book_view(request):
                 selected_time = time_str
                 slots = valid_slots
             else:
-                pricing = compute_pricing(service, client_profile)
+                pricing = compute_pricing(
+                    service,
+                    client_profile,
+                    date_obj=date_obj,
+                    time_obj=time_obj,
+                    pricing_tier_override=pricing_tier_override,
+                )
                 appt = Appointment.objects.create(
                         client=client_user,
                         professional=selected_prof,
@@ -2151,11 +2262,13 @@ def professional_book_view(request):
                         discount_value=pricing["discount_value"],
                         final_price=pricing["final_price"],
                         session_index=pricing["session_index"],
+                        pricing_tier_override=pricing_tier_override,
                         pricing_tier=pricing["pricing_tier"],
                         base_price_applied=pricing["base_price_applied"],
                         partner_price_applied=pricing["partner_price_applied"],
                         discount_applied=pricing["discount_applied"],
                     )
+                recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
 
                 log_appt(
                     AppointmentLog.ACTION_CREATED,
@@ -2260,6 +2373,7 @@ def professional_book_view(request):
             "services": services,
             "professionals": professionals,
             "service_map": service_map,
+            "selected_service": selected_service,
             "selected_professional_id": selected_professional_id,
             "selected_professional_name": selected_professional_name,
             "selected_service_id": selected_service_id,
@@ -2281,6 +2395,7 @@ def professional_book_view(request):
             "single_mode_url": single_mode_url,
             "series_mode_url": series_mode_url,
             "send_client_email_on_create": send_client_email_on_create,
+            "selected_pricing_tier_override": selected_pricing_tier_override,
         },
     )
     week = request.POST.get("week") or request.GET.get("week") or ""

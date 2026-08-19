@@ -258,6 +258,7 @@ class BackofficeServiceForm(forms.ModelForm):
 
 
 class BackofficeProfessionalForm(forms.ModelForm):
+    user_email = forms.EmailField(required=False, label="Email")
     new_user_first_name = forms.CharField(max_length=150, required=False, label="Primeiro nome")
     new_user_last_name = forms.CharField(max_length=150, required=False, label="Último nome")
     new_user_email = forms.EmailField(required=False, label="Email")
@@ -299,6 +300,8 @@ class BackofficeProfessionalForm(forms.ModelForm):
             self.fields["services"].queryset = Service.objects.order_by("name")
         if "profile_photo" in self.fields:
             self.fields["profile_photo"].widget.attrs.setdefault("accept", "image/*")
+        if self.instance and self.instance.pk and getattr(self.instance, "user_id", None):
+            self.fields["user_email"].initial = self.instance.user.email
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs.setdefault("class", "form-check-input")
@@ -318,9 +321,22 @@ class BackofficeProfessionalForm(forms.ModelForm):
                 raise ValidationError("Este utilizador já está associado a um profissional.")
         return user
 
+    def clean_user_email(self):
+        email = (self.cleaned_data.get("user_email") or "").strip().lower()
+        if not email:
+            return ""
+        qs = User.objects.filter(email__iexact=email)
+        current_user_id = getattr(self.instance, "user_id", None)
+        if current_user_id:
+            qs = qs.exclude(pk=current_user_id)
+        if qs.exists():
+            raise ValidationError("Este email já está registado.")
+        return email
+
     def clean(self):
         cleaned = super().clean()
         user = cleaned.get("user")
+        user_email = (cleaned.get("user_email") or "").strip()
         new_username = (cleaned.get("new_user_username") or "").strip()
         new_password1 = cleaned.get("new_user_password1") or ""
         new_password2 = cleaned.get("new_user_password2") or ""
@@ -335,6 +351,8 @@ class BackofficeProfessionalForm(forms.ModelForm):
                 self.add_error("new_user_password2", "Confirma a password.")
             if new_password1 and new_password2 and new_password1 != new_password2:
                 self.add_error("new_user_password2", "As passwords não coincidem.")
+        elif not self.instance.pk and not user_email:
+            self.add_error("user_email", "Indica um email.")
         is_independent = cleaned.get("is_independent")
         subcontract_percentage = cleaned.get("subcontract_percentage")
         if is_independent:
@@ -360,6 +378,12 @@ class BackofficeProfessionalForm(forms.ModelForm):
         user = self.cleaned_data.get("user")
         if not user:
             user = self._create_new_user()
+        else:
+            user_email = (self.cleaned_data.get("user_email") or "").strip().lower()
+            if user.email != user_email:
+                user.email = user_email
+                if commit:
+                    user.save(update_fields=["email"])
         instance = super().save(commit=False)
         instance.user = user
         if commit:
@@ -1335,14 +1359,61 @@ class CashVoidMovementForm(forms.Form):
 
 
 class MoloniCustomerDefaultsForm(forms.Form):
-    payment_method_id = forms.IntegerField(min_value=1, label="payment_method_id")
-    document_type_id = forms.IntegerField(min_value=1, label="document_type_id")
-    language_id = forms.IntegerField(min_value=1, label="language_id")
-    maturity_date_id = forms.IntegerField(min_value=1, label="maturity_date_id")
-    country_id = forms.IntegerField(min_value=1, label="country_id")
-    delivery_method_id = forms.IntegerField(min_value=1, required=False, label="delivery_method_id")
+    payment_method_id = forms.IntegerField(min_value=1, label="Método de pagamento")
+    document_type_id = forms.IntegerField(min_value=1, label="Tipo de documento")
+    language_id = forms.IntegerField(min_value=1, label="Idioma")
+    maturity_date_id = forms.IntegerField(min_value=1, label="Condição de vencimento")
+    country_id = forms.IntegerField(min_value=1, label="País")
+    delivery_method_id = forms.IntegerField(min_value=1, required=False, label="Método de envio")
 
-    def __init__(self, *args, **kwargs):
+    FIELD_HELP_TEXT = {
+        "payment_method_id": "Método base usado quando a app cria um cliente novo na Moloni.",
+        "document_type_id": "Tipo de documento por defeito associado ao cliente na Moloni.",
+        "language_id": "Idioma por defeito do cliente na Moloni.",
+        "maturity_date_id": "Condição ou prazo de vencimento por defeito.",
+        "country_id": "País por defeito para novos clientes.",
+        "delivery_method_id": "Opcional. Método de envio por defeito.",
+    }
+
+    def __init__(self, *args, suggestions=None, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs.setdefault("class", "form-control")
+        suggestions = suggestions or {}
+        suggestions_by_field = {
+            row.get("field"): row
+            for row in suggestions.get("fields", [])
+            if row.get("field")
+        }
+
+        for field_name, field in self.fields.items():
+            field.help_text = self.FIELD_HELP_TEXT.get(field_name, "")
+            row = suggestions_by_field.get(field_name) or {}
+            options = list(row.get("options") or [])
+
+            if options:
+                choices = [("", "— escolher —")]
+                if not field.required:
+                    choices = [("", "— sem método de envio —")]
+                existing_values = set()
+                for option in options:
+                    value = str(option.get("value") or "").strip()
+                    if not value:
+                        continue
+                    existing_values.add(value)
+                    count = int(option.get("count") or 0)
+                    sample_names = option.get("sample_names") or []
+                    label = value
+                    if count:
+                        label = f"{label} · usado em {count} cliente{'s' if count != 1 else ''}"
+                    if sample_names:
+                        label = f"{label} · ex.: {', '.join(sample_names)}"
+                    choices.append((value, label))
+
+                current_value = self.data.get(field_name) if self.is_bound else self.initial.get(field_name)
+                current_value = str(current_value or "").strip()
+                if current_value and current_value not in existing_values:
+                    choices.append((current_value, f"{current_value} · valor guardado"))
+
+                field.widget = forms.Select(choices=choices)
+                field.widget.attrs.setdefault("class", "form-select")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")

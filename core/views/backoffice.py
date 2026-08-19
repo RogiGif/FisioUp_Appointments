@@ -132,7 +132,7 @@ def test_duralux(request):
 def _user_can_use_post_designer(user):
     if not user.is_authenticated:
         return False
-    return Professional.objects.filter(user=user).exists() or is_admin_role(user)
+    return is_admin_role(user)
 
 
 WEEKLY_SCHEDULE_AUDIT_FIELDS = ["id", "professional_id", "timezone", "is_active"]
@@ -644,7 +644,7 @@ def _pending_cash_group_monthly_for_session(session):
 @login_required(login_url="/login/")
 def backoffice_post_designer_view(request):
     if not _user_can_use_post_designer(request.user):
-        raise PermissionDenied("Acesso reservado a profissionais e administradores.")
+        raise PermissionDenied("Acesso reservado a administradores.")
 
     formats = [
         {"id": "landscape", "label": "Post horizontal", "width": 1200, "height": 846},
@@ -1486,7 +1486,7 @@ def backoffice_agenda_view(request):
         else:
             try:
                 with transaction.atomic():
-                    pricing = compute_pricing(service, client_profile)
+                    pricing = compute_pricing(service, client_profile, date_obj=date_obj, time_obj=time_obj)
                     reactivated_cancelled = _find_matching_cancelled_appointment(
                         client_user=client_user,
                         professional=prof,
@@ -1534,6 +1534,7 @@ def backoffice_agenda_view(request):
                                 "completed_at",
                             ]
                         )
+                        recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
                         appt = reactivated_cancelled
                         log_appt(
                             AppointmentLog.ACTION_STATUS_UPDATED,
@@ -1565,6 +1566,7 @@ def backoffice_agenda_view(request):
                             partner_price_applied=pricing["partner_price_applied"],
                             discount_applied=pricing["discount_applied"],
                         )
+                        recalculate_upcoming_appointment_prices(client_profile, service_ids=[service.id])
                         log_appt(
                             AppointmentLog.ACTION_CREATED,
                             appt,
@@ -2755,18 +2757,18 @@ def backoffice_cash_dashboard_view(request):
     closing_filter_params.pop("edit_movement_id", None)
     closing_filter_params.pop("void_movement_id", None)
     closing_filter_qs = closing_filter_params.urlencode()
-    pending_appointments_preview = list(pending_appointments_qs[:8]) if selected_session else []
+    pending_appointments_preview = list(pending_appointments_qs) if selected_session else []
     for appt in pending_appointments_preview:
         appt.client_label = (
             getattr(getattr(appt.client, "client_profile", None), "full_name", "")
             or appt.client.get_full_name()
             or appt.client.username
         )
-    pending_client_payments_preview = list(pending_client_payments_qs[:8]) if selected_session else []
+    pending_client_payments_preview = list(pending_client_payments_qs) if selected_session else []
     for payment in pending_client_payments_preview:
         payment.client_label = payment.client_profile.full_name if payment.client_profile else "Cliente"
         payment.method_label = dict(ClientPayment.PAYMENT_METHOD_CHOICES).get(payment.payment_method, payment.payment_method)
-    pending_group_monthly_preview = list(pending_group_monthly_qs[:8]) if selected_session else []
+    pending_group_monthly_preview = list(pending_group_monthly_qs) if selected_session else []
     for charge in pending_group_monthly_preview:
         charge.client_label = (
             getattr(getattr(charge.client, "client_profile", None), "full_name", "")
@@ -4044,70 +4046,6 @@ def backoffice_settings_moloni_view(request):
         return HttpResponseForbidden("Acesso reservado a administradores.")
 
     integ = MoloniIntegration.get_solo()
-    defaults_initial = {
-        "payment_method_id": integ.customer_payment_method_id,
-        "document_type_id": integ.customer_document_type_id,
-        "language_id": integ.customer_language_id,
-        "maturity_date_id": integ.customer_maturity_date_id,
-        "country_id": integ.customer_country_id,
-        "delivery_method_id": integ.customer_delivery_method_id,
-    }
-    defaults_form = MoloniCustomerDefaultsForm(initial=defaults_initial)
-    if request.method == "POST" and (request.POST.get("action") or "").strip() == "save_customer_defaults":
-        defaults_form = MoloniCustomerDefaultsForm(request.POST)
-        if defaults_form.is_valid():
-            before = snapshot_instance(
-                integ,
-                fields=[
-                    "customer_payment_method_id",
-                    "customer_document_type_id",
-                    "customer_language_id",
-                    "customer_maturity_date_id",
-                    "customer_country_id",
-                    "customer_delivery_method_id",
-                ],
-            )
-            integ.customer_payment_method_id = defaults_form.cleaned_data["payment_method_id"]
-            integ.customer_document_type_id = defaults_form.cleaned_data["document_type_id"]
-            integ.customer_language_id = defaults_form.cleaned_data["language_id"]
-            integ.customer_maturity_date_id = defaults_form.cleaned_data["maturity_date_id"]
-            integ.customer_country_id = defaults_form.cleaned_data["country_id"]
-            integ.customer_delivery_method_id = defaults_form.cleaned_data.get("delivery_method_id")
-            integ.save(
-                update_fields=[
-                    "customer_payment_method_id",
-                    "customer_document_type_id",
-                    "customer_language_id",
-                    "customer_maturity_date_id",
-                    "customer_country_id",
-                    "customer_delivery_method_id",
-                    "updated_at",
-                ]
-            )
-            log_audit_event(
-                category="integrations",
-                action="moloni_customer_defaults_saved",
-                request=request,
-                actor=request.user,
-                instance=integ,
-                source="backoffice_settings_moloni",
-                message="Defaults de clientes Moloni guardados.",
-                before=before,
-                after=snapshot_instance(
-                    integ,
-                    fields=[
-                        "customer_payment_method_id",
-                        "customer_document_type_id",
-                        "customer_language_id",
-                        "customer_maturity_date_id",
-                        "customer_country_id",
-                        "customer_delivery_method_id",
-                    ],
-                ),
-            )
-            messages.success(request, "Defaults de clientes Moloni guardados com sucesso.")
-            return redirect("backoffice_settings_moloni")
-
     configured = moloni_service.is_configured()
     connected = bool(integ.refresh_token)
     callback_url = _moloni_redirect_uri(request)
@@ -4115,6 +4053,7 @@ def backoffice_settings_moloni_view(request):
     companies_error = ""
     defaults_suggestions = None
     defaults_suggestions_error = ""
+
     if connected and not moloni_service.get_company_id():
         try:
             companies = moloni_service.list_companies()
@@ -4125,6 +4064,119 @@ def backoffice_settings_moloni_view(request):
             defaults_suggestions = moloni_service.get_customer_defaults_suggestions()
         except moloni_service.MoloniError as exc:
             defaults_suggestions_error = str(exc)
+
+    defaults_initial = {
+        "payment_method_id": integ.customer_payment_method_id,
+        "document_type_id": integ.customer_document_type_id,
+        "language_id": integ.customer_language_id,
+        "maturity_date_id": integ.customer_maturity_date_id,
+        "country_id": integ.customer_country_id,
+        "delivery_method_id": integ.customer_delivery_method_id,
+    }
+
+    def _save_defaults(cleaned_data, *, action_name: str, message: str):
+        before = snapshot_instance(
+            integ,
+            fields=[
+                "customer_payment_method_id",
+                "customer_document_type_id",
+                "customer_language_id",
+                "customer_maturity_date_id",
+                "customer_country_id",
+                "customer_delivery_method_id",
+            ],
+        )
+        integ.customer_payment_method_id = cleaned_data["payment_method_id"]
+        integ.customer_document_type_id = cleaned_data["document_type_id"]
+        integ.customer_language_id = cleaned_data["language_id"]
+        integ.customer_maturity_date_id = cleaned_data["maturity_date_id"]
+        integ.customer_country_id = cleaned_data["country_id"]
+        integ.customer_delivery_method_id = cleaned_data.get("delivery_method_id")
+        integ.save(
+            update_fields=[
+                "customer_payment_method_id",
+                "customer_document_type_id",
+                "customer_language_id",
+                "customer_maturity_date_id",
+                "customer_country_id",
+                "customer_delivery_method_id",
+                "updated_at",
+            ]
+        )
+        log_audit_event(
+            category="integrations",
+            action=action_name,
+            request=request,
+            actor=request.user,
+            instance=integ,
+            source="backoffice_settings_moloni",
+            message=message,
+            before=before,
+            after=snapshot_instance(
+                integ,
+                fields=[
+                    "customer_payment_method_id",
+                    "customer_document_type_id",
+                    "customer_language_id",
+                    "customer_maturity_date_id",
+                    "customer_country_id",
+                    "customer_delivery_method_id",
+                ],
+            ),
+        )
+
+    defaults_form = MoloniCustomerDefaultsForm(
+        initial=defaults_initial,
+        suggestions=defaults_suggestions,
+    )
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+        if action == "save_customer_defaults":
+            defaults_form = MoloniCustomerDefaultsForm(
+                request.POST,
+                suggestions=defaults_suggestions,
+            )
+            if defaults_form.is_valid():
+                _save_defaults(
+                    defaults_form.cleaned_data,
+                    action_name="moloni_customer_defaults_saved",
+                    message="Defaults de clientes Moloni guardados.",
+                )
+                messages.success(request, "Defaults de clientes Moloni guardados com sucesso.")
+                return redirect("backoffice_settings_moloni")
+        elif action == "use_customer_defaults_recommendations":
+            try:
+                recommendations = moloni_service.get_recommended_customer_defaults()
+            except moloni_service.MoloniError as exc:
+                messages.error(request, f"Não foi possível obter recomendações automáticas da Moloni: {exc}")
+            else:
+                if recommendations["missing"]:
+                    messages.error(
+                        request,
+                        "Não foi possível preencher automaticamente todos os campos obrigatórios. "
+                        "Faltam recomendações para: "
+                        + ", ".join(recommendations["missing"])
+                        + ".",
+                    )
+                else:
+                    cleaned_data = {
+                        "payment_method_id": recommendations["defaults"].get("payment_method_id"),
+                        "document_type_id": recommendations["defaults"].get("document_type_id"),
+                        "language_id": recommendations["defaults"].get("language_id"),
+                        "maturity_date_id": recommendations["defaults"].get("maturity_date_id"),
+                        "country_id": recommendations["defaults"].get("country_id"),
+                        "delivery_method_id": recommendations["defaults"].get("delivery_method_id"),
+                    }
+                    _save_defaults(
+                        cleaned_data,
+                        action_name="moloni_customer_defaults_auto_filled",
+                        message="Defaults de clientes Moloni preenchidos automaticamente.",
+                    )
+                    messages.success(
+                        request,
+                        "Defaults preenchidos automaticamente com os valores mais usados nos clientes já existentes na Moloni.",
+                    )
+                    return redirect("backoffice_settings_moloni")
     defaults_status = moloni_service.get_customer_defaults_status()
     context = {
         "moloni_integration": integ,

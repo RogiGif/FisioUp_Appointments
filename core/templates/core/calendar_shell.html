@@ -8,20 +8,23 @@
                 <!-- [ Content Sidebar ] start -->
                 <div class="content-sidebar content-sidebar-xl" data-scrollbar-target="#psScrollbarInit">
                     <div class="content-sidebar-header bg-white sticky-top hstack justify-content-between">
-                        <h4 class="fw-bolder mb-0">Agenda</h4>
+                        <h4 class="fw-bolder mb-0">Calendário</h4>
                         <a href="javascript:void(0);" class="app-sidebar-close-trigger d-flex">
                             <i class="feather-x"></i>
                         </a>
                     </div>
                     <div class="content-sidebar-header">
-                        {% if is_client_calendar %}
+                        {% if not is_client_calendar %}
+                            <button type="button" id="toggle-all-events-btn" class="btn btn-outline-primary w-100">
+                                <i class="feather-layers me-2"></i>
+                                <span>Mostrar tudo</span>
+                            </button>
+                        {% elif is_client_calendar %}
                             <a href="{% url 'book' %}" id="btn-new-schedule" class="btn btn-primary w-100" data-toggle="modal">
-                        {% else %}
-                            <a href="{% url 'professional_clients' %}" id="btn-new-schedule" class="btn btn-primary w-100" data-toggle="modal">
+                                <i class="feather-calendar me-2"></i>
+                                <span>Nova marcação</span>
+                            </a>
                         {% endif %}
-                            <i class="feather-calendar me-2"></i>
-                            <span>Nova marcação</span>
-                        </a>
                     </div>
                     <div class="content-sidebar-body">
                         {% if show_calendar_filters %}
@@ -42,7 +45,7 @@
                             {% if not is_client_calendar %}
                                 <h2 class="px-4 fs-10 fw-bold text-uppercase my-4 text-muted text-spacing-1 text-truncate-1-line">Técnicos</h2>
                                 {% for p in professionals %}
-                                <div class="p-4 border-top c-pointer single-item schedule-item" data-professional-id="{{ p.id }}">
+                                <div class="p-4 border-top c-pointer single-item schedule-item" data-professional-id="{{ p.id }}" data-professional-services="{% for service in p.services.all %}{{ service.id }}{% if not forloop.last %},{% endif %}{% endfor %}">
                                     <div class="d-flex align-items-start">
                                         <div class="wd-50 ht-50 bg-soft-primary text-primary lh-1 d-flex align-items-center justify-content-center flex-column rounded-2 schedule-date">
                                             <span class="fs-18 fw-bold mb-1 d-block">{{ p.user.get_full_name|default:p.user.username|slice:":2"|upper }}</span>
@@ -155,6 +158,18 @@
                                             <i class="feather-eye calendar-icon me-1 fs-12"></i>
                                             <span>Mostrar disponibilidades</span>
                                         </button>
+                                    </div>
+                                    {% endif %}
+                                    {% if not is_client_calendar %}
+                                    <div class="menu-navi d-none d-sm-flex ms-2">
+                                        {% if is_client_calendar %}
+                                            <a href="{% url 'book' %}" id="btn-new-schedule" class="move-today d-inline-flex align-items-center">
+                                        {% else %}
+                                            <a href="{% url 'professional_clients' %}" id="btn-new-schedule" class="move-today d-inline-flex align-items-center">
+                                        {% endif %}
+                                                <i class="feather-calendar calendar-icon me-1 fs-12"></i>
+                                                <span>Nova marcação</span>
+                                            </a>
                                     </div>
                                     {% endif %}
                                 </div>
